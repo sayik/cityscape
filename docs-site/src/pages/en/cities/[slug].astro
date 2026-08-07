@@ -1,0 +1,177 @@
+---
+// Per-city landing page EN (SEO measure 2). One page per covered city from
+// src/data/cities.json, with the data types actually available for that city,
+// city-specific curl examples and city-scoped dataset JSON-LD. Counterpart:
+// src/pages/staedte/[slug].astro.
+import { getCollection } from "astro:content";
+import Docs from "../../../layouts/Docs.astro";
+import JsonLd from "../../../components/JsonLd.astro";
+import cities from "../../../data/cities.json";
+import coverage from "../../../data/coverage.json";
+import { STATES, topicsForCity } from "../../../lib/cities";
+import { API_BASE } from "../../../lib/codegen";
+
+export function getStaticPaths() {
+  return cities.map((city) => ({
+    params: { slug: city.slug },
+    props: { city },
+  }));
+}
+
+const { city } = Astro.props;
+const stateName = STATES[city.state] ?? city.state;
+const fmt = new Intl.NumberFormat("en-US");
+const available = topicsForCity(city.slug, coverage);
+const isCore = city.coverage === "full";
+
+// Full list of ALL city-scoped data endpoints (single source openapi.yaml via
+// the endpoints collection): only per-slug paths /cities/{slug}/... (excluding
+// list/compare operations like getCities). Every data type is retrievable for
+// any city via its slug; where a source has nothing, the API honestly returns
+// no_data.
+const cityEndpoints = (await getCollection("endpoints"))
+  .filter((e) => e.data.kind === "city" && /\/cities\/\{[^}]+\}\//.test(e.data.path))
+  .map((e) => ({
+    id: e.data.id,
+    summary: e.data.summaryEn || e.data.summary,
+    example: e.data.path.replace(/\{[^}]+\}/, city.slug),
+  }))
+  .sort((a, b) => a.summary.localeCompare(b.summary, "en"));
+// Title budget: 53 chars (SeoHead appends " | InfraNode", total max 65,
+// Bing scan 2026-07-01). Use the long form only if it fits, otherwise a
+// compact form for long city names (e.g. Ludwigshafen am Rhein).
+const metaTitleLong = `Open data API for ${city.name}: free and keyless`;
+const metaTitle = metaTitleLong.length <= 53 ? metaTitleLong : `Open data API for ${city.name}, keyless`;
+const lead = `Open data for ${city.name} (${stateName}) through a free, keyless REST API: weather, air quality, electricity price and more, delivered as consistent JSON with source and license on every response. No API key, no sign-up.`;
+const weatherExample = `${API_BASE}/api/v1/cities/${city.slug}/weather`;
+const airExample = `${API_BASE}/api/v1/cities/${city.slug}/air-uba`;
+---
+
+<Docs
+  title={metaTitle}
+  description={lead}
+  current={`stadt-${city.slug}`}
+  lang="en"
+  altLangPath={`/staedte/${city.slug}/`}
+>
+  <JsonLd
+    slot="jsonld"
+    type="Dataset"
+    name={`InfraNode: Open data for ${city.name}`}
+    description={`Normalized open data for ${city.name} (${stateName}) through a free, keyless REST API: ${available.map((t) => t.en.h1.replace(/ \(.*\)$/, "").replace(/ API.*/, "")).join(", ")}. Machine-readable as JSON.`}
+    url={`/en/cities/${city.slug}/`}
+    license="https://www.govdata.de/dl-de/by-2-0"
+    identifier="https://doi.org/10.5281/zenodo.20752355"
+    creatorName="InfraNode"
+    spatialCoverage={`${city.name}, ${stateName}, Germany`}
+    keywords={[
+      `open data ${city.name}`,
+      `${city.name} API`,
+      `city data ${city.name}`,
+      "free API",
+      "keyless API",
+      "REST API",
+    ]}
+    variableMeasured={available.flatMap((t) => t.en.vars)}
+    sameAs={[
+      "https://doi.org/10.5281/zenodo.20752355",
+      "https://huggingface.co/datasets/Khaledc83/german-cities-open-data",
+    ]}
+    distributions={[
+      {
+        name: `InfraNode REST API (${city.name})`,
+        url: `${API_BASE}/api/v1/cities/${city.slug}`,
+        format: "application/json",
+      },
+    ]}
+  />
+
+  <h1>Open data API for {city.name}</h1>
+  <p class="lead">{lead}</p>
+
+  <table class="cityfacts">
+    <tbody>
+      <tr><th scope="row">City</th><td>{city.name}</td></tr>
+      <tr><th scope="row">State</th><td>{stateName}</td></tr>
+      <tr><th scope="row">Population</th><td>{city.population != null ? fmt.format(city.population) : "-"}</td></tr>
+      <tr><th scope="row">API slug</th><td><code>{city.slug}</code></td></tr>
+      <tr><th scope="row">Coverage</th><td>{isCore ? "Core (hand-verified sources)" : "Auto (AGS and geo-based)"}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Data with a guide for {city.name}</h2>
+  <p>These data types have an in-depth guide; all are retrievable for {city.name} via the slug:</p>
+  <ul>
+    {
+      available.map((t) => (
+        <li>
+          <a href={`/en/data/${t.en.slug}/`}>{t.en.h1.replace(/ \(.*\)$/, "")}</a>
+          {" "}<code>{`/api/v1/cities/${city.slug}${t.examplePath.replace(/.*\/cities\/[^/]+/, "")}`}</code>
+        </li>
+      ))
+    }
+  </ul>
+
+  <h2>How to fetch data for {city.name}</h2>
+  <p>A simple GET request, no key and no sign-up:</p>
+  <pre><code>curl {weatherExample}</code></pre>
+  <p>Or air quality:</p>
+  <pre><code>curl {airExample}</code></pre>
+
+  <h2>All {cityEndpoints.length} data types for {city.name}</h2>
+  <p>
+    Using the same slug, all {cityEndpoints.length} city data types can be
+    retrieved for {city.name}. Where a source has nothing for {city.name} (yet),
+    the API honestly returns <code>no_data</code> instead of an error.
+    Parameters and example responses for each data type are in the linked
+    reference:
+  </p>
+  <ul class="endpoint-list">
+    {
+      cityEndpoints.map((e) => (
+        <li>
+          <a href={`/en/api/${e.id}/`}>{e.summary}</a>
+          {" "}<code>{e.example}</code>
+        </li>
+      ))
+    }
+  </ul>
+  <p>
+    An overview of all cities is on the
+    <a href="/en/cities/">cities page</a>. InfraNode is also available as an
+    <a href="/en/mcp/">MCP server for AI assistants</a>.
+  </p>
+
+  <h2>{city.name} via MCP server in Claude and ChatGPT</h2>
+  <p>
+    All open data for {city.name} is also available through the free, keyless
+    <a href="/en/mcp/">InfraNode MCP server</a> for AI agents. Connect it once to
+    Claude or ChatGPT and ask in natural language, for example "Give me an
+    overview of {city.name}" (calls <code>get_city_overview</code>, the catalog
+    of all data types with live highlights) or more specifically "What is the
+    weather in {city.name}?". Here is
+    how to set it up:
+    <a href="/en/tutorials/set-up-mcp-server-claude/">set up the MCP server</a>.
+  </p>
+</Docs>
+
+<style>
+  .lead {
+    font-size: 1.1rem;
+    color: var(--fg-muted);
+  }
+  table.cityfacts {
+    margin: 1rem 0;
+  }
+  table.cityfacts th {
+    text-align: left;
+    padding-right: 1.2rem;
+    white-space: nowrap;
+  }
+  .endpoint-list {
+    line-height: 1.7;
+  }
+  .endpoint-list code {
+    font-size: 0.8em;
+  }
+</style>

@@ -1,0 +1,497 @@
+"""httpx-Wrapper um die lokale InfraNode-Live-FastAPI (DX-05).
+
+Die MCP-Tools rufen ihre Daten über diesen Wrapper, nie direkt bei Upstreams.
+Die Funktion ``get_resource`` baut die URL ausschließlich aus der konfigurierten
+Base-URL plus einem festen ``/cities/{slug}/{resource}``-Schema und gibt das
+geparste JSON unverändert zurück (keine Mapping-/Lizenz-Logik, D-07/D-08).
+
+Sicherheit:
+
+- T-12-MCP-SSRF: Die Base-URL stammt ausschließlich aus der Env
+  ``INFRANODE_MCP_API_BASE`` (Default ``http://localhost:8000/api/v1``). Ihr Host
+  wird gegen eine Allowlist geprüft; ein nicht-allowlisteter Host wird mit
+  ``ValueError`` abgelehnt, bevor ein Request rausgeht. Eine arbitrary URL aus
+  Tool-Argumenten ist nicht möglich.
+- T-12-MCP-INJECT: ``resource`` wird gegen die Konstante ``ALLOWED_RESOURCES``
+  validiert und ``slug`` als reiner Pfadbestandteil url-gequotet, bevor die URL
+  gebaut wird. Ein unbekannter ``resource`` oder ein Slug mit Pfad-/Host-Anteilen
+  löst einen ``ValueError`` aus, bevor ein Request rausgeht.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import re
+import weakref
+from urllib.parse import quote, urlsplit
+
+import httpx
+
+from cityscape.config import get_settings
+
+# Default-Base-URL der lokalen Live-API (Loopback). Aus der Env überschreibbar,
+# aber nur auf einen allowlisteten Host (siehe ALLOWED_HOSTS).
+_DEFAULT_BASE_URL = "http://localhost:8000/api/v1"
+
+# T-12-MCP-SSRF: Host-Allowlist. Die Liste ist bewusst eng gehalten; ein
+# nicht-allowlisteter Host wird abgelehnt, bevor ein Request rausgeht.
+# - localhost/127.0.0.1/::1: lokaler Subprozess (stdio) gegen eine lokale API.
+# - api: der interne Compose-Service-Name. Im Remote-Betrieb (Phase 2) ruft der
+#   MCP-Container die API über das Compose-Netz (http://api:8000/api/v1), NICHT
+#   die öffentliche URL (sonst teilen sich alle Nutzer eine IP -> Rate-Limit).
+ALLOWED_HOSTS: frozenset[str] = frozenset(
+    {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        "api",
+    }
+)
+
+# Header, mit dem der MCP-Server seine internen API-Aufrufe markiert. Die API-
+# MetricsMiddleware erkennt ihn und macht MCP-Aktionen im Dashboard sichtbar +
+# löst einen ntfy-Push aus (Owner-Wunsch: MCP-Aktionen verfolgen). Best-effort-
+# Kennung, kein Auth-Mechanismus.
+_MCP_SOURCE_HEADER = "X-Infranode-Mcp"
+
+# T-12-MCP-INJECT: erlaubte Ressourcen-Namen, exakt die City-Sub-Ressourcen aus
+# docs/openapi.yaml (GET /api/v1/cities/{slug}/<resource>). Roher Tool-Input wird
+# gegen diese Konstante geprüft, bevor er in die URL gelangt.
+ALLOWED_RESOURCES: frozenset[str] = frozenset(
+    {
+        "base",
+        # Ein-Aufruf-Ueberblick: Basis + Katalog aller Datenarten + Live-Highlights.
+        "overview",
+        "air",
+        "air-uba",
+        "weather",
+        "pois",
+        "traffic",
+        "transit",
+        # DATA-40: unified Parkhaus-Endpunkt je Stadt (ParkenDD ~22 Städte +
+        # München-Fallback). Loest die alte, frankfurt-fixe /live/{slug}/parking-
+        # Route ab; unabgedeckte Slugs -> 200 not_covered (kein 404).
+        "parking",
+        "charging",
+        # DATA-42: eRound-Live-Ladebelegung je Stadt (Join Geo-Map + Delta-State).
+        "charging-status",
+        "water-level",
+        "flood",
+        "pollen-uv",
+        # DWD Waldbrand-/Graslandfeuerindex je Stadt (keylos, GeoNutzV, Tier A).
+        "fire-danger",
+        # EEA Badegewaesserqualitaet im Umkreis (keylos, CC-BY 4.0, Tier A).
+        "bathing-water",
+        # Bundes-Klinik-Atlas Krankenhausstandorte (keylos; fail-closed Tier C,
+        # per Default deaktiviert bis Lizenzbestaetigung BMG/IQTIG).
+        "hospitals-atlas",
+        # DB FaSta Aufzug-/Rolltreppen-Status (key-gated DB-Marketplace, CC-BY,
+        # Tier A; disabled ohne Schluessel).
+        "station-facilities",
+        "demographics",
+        "energy",
+        "geo",
+        "election",
+        "holidays",
+        "health",
+        "icu-live",
+        "road-events",
+        "events",
+        "webcams",
+        # SMARD/DWD (früher ergänzt, in der MCP-Allowlist nachgezogen).
+        "power-load",
+        "power-price",
+        "weather-warnings",
+        # Quick-260705-ufv: BBK NINA Bevoelkerungsschutz-Warnungen je Stadt (keylos,
+        # ARS-basiert, Tier A, Voll-Abdeckung). Ueber get_city_resource.
+        "civil-protection-warnings",
+        # DATA-27/28/29: KBA + GENESIS-Trio + Unfallatlas (Tier A, Kreis-Jahreswerte).
+        "vehicle-registrations",
+        "unemployment",
+        "tourism",
+        "construction",
+        "accidents",
+        # PKS-01: BKA Polizeiliche Kriminalstatistik (Tier A, Kreis-Jahreswerte).
+        "crime-stats",
+        # DATA-30: Tankerkönig Spritpreise (Tier A, aggregiert je Stadt).
+        "fuel-prices",
+        # DATA-33: GBFS-Bike-/Scooter-Sharing (Tier A, aggregiert je Stadt).
+        "sharing",
+        # DATA-38: PVGIS-Solar-Einstrahlung + normierter PV-Ertrag je Stadt (Tier A).
+        "solar",
+        # DATA-39: Dach-Solarkataster je Stadt (NRW-Pilot, Tier A, Teilabdeckung).
+        "solar-roofs",
+        # DATA-32: INKAR/BBSR sozialökonomische Indikatoren je Kreis (Tier A).
+        "indicators",
+        # DATA-35: BORIS amtliche Bodenrichtwerte je Stadt, aggregiert (Tier A).
+        "land-values",
+        # DATA-37: Regionalstatistik.de Realsteuer-Hebesätze (Gemeinde) +
+        # Gewerbean-/-abmeldungen (Kreis), Tier A.
+        "tax-rates",
+        "business-registrations",
+        # DATA-37: Regionalstatistik.de beantragte Insolvenzen je Kreis (52411-02
+        # Unternehmen + 52411-03 übrige Schuldner), Tier A.
+        "insolvencies",
+        # DATA-34: DB-Timetables Bahnhof-Abfahrten + -Ankünfte Metropolen-Hbf (Tier A).
+        "station-departures",
+        "station-arrivals",
+        # DATA-36: StaDa Bahnhofs-Katalog je Stadt (alle Bahnhöfe mit EVA, Tier A).
+        "stations",
+        # DATA-OSM (Tier 1): 10 dedizierte OSM-Overpass-Datenarten (ODbL, Tier B).
+        "playgrounds",
+        "drinking-water",
+        "public-toilets",
+        "markets",
+        "parcel-lockers",
+        "post-offices",
+        "post-boxes",
+        "public-wifi",
+        "recycling-centres",
+        "government-offices",
+        "education",
+        # DATA-OSM-Tier-2: Denkmallisten je Bundesland (Land-WFS, coverage-gated).
+        "heritage",
+        # DATA-OSM-Tier-2: Baumkataster je Stadt (kommunaler WFS, coverage-gated).
+        "tree-cadastre",
+        # DATA-OSM-Tier-2: Einwohnerdichte (Zensus-2022-100m-Gitter, alle Städte).
+        "population-density",
+        # TENDER-05/06: Öffentliche Auftragsvergabe je Stadt (oeffentlichevergabe.de,
+        # OCDS, CC0/Tier A). Read-only aus dem deduplizierten Store (Plan 21-04/05).
+        "public-tenders",
+        # DATA-40: Kommunale Radzählstellen je Stadt (Dauerzählstellen, Tier A,
+        # Teilabdeckung). NICHT das sharing-Tool (GBFS-Leihfahrzeuge).
+        "bike-counts",
+        # DATA-41: Fernwärme-/Wärmenetz-Versorgung je Stadt (kommunale Wärmeplanung,
+        # föderiert je Stadt-WFS, Tier A, Teilabdeckung berlin/hamburg).
+        "district-heating",
+        # Quick-260705-jgt: Behoerden-Wartezeiten je Stadt (live, keylos, Tier A,
+        # Teilabdeckung nur koeln). Ueber get_city_resource(slug, "office-wait-times").
+        "office-wait-times",
+    }
+)
+
+# T-12-MCP-INJECT: erlaubte Per-Bahnhof-Board-Pfade unter GET /api/v1/stations/{eva}/...
+# Die EVA wird zusätzlich als reine Zahl validiert (_validate_eva), bevor sie in
+# die URL gelangt; nur diese Board-Namen sind als zweites Segment zulässig.
+ALLOWED_STATION_BOARDS: frozenset[str] = frozenset({"departures", "arrivals"})
+
+# T-12-MCP-INJECT: erlaubte Live-Ressourcen-Pfade unter GET /api/v1/live/{slug}/...
+# Mehrsegmentige Pfade sind hier zulässig, weil sie gegen DIESE Allowlist
+# geprüft werden (kein roher Tool-Input im Pfad außer dem gequoteten slug).
+ALLOWED_LIVE_RESOURCES: frozenset[str] = frozenset(
+    {
+        "transit/departures",
+        # Frankfurt am Main Live-Parkbelegung (Mobilithek DATEX II V3). Route ist
+        # stadt-fix (/live/frankfurt-am-main/parking); ein anderer Slug -> 404.
+        "parking",
+    }
+)
+
+# T-12-MCP-INJECT: erlaubte slug-lose Top-Level-Endpunkte (GET /api/v1/<name>),
+# optional mit Query-Parametern. "compare" fächert eine Ressource über mehrere
+# Städte (cities/resource als Query, kein roher Input im Pfad).
+ALLOWED_COLLECTIONS: frozenset[str] = frozenset(
+    {
+        "cities",
+        "sources",
+        "compare",
+    }
+)
+
+# Fixe, moderate Verbindungs-/Schreib-Timeouts fuer den Loopback-Call (orientiert
+# an infra/http.py). connect/write sind bewusst kurz; read + pool sind
+# settings-getrieben (siehe _loopback_timeout).
+_LOOPBACK_CONNECT_TIMEOUT = 2.0
+_LOOPBACK_WRITE_TIMEOUT = 5.0
+
+
+def _loopback_limits(settings) -> httpx.Limits:  # noqa: ANN001 - Settings-Duck-Typing
+    """Baut die httpx.Limits des Loopback-Clients aus den Settings.
+
+    Reine Werte-Abbildung (quick-260704-ust). max_connections/max_keepalive
+    entsprechen per Default den httpx-Defaults (kein Verhaltenswechsel), sind
+    aber jetzt explizit und per Env konfigurierbar.
+    """
+    return httpx.Limits(
+        max_connections=settings.mcp_loopback_max_connections,
+        max_keepalive_connections=settings.mcp_loopback_max_keepalive,
+    )
+
+
+def _loopback_timeout(settings) -> httpx.Timeout:  # noqa: ANN001 - Settings-Duck-Typing
+    """Baut das httpx.Timeout des Loopback-Clients aus den Settings.
+
+    Der KURZE ``pool``-Wert (Default 1.0s) ist die eigentliche Verteidigung: ein
+    Burst staut sich nicht mehr sekundenlang auf dem Verbindungs-Pool auf (vorher
+    lag der flache 30s-Timeout auch auf dem Pool-Acquire). ``read`` bleibt bewusst
+    grosszuegig, weil Upstreams hinter der Live-API langsam sein koennen;
+    connect/write sind fixe moderate Werte.
+    """
+    return httpx.Timeout(
+        connect=_LOOPBACK_CONNECT_TIMEOUT,
+        read=settings.mcp_loopback_read_timeout,
+        write=_LOOPBACK_WRITE_TIMEOUT,
+        pool=settings.mcp_loopback_pool_timeout,
+    )
+
+
+class UpstreamError(RuntimeError):
+    """Lesbarer Fehler aus dem Antwort-Envelope der Live-API.
+
+    Wird bei einem 4xx/5xx-Status geworfen, statt einen rohen
+    ``httpx.HTTPStatusError``-Traceback an den Agenten zu geben. FastMCP wandelt
+    eine geworfene Exception in einen Tool-Fehler um, dessen Text das Modell
+    sieht; mit dieser Klasse trägt der Text die strukturierte API-Meldung inkl.
+    ``hint``, sodass sich das Modell selbst korrigieren kann (z.B. ``list_cities``
+    bei unbekanntem Slug aufrufen).
+
+    ``status_code`` trägt den HTTP-Status der Fehler-Response, damit die
+    Registrierungsschicht (server.py) 5xx (transiente Upstream-/Quellen-Ausfälle)
+    graceful in einen ``source_status="error"``-Envelope wandeln kann, 4xx
+    (z.B. unbekannter Slug, fehlender Pflichtparameter) aber weiter wirft, damit
+    sich das Modell selbst korrigiert.
+    """
+
+    def __init__(self, *args: object, status_code: int | None = None) -> None:
+        super().__init__(*args)
+        self.status_code = status_code
+
+
+def _build_upstream_error(response: httpx.Response) -> UpstreamError:
+    """Formt aus einer Fehler-Response eine lesbare ``UpstreamError``.
+
+    Bevorzugt den kanonischen API-Fehler-Envelope ``{"error": {"message",
+    "hint", "code"}}``; fällt auf den (gekürzten) Rohtext bzw. den HTTP-Grund
+    zurück, falls die Antwort kein erwartetes JSON ist.
+    """
+    detail = ""
+    try:
+        body = response.json()
+    except ValueError:
+        body = None
+    if isinstance(body, dict) and isinstance(body.get("error"), dict):
+        err = body["error"]
+        detail = " ".join(
+            str(part) for part in (err.get("message"), err.get("hint")) if part
+        )
+    if not detail:
+        detail = response.text[:200].strip() or response.reason_phrase
+    return UpstreamError(
+        f"InfraNode-API {response.status_code}: {detail}",
+        status_code=response.status_code,
+    )
+
+
+def _base_url() -> str:
+    """Liest die Base-URL aus der Env und prüft den Host gegen die Allowlist.
+
+    Gibt die validierte Base-URL ohne abschließenden Schrägstrich zurück.
+    Löst ``ValueError`` aus, wenn das Schema nicht http/https ist oder der Host
+    nicht in ``ALLOWED_HOSTS`` liegt (T-12-MCP-SSRF).
+    """
+    # Basis-URL aus INFRANODE_MCP_API_BASE, sonst Default. So
+    # funktioniert die nach außen dokumentierte Variable, ohne den bestehenden
+    # Env-Vertrag zu brechen.
+    raw = os.environ.get("INFRANODE_MCP_API_BASE", _DEFAULT_BASE_URL)
+    parts = urlsplit(raw)
+    if parts.scheme not in ("http", "https"):
+        raise ValueError(
+            f"Ungueltiges Schema fuer INFRANODE_MCP_API_BASE: "
+            f"{parts.scheme!r}. Erlaubt sind nur http/https."
+        )
+    if parts.hostname not in ALLOWED_HOSTS:
+        raise ValueError(
+            f"Host {parts.hostname!r} ist nicht allowlistet (T-12-MCP-SSRF). "
+            f"Erlaubt: {', '.join(sorted(ALLOWED_HOSTS))}."
+        )
+    return raw.rstrip("/")
+
+
+def _validate_slug(slug: str) -> str:
+    """Validiert und quotet den Slug als reinen Pfadbestandteil (T-12-MCP-INJECT).
+
+    Ein Slug darf keine Pfad-Trenner oder Host-Anteile (``/``, ``@``, ``:``,
+    Whitespace) enthalten; solche Eingaben könnten die URL umlenken. Gibt den
+    url-gequoteten Slug zurück oder löst ``ValueError`` aus.
+    """
+    if not slug or not isinstance(slug, str):
+        raise ValueError("Slug muss ein nicht-leerer String sein.")
+    # Reiner Pfadbestandteil: kein Slash/At/Doppelpunkt/Whitespace. Diese Zeichen
+    # könnten Host/Userinfo/Pfad umlenken (z.B. "hamburg@evil.example/internal").
+    forbidden = set("/@:\\ \t\n\r?#")
+    if any(ch in forbidden for ch in slug):
+        raise ValueError(
+            f"Ungueltiger Slug {slug!r}: enthaelt unzulaessige Zeichen "
+            "(Pfad-/Host-Trenner)."
+        )
+    return quote(slug, safe="")
+
+
+async def get_resource(
+    slug: str,
+    resource: str,
+    params: dict[str, str] | None = None,
+) -> dict:
+    """Ruft eine Stadt-Ressource der lokalen Live-API und gibt das JSON zurück.
+
+    Baut die URL ausschließlich aus der allowlisteten Base-URL plus dem festen
+    ``/cities/{slug}/{resource}``-Schema. ``resource`` wird gegen
+    ``ALLOWED_RESOURCES`` geprüft, ``slug`` als reiner Pfadbestandteil gequotet
+    und der Host der Base-URL gegen ``ALLOWED_HOSTS`` validiert, bevor ein Request
+    rausgeht. Das Ergebnis (kanonischer ``{data, meta}``-Envelope der API) wird
+    unverändert zurückgegeben, ohne jede Mapping-/Lizenz-Logik.
+
+    Args:
+        slug: Stadt-Slug (reiner Pfadbestandteil, z.B. ``"hamburg"``).
+        resource: Ressourcen-Name aus ``ALLOWED_RESOURCES`` (z.B. ``"base"``).
+        params: Optionale Query-Parameter (z.B. ``{"type": "hospital"}``).
+
+    Raises:
+        ValueError: Bei nicht-allowlistetem Host (T-12-MCP-SSRF) oder unbekanntem
+            ``resource``/ungueltigem ``slug`` (T-12-MCP-INJECT), jeweils BEVOR ein
+            Request rausgeht.
+    """
+    if resource not in ALLOWED_RESOURCES:
+        raise ValueError(
+            f"Unbekannte Ressource {resource!r} (T-12-MCP-INJECT). "
+            f"Erlaubt: {', '.join(sorted(ALLOWED_RESOURCES))}."
+        )
+    safe_slug = _validate_slug(slug)
+    # MCP-Kennung: der Ressourcen-Name (bereits gegen ALLOWED_RESOURCES validiert).
+    return await _request(f"/cities/{safe_slug}/{resource}", params, tag=resource)
+
+
+async def get_live(
+    slug: str,
+    live_resource: str,
+    params: dict[str, str] | None = None,
+) -> dict:
+    """Ruft eine Live-Ressource ``/live/{slug}/{live_resource}``; gibt JSON zurück.
+
+    ``live_resource`` wird gegen ``ALLOWED_LIVE_RESOURCES`` geprüft, ``slug`` als
+    reiner Pfadbestandteil gequotet und der Base-Host gegen ``ALLOWED_HOSTS``
+    validiert, BEVOR ein Request rausgeht (T-12-MCP-SSRF/-INJECT). Envelope 1:1.
+
+    Args:
+        slug: Stadt-Slug (reiner Pfadbestandteil, z.B. ``"berlin"``).
+        live_resource: Pfad aus ``ALLOWED_LIVE_RESOURCES`` (z.B.
+            ``"transit/departures"``).
+        params: Optionale Query-Parameter (z.B. ``{"stop_id": "..."}``).
+    """
+    if live_resource not in ALLOWED_LIVE_RESOURCES:
+        raise ValueError(
+            f"Unbekannte Live-Ressource {live_resource!r} (T-12-MCP-INJECT). "
+            f"Erlaubt: {', '.join(sorted(ALLOWED_LIVE_RESOURCES))}."
+        )
+    safe_slug = _validate_slug(slug)
+    return await _request(
+        f"/live/{safe_slug}/{live_resource}", params, tag=f"live:{live_resource}"
+    )
+
+
+async def get_collection(
+    name: str,
+    params: dict[str, str] | None = None,
+) -> dict:
+    """Ruft einen slug-losen Collection-Endpunkt ``/{name}`` und gibt das JSON zurück.
+
+    ``name`` wird gegen ``ALLOWED_COLLECTIONS`` geprüft und der Base-Host gegen
+    ``ALLOWED_HOSTS`` validiert, BEVOR ein Request rausgeht (T-12-MCP-SSRF/-INJECT).
+
+    Args:
+        name: Collection-Endpunkt aus ``ALLOWED_COLLECTIONS`` (``"cities"`` /
+            ``"sources"``).
+        params: Optionale Query-Parameter (z.B. Pagination).
+    """
+    if name not in ALLOWED_COLLECTIONS:
+        raise ValueError(
+            f"Unbekannter Collection-Endpunkt {name!r} (T-12-MCP-INJECT). "
+            f"Erlaubt: {', '.join(sorted(ALLOWED_COLLECTIONS))}."
+        )
+    return await _request(f"/{name}", params, tag=f"collection:{name}")
+
+
+_EVA_RE = re.compile(r"^\d{6,8}$")
+
+
+async def get_station_board(eva: str, board: str) -> dict:
+    """Ruft ein Per-Bahnhof-Board ``/stations/{eva}/{board}`` und gibt das JSON zurück.
+
+    ``eva`` wird strikt als 6-8-stellige Zahl validiert (T-12-MCP-SSRF/-INJECT),
+    ``board`` gegen ``ALLOWED_STATION_BOARDS`` geprüft, der Base-Host gegen
+    ``ALLOWED_HOSTS``, BEVOR ein Request rausgeht. Envelope 1:1.
+
+    Args:
+        eva: EVA-Nummer des Bahnhofs (reine Zahl, z.B. ``"8011160"``; aus dem
+            Katalog ``GET /cities/{slug}/stations``).
+        board: ``"departures"`` oder ``"arrivals"``.
+    """
+    if board not in ALLOWED_STATION_BOARDS:
+        raise ValueError(
+            f"Unbekanntes Board {board!r} (T-12-MCP-INJECT). "
+            f"Erlaubt: {', '.join(sorted(ALLOWED_STATION_BOARDS))}."
+        )
+    if not isinstance(eva, str) or not _EVA_RE.match(eva):
+        raise ValueError(
+            f"Ungueltige EVA {eva!r} (T-12-MCP-INJECT): erwartet eine 6-8-stellige "
+            "Zahl."
+        )
+    return await _request(f"/stations/{eva}/{board}", None, tag=f"station:{board}")
+
+
+async def _request(
+    path: str,
+    params: dict[str, str] | None,
+    *,
+    tag: str,
+) -> dict:
+    """Fuehrt den Loopback-GET gegen die allowlistete Base-URL aus (gemeinsamer Kern).
+
+    ``path`` wird ausschließlich aus bereits validierten Bestandteilen gebaut
+    (gequoteter slug + allowlistete resource/collection); roher Tool-Input gelangt
+    nie ungeprüft hierher. Der Base-Host wird in ``_base_url`` gegen die Allowlist
+    geprüft. Die MCP-Kennung ``tag`` fährt als Header mit (Dashboard/ntfy).
+    """
+    base = _base_url()
+    url = f"{base}{path}"
+    headers = {_MCP_SOURCE_HEADER: tag}
+
+    response = await _get_client().get(url, params=params, headers=headers)
+    # Bei 4xx/5xx den strukturierten API-Fehler-Envelope als lesbare
+    # UpstreamError durchreichen, statt einen rohen Traceback an den Agenten
+    # zu geben (das Modell sieht so message + hint und kann sich korrigieren).
+    if response.is_error:
+        raise _build_upstream_error(response)
+    return response.json()
+
+
+# Wiederverwendeter AsyncClient je Event-Loop (Latenz-Haertung 2026-07-02):
+# vorher oeffnete JEDER Tool-Call einen frischen ``httpx.AsyncClient`` und damit
+# eine neue TCP-Verbindung zur API; ueber eine Agenten-Session mit vielen Calls
+# summiert sich dieser Verbindungs-Overhead. Der Cache ist pro Event-Loop
+# geschluesselt, weil die gepoolten Verbindungen an den Loop gebunden sind, auf
+# dem sie entstanden: im Server-Betrieb (ein Loop) ergibt das genau EINEN
+# gepoolten Client mit Keep-Alive; in Tests (frischer Loop pro Test) je Loop
+# einen eigenen, statt einen loop-fremden (kaputten) wiederzuverwenden.
+# WeakKeyDictionary statt ``id(loop)``-Schluessel: ein GC-ter Loop nimmt seinen
+# Eintrag mit, und ein neuer Loop an derselben Speicheradresse kann nie den
+# toten Client erben. Kein explizites Schliessen noetig: der Prozess haelt
+# maximal eine Handvoll Clients, deren Loopback-Verbindungen der Peer idle-schliesst.
+_clients: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _get_client() -> httpx.AsyncClient:
+    """Gepoolter AsyncClient des laufenden Event-Loops (lazy, Keep-Alive)."""
+    loop = asyncio.get_running_loop()
+    client = _clients.get(loop)
+    if client is None or client.is_closed:
+        settings = get_settings()
+        client = httpx.AsyncClient(
+            limits=_loopback_limits(settings),
+            timeout=_loopback_timeout(settings),
+        )
+        _clients[loop] = client
+    return client

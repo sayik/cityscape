@@ -1,0 +1,105 @@
+[project]
+name = "cityscape"
+version = "1.0.0"
+description = "cityscape API: Open-source proxy REST API for open data from German cities"
+authors = [
+    { name = "sayik", email = "sayik@users.noreply.github.com" }
+]
+license = "Apache-2.0"
+requires-python = ">=3.13"
+dependencies = [
+    "asgi-correlation-id==5.0.0",
+    "cryptography==48.0.0",
+    "fastapi==0.136.3",
+    "gtfs-realtime-bindings==2.0.0",
+    "httpx==0.28.1",
+    "itsdangerous==2.2.0",
+    "jinja2==3.1.6",
+    "limits==5.8.0",
+    # openpyxl: reads the Berlin bike-count data XLSX (DATA-40 bike-counts, the only
+    # XLSX source). Read-only streaming, only on cache misses (long TTL).
+    "openpyxl==3.1.5",
+    "orjson==3.11.9",
+    "pydantic==2.13.4",
+    "pydantic-settings==2.14.1",
+    "python-multipart==0.0.32",
+    "redis==8.0.0",
+    "slowapi==0.1.9",
+    "structlog==26.1.0",
+    # tzdata: IANA time zones for zoneinfo (DATA-34 DB-Timetables uses
+    # Europe/Berlin for the local station time). On Linux Docker, this is often set via
+    # system time zone, but NOT on Windows/slim images -> pin it explicitly,
+    # so that ZoneInfo(“Europe/Berlin”) resolves correctly everywhere (tests + prod).
+    "tzdata==2026.1",
+    "uvicorn[standard]==0.49.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12.0"]
+build-backend = "uv_build"
+
+# Two top-level packages are built under src/: the internal package and
+# the public alias namespace “cityscape” (e.g., python -m cityscape.mcp).
+# Otherwise, uv_build builds only the package named [project].name; the explicit
+# list adds the alias.
+[tool.uv.build-backend]
+module-name = "cityscape"
+module-root = "src"
+
+[dependency-groups]
+dev = [
+    "fakeredis==2.36.1",
+    "jsonschema==4.26.0",
+    "pytest==9.0.3",
+    "pytest-asyncio==1.4.0",
+    "respx==0.23.1",
+    "ruff==0.15.16",
+]
+# Optional batch processing layer (D-01 pyarrow + D-17 h3).
+# Separate group, NEVER in [project] dependencies: neither should be included in the
+# live Docker image (image size/memory on CAX11, ARM/4 GB, Pitfall 1). Imported only by the
+# offline batch command, never via the request hotpath.
+# MCP server layer (official MCP Python SDK including bundled FastMCP,
+# owner decision A1 against standalone fastmcp). Separate group, NEVER in [project]
+# dependencies: must not be included in the live Docker image (T-12-MCP-IMG, Pitfall 2). httpx
+# is already a live dependency and is NOT included here again.
+mcp = [
+    "mcp[cli]==1.27.2",
+]
+# BORIS Shapefile Ingest (DATA-35): States without an open WFS (NW/ST) provide the
+# standard land values only as a Shapefile download. pyshp (pure Python, .shp/.dbf) ONLY
+# for offline bulk ingest, NEVER in the live Docker image/request path (Pitfall 1).
+ingest = [
+    "pyshp==2.3.1",
+]
+# Optional Data Explorer layer (DuckDB query against local JSONL data, OPS-09).
+# Separate group, NEVER in [project] dependencies: duckdb must not be included in the live Docker
+# image (image size/memory on CAX11, ARM/4 GB, not in the request hotpath, Pitfall 1).
+# Imported only lazily in the Admin Explorer path, never from a public API request. Version
+# 1.5.x MANDATORY: 1.4-LTS has no Linux ARM64 wheels on PyPI (RESEARCH
+# Pitfall 7); 1.5.3 pinned exactly, ARM64 wheel verified on the box.
+explorer = [
+    "duckdb==1.5.3",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+# scripts/ = one-time operational/ops utilities (Kuma setup, deploy, Export-Gate),
+# not a shipped library. Long lines (URLs, shell commands, regex) are
+# acceptable here -> ignore E501; all other rules (F/B/I/S) remain active,
+# so that actual bugs (unused imports, zip-strict) continue to be caught.
+"scripts/**" = ["E501"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    # Live contract tests target real upstreams. Run ONLY in the separate,
+    # non-blocking contract-live workflow (.github/workflows/contract-live.yml),
+    # NEVER in the main CI (where `pytest -m “not live”` is used), so that upstream failures
+    # do not mark PRs as red.
+    "live: trifft echte Upstream-APIs (nur im contract-live-Workflow)",
+]

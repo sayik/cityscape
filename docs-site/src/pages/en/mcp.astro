@@ -1,0 +1,469 @@
+---
+// English MCP page. Mirrors the German /mcp page with idiomatic copy.
+import Docs from "../../layouts/Docs.astro";
+import CodeTabs from "../../components/CodeTabs.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { mcpTopics } from "../../data/mcp-topics";
+
+// The server is publicly hosted (remote, Streamable HTTP) at
+// https://mcp.infranode.dev/mcp. Tab 1: Claude Code (remote, one command),
+// Tab 2: URL connector config, Tab 3: local self-host (stdio, needs repo access).
+const MCP_URL = "https://mcp.infranode.dev/mcp";
+
+const claudeCodeRemote = `claude mcp add --transport http infranode ${MCP_URL}`;
+
+const connectorConfig = [
+  `{`,
+  `  "mcpServers": {`,
+  `    "infranode": {`,
+  `      "url": "${MCP_URL}"`,
+  `    }`,
+  `  }`,
+  `}`,
+].join("\n");
+
+const claudeCodeLocal = `claude mcp add infranode -- uv run --group mcp python -m infranode.mcp`;
+
+// Fallback for clients that only support local stdio servers (no remote URL):
+// the standard mcp-remote bridge pipes stdio to the hosted endpoint via npx.
+const mcpRemoteConfig = [
+  `{`,
+  `  "mcpServers": {`,
+  `    "infranode": {`,
+  `      "command": "npx",`,
+  `      "args": ["-y", "mcp-remote", "${MCP_URL}"]`,
+  `    }`,
+  `  }`,
+  `}`,
+].join("\n");
+
+// The server's 12 tools (source: docs/mcp-install.md).
+const coreTools = [
+  ["get_city(slug)", "City master data (population, area, coordinates)"],
+  ["get_city_overview(slug)", "One-call overview: catalog of all 67 data types with key and coverage status + live highlights (discovery entry point)"],
+  ["get_city_resource(slug, resource)", "Generic access to all 67 data types by data type key (see list below)"],
+  ["air_quality(slug)", "Official air quality: PM10, PM2.5, NO2, O3, SO2 (UBA)"],
+  ["weather(slug)", "Current weather observations (DWD, not a forecast)"],
+  ["pois(slug, type)", "Points of interest, filtered by type (OpenStreetMap)"],
+  ["station_board_departures(eva)", "Live departures of any station by EVA number, all categories incl. local trains + disruptions (DB Timetables)"],
+  ["station_board_arrivals(eva)", "Live arrivals of any station by EVA number, all categories incl. local trains + disruptions (DB Timetables)"],
+  ["transit_departures(slug, stop_id?)", "Live public-transport departures with delays (GTFS-RT/HVV/VGN)"],
+  ["list_cities()", "List of all covered cities (slugs, coverage)"],
+  ["sources()", "All data sources with licence and availability"],
+  ["compare(resource, cities)", "Compare one resource (weather, air, indicators, demographics, unemployment, tourism, charging-status, weather-warnings) across several cities"],
+];
+
+// The 67 data types, grouped by topic (source: docs/mcp-install.md).
+// Display key = resource key for get_city_resource (kebab-case).
+// Data types with a dedicated tool are marked in the description.
+const dataTypeGroups = [
+  {
+    title: "Core and geo",
+    types: [
+      ["base", "City master data. Dedicated tool: get_city"],
+      ["overview", "One-call overview: catalog of all data types per city with coverage status + live highlights (discovery entry point). Dedicated tool: get_city_overview"],
+      ["geo", "Geo data"],
+      ["demographics", "Demographics"],
+      ["population-density", "Population density from the official Census 2022 100m grid (inhabitants per km² over the populated area)"],
+    ],
+  },
+  {
+    title: "Environment and weather",
+    types: [
+      ["air-uba", "Official air quality. Dedicated tool: air_quality"],
+      ["air", "Air quality, live readings"],
+      ["weather", "Weather. Dedicated tool: weather"],
+      ["weather-warnings", "Official DWD weather warnings (severe weather, level)"],
+      ["civil-protection-warnings", "Official civil protection warnings (BBK NINA: hazmat, major fire, etc.)"],
+      ["pollen-uv", "Pollen and UV index"],
+      ["fire-danger", "Forest and grassland fire danger index (DWD)"],
+    ],
+  },
+  {
+    title: "Mobility and traffic",
+    types: [
+      ["traffic", "Traffic situation"],
+      ["transit", "Public transit stops"],
+      ["charging", "Charging stations"],
+      ["charging-status", "EV charging occupancy (live, all 84 cities)"],
+      ["road-events", "Road and construction notices"],
+      ["parking", "Live parking occupancy per city: vacant spaces and occupancy (Dortmund, Frankfurt am Main, Wuppertal)"],
+      ["vehicle-registrations", "Car stock and electric vehicle share (KBA)"],
+      ["accidents", "Road traffic accidents per county (accident atlas)"],
+      ["crime-stats", "Crime statistics per main offence group: cases, frequency per 100k, clearance rate (BKA PKS)"],
+      ["fuel-prices", "Fuel prices per city, aggregated (Tankerkönig)"],
+      ["sharing", "Bike and scooter sharing per city, aggregated (GBFS/Nextbike)"],
+      ["bike-counts", "Bike counters per city: municipal continuous cycling-count stations (municipal open data, partial coverage)"],
+      ["station-departures", "Live departures at each city's main station with delays (DB Timetables)"],
+      ["station-arrivals", "Live arrivals at each city's main station with delays (DB Timetables)"],
+      ["stations", "Catalog of all stations in a city with EVA numbers (DB StaDa)"],
+      ["station-facilities", "Station facilities: lift and escalator status (DB FaSta, partial coverage)"],
+    ],
+  },
+  {
+    title: "Water and situation",
+    types: [
+      ["water-level", "Water levels"],
+      ["flood", "Flood situation"],
+      ["bathing-water", "Bathing water quality nearby (EEA)"],
+    ],
+  },
+  {
+    title: "Health and energy",
+    types: [
+      ["health", "Health data"],
+      ["icu-live", "ICU beds, live"],
+      ["hospitals-atlas", "Hospital locations from the federal clinic atlas"],
+      ["energy", "Energy installations (market master data register)"],
+      ["power-load", "Electricity consumption / grid load per control zone (SMARD)"],
+      ["power-price", "Day-ahead wholesale power price (SMARD)"],
+      ["solar", "Solar irradiation and normalised PV yield per kWp (PVGIS)"],
+      ["solar-roofs", "Rooftop solar cadastre per city: solar potential of roofs (partial coverage)"],
+      ["district-heating", "District heating networks (municipal heat planning, partial coverage)"],
+    ],
+  },
+  {
+    title: "Economy and statistics",
+    types: [
+      ["unemployment", "Unemployment count and rate per county"],
+      ["tourism", "Guest overnight stays and arrivals (tourism)"],
+      ["construction", "Building permits (residential buildings and dwellings)"],
+      ["indicators", "Socioeconomic indicators per county (INKAR/BBSR, ~70 metrics)"],
+      ["land-values", "Official land values per city, aggregated (BORIS, building land)"],
+      ["tax-rates", "Local tax multipliers per municipality: trade tax and property tax A/B/C (Regionalstatistik)"],
+      ["business-registrations", "Business registrations/deregistrations and net per district (Regionalstatistik)"],
+      ["insolvencies", "Insolvency filings per district: corporate and other debtors (incl. consumers), annual (Regionalstatistik)"],
+      ["public-tenders", "Public procurement per city: running tenders and awarded contracts (German public procurement data service, OCDS/CC0)"],
+    ],
+  },
+  {
+    title: "City life and politics",
+    types: [
+      ["pois", "Points of interest (required type parameter, e.g. hospital). Dedicated tool: pois"],
+      ["events", "Events"],
+      ["webcams", "Webcams"],
+      ["election", "Election results"],
+      ["holidays", "Public holidays"],
+      ["heritage", "Listed heritage monuments per city from the state register (Berlin, DL-DE/Zero)"],
+      ["office-wait-times", "Government office wait times per city: live wait at citizen/vehicle-registration offices (Cologne only, partial coverage)"],
+    ],
+  },
+  {
+    title: "City infrastructure (OpenStreetMap)",
+    types: [
+      ["playgrounds", "Public playgrounds"],
+      ["drinking-water", "Public drinking water fountains"],
+      ["public-toilets", "Public toilets"],
+      ["markets", "Markets and marketplaces (optional market days)"],
+      ["parcel-lockers", "Parcel lockers (DHL, Amazon, DPD, Hermes, GLS)"],
+      ["post-offices", "Post offices"],
+      ["post-boxes", "Public post boxes with collection times"],
+      ["public-wifi", "Public Wi-Fi locations"],
+      ["recycling-centres", "Recycling centres"],
+      ["government-offices", "Government offices (citizen and administrative offices)"],
+      ["education", "Education facilities (schools, universities, kindergartens)"],
+      ["tree-cadastre", "Municipal tree cadastre (species, planting year, height; Berlin, DL-DE/Zero)"],
+    ],
+  },
+];
+
+// FAQ for the FAQPage JSON-LD (GEO: directly quotable by AI answer engines and
+// Google). Plain text, serialised safely in JsonLd.astro.
+const faq = [
+  {
+    q: "How do I connect the InfraNode MCP server to Claude or ChatGPT?",
+    a: "Add the hosted endpoint https://mcp.infranode.dev/mcp as a connector. In Claude Code: claude mcp add --transport http infranode https://mcp.infranode.dev/mcp. No install needed.",
+  },
+  {
+    q: "Does the InfraNode MCP server need an API key?",
+    a: "No. Access is read-only, key-free and free of charge; only a fair per-IP limit applies.",
+  },
+  {
+    q: "What data does the InfraNode MCP server provide?",
+    a: "12 lean tools covering 67 data types of 84 major German cities: master data, air quality, weather, weather warnings and civil protection warnings, public transit incl. live departures, traffic, live parking occupancy, water levels and flooding, health, energy and power market, solar and district heating, car stock and electric share, unemployment, tourism, building permits, road accidents, fuel prices, land values, local tax multipliers and business registrations, insolvencies, bike and scooter sharing, bike counters, POIs, events, elections and holidays, station departures and arrivals, public procurement, government office wait times (Cologne only), plus a cities and a sources overview, and a multi-city comparison.",
+  },
+  {
+    q: "Why does the InfraNode MCP server have only 12 tools?",
+    a: "12 lean tools cover 67 data types: the generic accessor get_city_resource(slug, resource) fetches any data type by its key, and get_city_overview returns all keys with coverage status per city. This keeps the token footprint in the agent's context window minimal, stays well below client tool limits (e.g. 80 tools in Cursor), and the data breadth keeps growing without adding new tools.",
+  },
+  {
+    q: "My MCP client only supports local stdio servers. How do I connect InfraNode?",
+    a: "Use the standard mcp-remote bridge: command npx with args -y mcp-remote https://mcp.infranode.dev/mcp. It pipes stdio to the hosted endpoint, with no repo and no key. There is no package via pip, uvx or npx infranode.",
+  },
+  {
+    q: "Can I self-host the InfraNode MCP server?",
+    a: "Yes, locally over stdio. The source code is available on GitHub (Apache-2.0).",
+  },
+  {
+    q: "Is the InfraNode MCP server officially listed?",
+    a: "Yes. The server is listed in the official MCP Registry (registry.modelcontextprotocol.io) under the name dev.infranode/infranode.",
+  },
+];
+---
+
+<Docs
+  title="Open Data MCP Server for Germany (AI agents)"
+  description="Open data MCP server for German cities: 12 lean tools covering 67 data types, for AI agents like Claude and ChatGPT, hosted at mcp.infranode.dev, remote over Streamable HTTP, no install, no API key, free."
+  current="mcp"
+  lang="en"
+  altLangPath="/mcp/"
+>
+  <JsonLd
+    slot="jsonld"
+    type="SoftwareApplication"
+    name="InfraNode MCP server"
+    description="Hosted MCP server with 12 lean tools covering 67 data types of open city data for 84 major German cities, key-free and free of charge."
+  />
+  <JsonLd slot="jsonld" type="FAQPage" faq={faq} />
+
+  <h1>Open data MCP server for German cities</h1>
+  <p>
+    The InfraNode MCP server is a free, hosted Model Context Protocol server that
+    gives AI agents access to 67 data types of open data for 84 major German
+    cities through 12 lean tools, with no API key. It exposes the city data as
+    tools an agent calls directly, so you do not write HTTP calls by hand. The
+    server is listed in the official
+    <a href="https://registry.modelcontextprotocol.io">MCP Registry</a>
+    under the name <code>dev.infranode/infranode</code>, with a tool overview and
+    score also on <a href="https://glama.ai/mcp/servers/@street1983nk/infranode">Glama</a>.
+  </p>
+  <p>
+    In short: InfraNode is the open data MCP server for Germany, a free, keyless
+    MCP server for German cities and their open data, usable in Claude, ChatGPT
+    and other AI agents.
+  </p>
+  <p>
+    What sets it apart: InfraNode is the most comprehensive open data MCP server
+    for Germany. It is not limited to a single city or to rail only, but covers
+    all 84 major German cities and every data type, from environment and mobility
+    to energy, economy and city life, through one hosted, keyless endpoint, with
+    no per-city signup and no local install. How InfraNode compares to other MCP
+    servers for German and European data is shown in the
+    <a href="/en/mcp-comparison/">MCP server comparison</a>.
+  </p>
+
+  <h2>Data tools by topic</h2>
+  <p>
+    Dedicated pages per data type explain the matching MCP tool and how to use it
+    in your AI assistant:
+  </p>
+  <ul>
+    {mcpTopics.map((topic) => (<li><a href={`/en/mcp/${topic.en.slug}/`}>{topic.en.h1}</a></li>))}
+  </ul>
+  <p>
+    This data is available for all <a href="/en/cities/">84 covered cities</a>.
+    New to MCP? <a href="/en/tutorials/what-is-an-mcp-server/">What is an MCP
+    server</a> covers the basics, the
+    <a href="/en/tutorials/set-up-mcp-server-claude/">setup guide</a> shows how to
+    connect it in Claude and ChatGPT.
+  </p>
+
+  <div class="tldr">
+    <p class="tldr__title">Connect now</p>
+    <p>
+      The server is publicly hosted at <code>https://mcp.infranode.dev/mcp</code>
+      (Streamable HTTP). No install, no API key: add it as a connector with that
+      URL in Claude, ChatGPT or any other MCP client and you are done.
+    </p>
+    <p>
+      Building a Custom GPT instead of an MCP setup? For the OpenAI ecosystem
+      InfraNode is also available as a
+      <a href="/en/chatgpt/">GPT action with a curated OpenAPI</a>.
+    </p>
+  </div>
+
+  <h2>Try it now: have it build a live dashboard</h2>
+  <p>
+    In clients with canvas/artifact support (e.g. Claude Code, Claude.ai), a
+    simple prompt is enough to turn InfraNode data into a finished,
+    interactive page. For example:
+  </p>
+  <pre class="codetabs__pre"><code>Build me a live dashboard for Cologne</code></pre>
+  <p>
+    The agent calls <code>get_city_overview</code> plus a few targeted live data
+    types (weather, air quality, train departures, traffic events via
+    <code>get_city_resource</code>) and renders a full overview page from that
+    on its own, InfraNode itself never prescribes any UI:
+  </p>
+  <img
+    src="/showcase/koeln-live-dashboard.png"
+    alt="Cologne dashboard generated by Claude from InfraNode live data: weather, air quality, train departures, traffic events and data coverage"
+    loading="lazy"
+    class="showcase-img"
+  />
+  <p>
+    The result isn't an InfraNode app, it's something the agent built itself
+    from the tools' raw JSON responses, starting from
+    <code>get_city_overview</code>. Works the same way for any of the other 83
+    cities.
+  </p>
+
+  <h2>What the server runs against</h2>
+  <p>
+    The MCP server is a thin wrapper around the InfraNode live API. Each tool
+    calls the REST API and passes its normalised JSON through unchanged. There is
+    no mapping logic in the server and no API key for read access.
+  </p>
+
+  <h2>The 12 tools</h2>
+  <p>
+    The server provides 12 lean tools that together cover 67 data types. This
+    keeps the token footprint in the agent's context window minimal, stays well
+    below the tool limits of common MCP clients (e.g. 80 tools in Cursor), and
+    the data breadth keeps growing without adding new tools.
+  </p>
+  <p>
+    <strong>Why 12 tools instead of 71? (July 2026 change):</strong> Until June
+    2026 every data type carried its own tool, 71 in total. That tool list cost
+    roughly 30,000 tokens in the context window of every connected agent, on
+    every single connect, and would have kept growing with each new data type.
+    Since July 2026 <code>get_city_resource</code> bundles the entire long
+    tail: same data, same responses, but only about 4,400 tokens for the whole
+    tool list (85 percent less) and permanent headroom under all client tool
+    limits. For existing users: if you previously called an individual tool
+    such as <code>charging</code> or <code>parking</code>, call
+    <code>get_city_resource(slug, resource="charging")</code> instead; the key
+    is the former tool name in kebab case (for example <code>water_level</code>
+    becomes <code>water-level</code>). The REST API is unaffected by this
+    change.
+  </p>
+  <table class="params">
+    <thead>
+      <tr>
+        <th>Tool</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      {coreTools.map(([name, desc]) => (
+        <tr>
+          <td>
+            <code>{name}</code>
+          </td>
+          <td>{desc}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+  <p>
+    Most tools expect a city slug (for example <code>berlin</code> or
+    <code>hamburg</code>); <code>pois</code> also requires a <code>type</code>
+    parameter (e.g. <code>hospital</code>, <code>school</code>,
+    <code>pharmacy</code>), and <code>transit_departures</code> optionally takes
+    a <code>stop_id</code>. <code>list_cities</code> and <code>sources</code>
+    need no argument.
+  </p>
+
+  <h2>The 67 data types</h2>
+  <p>
+    Any data type without a dedicated tool is fetched via
+    <code>get_city_resource</code>, passing the data type key as the
+    <code>resource</code> argument. Example:
+    <code>get_city_resource(slug="berlin", resource="charging")</code> returns
+    the charging stations in Berlin. Which keys a city covers is shown by
+    <code>get_city_overview(slug)</code> (key plus coverage status per data
+    type); the <code>infranode://catalog</code> resource lists all data types.
+  </p>
+  {
+    dataTypeGroups.map((group) => (
+      <>
+        <h3>{group.title}</h3>
+        <table class="params">
+          <thead>
+            <tr>
+              <th>Data type</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {group.types.map(([name, desc]) => (
+              <tr>
+                <td>
+                  <code>{name}</code>
+                </td>
+                <td>{desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    ))
+  }
+
+  <h2>Example call</h2>
+  <p>
+    An agent fetches the one-call overview for Berlin: base data, a catalog of
+    all 67 data types with key and coverage status, and a live-highlights
+    snapshot. A good entry point for any city question, instead of guessing a
+    single data type. The result is the live API's normalised JSON, passed
+    through unchanged.
+  </p>
+  <pre class="codetabs__pre"><code>get_city_overview(slug="berlin")</code></pre>
+
+  <h2>One-click install</h2>
+  <p>
+    For Cursor and VS Code it is one click. Because InfraNode is keyless, there
+    is no login, the server connects instantly:
+  </p>
+  <p class="install">
+    <a class="install__btn" href="https://cursor.com/install-mcp?name=infranode&config=eyJ1cmwiOiJodHRwczovL21jcC5pbmZyYW5vZGUuZGV2L21jcCJ9">Add to Cursor</a>
+    <a class="install__btn install__btn--ghost" href="vscode:mcp/install?%7B%22name%22%3A%22infranode%22%2C%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.infranode.dev%2Fmcp%22%7D">Add to VS Code</a>
+  </p>
+
+  <h2>Connect (remote, recommended)</h2>
+  <p>
+    The fastest path: add the hosted endpoint
+    <code>https://mcp.infranode.dev/mcp</code> as a connector. In Claude Code a
+    single command does it (first tab). Clients with URL connector configuration
+    (Claude Desktop, ChatGPT and others) use the JSON form in the second tab or
+    enter the URL directly in their connector UI.
+  </p>
+  <CodeTabs
+    curl={claudeCodeRemote}
+    js={connectorConfig}
+    py={claudeCodeLocal}
+    id="codetabs-mcp-setup-en"
+    labels={["Claude Code (remote)", "Connector by URL", "Local (stdio)"]}
+    lang="en"
+  />
+  <p>
+    Once added, the 12 InfraNode tools are available in the agent. Access is
+    read-only and key-free.
+  </p>
+
+  <h2>Connect stdio-only clients (npx mcp-remote)</h2>
+  <p>
+    Some MCP clients only support local stdio servers, not a remote URL. For them
+    the standard <code>mcp-remote</code> tool bridges the gap: it runs locally via
+    <code>npx</code> and pipes stdio to the hosted endpoint. No repo, no key, no
+    InfraNode install required.
+  </p>
+  <pre class="codetabs__pre"><code>{mcpRemoteConfig}</code></pre>
+  <p>
+    If your client supports remote URL connectors (Claude, ChatGPT), the direct
+    route above is simpler. <code>mcp-remote</code> is only the fallback for
+    purely local stdio clients. Note: there is deliberately no package via
+    <code>pip</code>, <code>uvx</code> or <code>npx infranode</code>, the hosted
+    endpoint is the intended path.
+  </p>
+
+  <h2>Run it locally (optional)</h2>
+  <p>
+    If you prefer to self-host, run the server locally over stdio (third tab).
+    The source code is available on GitHub (Apache-2.0).
+    The <code>INFRANODE_MCP_API_BASE</code> environment variable sets the API base
+    it talks to (default <code>https://infranode.dev/api/v1</code>).
+  </p>
+
+  <h2>What is MCP</h2>
+  <p>
+    The Model Context Protocol (MCP) is an open standard through which AI agents
+    plug in external tools and data sources. An MCP server registers its tools
+    with the client, the agent calls them with typed arguments when needed and
+    receives structured JSON back. For you as a developer that means: instead of
+    building an API integration, you connect a server once and your agent can use
+    the data right away. The InfraNode server is reachable remotely over
+    Streamable HTTP and needs no local process; alternatively it runs locally
+    over stdio.
+  </p>
+</Docs>

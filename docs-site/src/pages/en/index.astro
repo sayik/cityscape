@@ -1,0 +1,214 @@
+---
+// English landing page. Mirrors the German index with idiomatic copy, TL;DR
+// block and FAQ (FAQPage JSON-LD). Endpoint reference stays German and is
+// linked as "API Reference".
+import Docs from "../../layouts/Docs.astro";
+import JsonLd from "../../components/JsonLd.astro";
+
+const faqs = [
+  {
+    q: "Do I need an API key?",
+    a: "No. The API is open and keyless: every endpoint is publicly readable, no signup, no key. Calls are simply limited per IP.",
+  },
+  {
+    q: "What does it cost?",
+    a: "Nothing. InfraNode is a free, public open-data API, ad-free and with no paywall. The source code is available on GitHub (Apache-2.0).",
+  },
+  {
+    q: "Which cities are covered?",
+    a: "All 84 German cities above 100,000 inhabitants. Of those, 28 core cities have full source coverage; the rest are served through AGS- and geo-based sources.",
+  },
+  {
+    q: "Where does the data come from?",
+    a: "From public, official sources. InfraNode brings them together behind one interface and passes them through in normalised form. Every response names licence and origin in its attribution block.",
+  },
+  {
+    q: "Are there rate limits?",
+    a: "Yes. Calls are limited per IP (abuse protection); on overrun the API answers with status 429. Every response carries RateLimit headers.",
+  },
+  {
+    q: "How fresh is the data?",
+    a: "It depends on the source. Responses carry a timestamp in the meta block plus ETag and Cache-Control headers. Live endpoints return current readings, static data is cached longer.",
+  },
+];
+
+const faqJsonLd = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.a },
+  })),
+});
+---
+
+<Docs
+  title="Open city data Germany, free REST API and MCP server"
+  description="Free, keyless open data API and MCP server for 84 major German cities: weather, air quality, live transit, electricity price and more. No API key, commercial use allowed."
+  current="home"
+  lang="en"
+  altLangPath="/"
+>
+  <JsonLd
+    slot="jsonld"
+    type="WebAPI"
+    name="InfraNode API"
+    description="Free, public open-data REST API for normalised open data of German cities."
+  />
+  <JsonLd
+    slot="jsonld"
+    type="Organization"
+    description="Open-data REST API and MCP server for normalised open data of German cities, keyless and free."
+  />
+  <JsonLd
+    slot="jsonld"
+    type="WebSite"
+    description="Open data of German cities via a free, keyless REST API and an MCP server for AI agents like Claude and ChatGPT."
+  />
+  <script slot="jsonld" type="application/ld+json" set:html={faqJsonLd} />
+
+  <p class="hero__eyebrow">Free, public open-data API</p>
+  <h1>Open city data, one API instead of dozens</h1>
+  <p class="hero__lede">
+    Weather, live transit departures, EV charging occupancy, electricity
+    prices and more for 84 German cities, via one REST interface and an MCP
+    server for AI agents. Every response follows the same JSON envelope and
+    names licence, origin and an honest source status.
+  </p>
+
+  <div class="tldr">
+    <p class="tldr__title">In short</p>
+    <p>
+      InfraNode is a free, public open-data REST API that serves open data for
+      German cities behind one unified interface. Instead of signing up at dozens
+      of portals, you query everything through a consistent JSON envelope, with no
+      API key.
+    </p>
+    <ul>
+      <li>84 large cities, 67 data types, 102 endpoints, one unified envelope.</li>
+      <li>No key required, free and ad-free.</li>
+      <li>Hosted on a server in Germany, with an honest source status.</li>
+    </ul>
+  </div>
+
+  <ul class="stats">
+    <li class="stat"><a href="/en/cities/"><strong>84</strong> cities</a></li>
+    <li class="stat"><strong>67</strong> data types</li>
+    <li class="stat"><strong>102</strong> endpoints</li>
+    <li class="stat"><strong>4,300+</strong> data streams, growing</li>
+    <li class="stat"><strong>35+</strong> official sources</li>
+  </ul>
+
+  <div class="hero__actions">
+    <a class="btn-primary" href="/en/quickstart/">Quickstart</a>
+    <a class="btn-secondary" href="/api/getCities/">View endpoints</a>
+    <a
+      class="btn-postman"
+      href="https://god.gw.postman.com/run-collection/55901679-26601800-bf9d-4ddd-8413-5f273f18be4d"
+      target="_blank"
+      rel="noopener"
+    >
+      <svg
+        class="btn-postman__icon"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <circle cx="12" cy="12" r="11" fill="#ffffff" opacity="0.18" />
+        <path d="M9.5 8.2v7.6l6.2-3.8z" fill="#ffffff" />
+      </svg>
+      Run in Postman
+    </a>
+  </div>
+
+  <figure class="hero-code" aria-label="Example call to the InfraNode API">
+    <div class="hero-code__bar" aria-hidden="true">
+      <i></i><i></i><i></i><span>Terminal, first call in seconds</span>
+    </div>
+    <pre><code><span class="c-dim">$</span> <span class="c-cmd">curl https://infranode.dev/api/v1/cities/berlin/weather</span>
+&#123;
+  <span class="c-key">"data"</span>: &#123;
+    <span class="c-key">"payload"</span>: &#123; <span class="c-key">"temperature_c"</span>: 12.9, <span class="c-key">"condition"</span>: <span class="c-str">"dry"</span>, <span class="c-dim">…</span> &#125;,
+    <span class="c-key">"attribution"</span>: &#123; <span class="c-key">"text"</span>: <span class="c-str">"Datenbasis: Deutscher Wetterdienst, …"</span> &#125;,
+    <span class="c-key">"license_id"</span>: <span class="c-str">"geonutzv"</span>, <span class="c-dim">…</span>
+  &#125;,
+  <span class="c-key">"meta"</span>: &#123; <span class="c-key">"source_status"</span>: <span class="c-str">"ok"</span>, <span class="c-key">"cache_status"</span>: <span class="c-str">"HIT"</span>, <span class="c-dim">…</span> &#125;
+&#125;</code></pre>
+  </figure>
+
+  <h2>What data is available</h2>
+  <p>
+    67 data types per city, all permissively licensed (Tier A: DL-DE/BY,
+    CC-BY, free for commercial use):
+  </p>
+  <ul>
+    <li>
+      <strong>Environment and weather:</strong> air quality (PM10, live
+      readings), weather, official DWD weather warnings, pollen and UV index.
+    </li>
+    <li>
+      <strong>Mobility and traffic:</strong> public transit stops and live
+      departures with delays, traffic situation, roadworks, charging stations
+      including live occupancy, car stock and electric vehicle share (KBA),
+      road accidents (accident atlas).
+    </li>
+    <li>
+      <strong>Energy and statistics:</strong> energy installations (market
+      master data register), electricity consumption and wholesale price
+      (SMARD), unemployment rate, tourism overnight stays, building permits,
+      demographics.
+    </li>
+    <li>
+      <strong>Water, health, city life:</strong> water levels and flooding,
+      hospitals and ICU beds, POIs, events, election results, public holidays,
+      administrative boundaries.
+    </li>
+  </ul>
+
+  <h2>What sets the API apart</h2>
+  <p>
+    Every response has the same shape: <code>data</code> with the payload and
+    <code>meta</code> with city, timestamp, <code>source_status</code>,
+    <code>correlation_id</code> and <code>cache_status</code>. Each data record
+    additionally carries an <code>attribution</code> field with licence and
+    origin. The <code>source_status</code> field cleanly tells "no data" apart
+    from a real error: a source without data still returns a tidy 200, not a 5xx.
+    Responses carry <code>ETag</code> and <code>Cache-Control</code> headers, and
+    an MCP server exposes the endpoints as tools for AI agents.
+  </p>
+
+  <h2>Real-time data under /live</h2>
+  <p>
+    Under <code>/api/v1/live/*</code> InfraNode serves current readings: traffic
+    conditions, roadworks, parking, charging and public-transit real-time with
+    delays per stop, trip and route. Some live sources are city-specific, for
+    example Hamburg HVV departures or Dortmund parking occupancy. The
+    <a href="/en/coverage/">coverage page</a> shows which city has which live
+    source.
+  </p>
+
+  <h2>Getting started</h2>
+  <p>
+    Read the <a href="/en/quickstart/">Quickstart</a> for your first call, or set
+    up the <a href="/en/mcp/">MCP server</a> for AI agents. In ChatGPT you can
+    simply use the ready-made <a href="/en/chatgpt/">InfraNode GPT</a> from the
+    GPT Store. The full endpoint
+    reference lives in the left navigation. Reference content is in German, the
+    code samples are universal. Every endpoint is also available as the
+    <a href="https://www.postman.com/alster83-7133231/infranode/collection/pft781f/infranode-api" target="_blank" rel="noopener">InfraNode API on the Postman API Network</a>,
+    with real example responses you can try in the browser without an API key.
+  </p>
+
+  <h2>Frequently asked questions</h2>
+  <div class="faq">
+    {
+      faqs.map((f) => (
+        <div class="faq__item">
+          <h3 class="faq__q">{f.q}</h3>
+          <p class="faq__a">{f.a}</p>
+        </div>
+      ))
+    }
+  </div>
+</Docs>

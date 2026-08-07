@@ -1,0 +1,154 @@
+---
+// Englische Per-Endpunkt-Seite je OpenAPI-Operation. Analog zur deutschen
+// src/pages/api/[slug].astro, rendert aber summaryEn/descriptionEn und
+// englische UI-Strings. lang="en", canonical/pageUrl unter /en/api/...
+import { getCollection } from "astro:content";
+import Docs from "../../../layouts/Docs.astro";
+import CodeTabs from "../../../components/CodeTabs.astro";
+import TryIt from "../../../components/TryIt.astro";
+import JsonLd from "../../../components/JsonLd.astro";
+import { curlFor, jsFor, pyFor } from "../../../lib/codegen";
+
+export async function getStaticPaths() {
+  const endpoints = await getCollection("endpoints");
+  return endpoints.map((entry) => ({
+    params: { slug: entry.data.id },
+    props: { endpoint: entry.data },
+  }));
+}
+
+interface OpenApiParameter {
+  name?: string;
+  in?: string;
+  required?: boolean;
+  description?: string;
+  descriptionEn?: string;
+  schema?: { type?: string; enum?: unknown[] };
+}
+
+const { endpoint } = Astro.props;
+
+// Try-it nur fuer aufrufbare Endpunkte (kind === "city").
+const canTryIt = endpoint.kind === "city";
+
+const params = (endpoint.parameters as unknown[]).map((p) =>
+  p != null && typeof p === "object" ? (p as OpenApiParameter) : {},
+);
+
+const methodClass = endpoint.method.toLowerCase() === "post" ? "method--post" : "method--get";
+
+const curl = curlFor(endpoint);
+const js = jsFor(endpoint);
+const py = pyFor(endpoint);
+
+// Englische Texte mit Fallback auf die deutschen, falls x-*-en fehlt.
+const summary = endpoint.summaryEn || endpoint.summary;
+const description = endpoint.descriptionEn || endpoint.description;
+
+// SEO: speaking, keyword-bearing title from the English summary instead of
+// raw METHOD + path. Budget: 53 chars (SeoHead appends " | InfraNode",
+// 12 chars, total max 65, Bing scan 2026-07-01). JSON-LD keeps the full
+// form with method + path in name (jsonLdName).
+// Measured against the HTML-escaped length (Astro escapes e.g. ' to &#39;),
+// so the raw <title> content in the build also stays within budget.
+function escLen(s: string): number {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;").length;
+}
+function shortTitle(text: string | undefined, max = 53): string {
+  if (!text) return "";
+  if (escLen(text) <= max) return text;
+  let cut = "";
+  for (const word of text.split(" ")) {
+    const next = cut ? `${cut} ${word}` : word;
+    if (escLen(next) + 1 > max) break;
+    cut = next;
+  }
+  if (!cut) cut = text.slice(0, max - 1);
+  return `${cut.replace(/[\s,;:]+$/, "")}…`;
+}
+const seoTitle = shortTitle(summary) || `${endpoint.method} ${endpoint.path}`;
+const jsonLdName = summary
+  ? `${summary} (${endpoint.method} ${endpoint.path})`
+  : `${endpoint.method} ${endpoint.path}`;
+const seoDescription = summary || description;
+const site = Astro.site?.toString().replace(/\/$/, "") ?? "";
+const pageUrl = `${site}/en/api/${endpoint.id}/`;
+const altLangPath = `/api/${endpoint.id}/`;
+---
+
+<Docs
+  title={seoTitle}
+  description={seoDescription}
+  current={endpoint.id}
+  lang="en"
+  altLangPath={altLangPath}
+>
+  <JsonLd
+    slot="jsonld"
+    type="APIReference"
+    name={jsonLdName}
+    abstract={seoDescription}
+    url={pageUrl}
+  />
+  <h1>
+    <span class={`method ${methodClass}`}>{endpoint.method}</span>
+    <span class="path">{endpoint.path}</span>
+  </h1>
+  {summary && <p><strong>{summary}</strong></p>}
+  {description && <p>{description}</p>}
+
+  <h2>Parameters</h2>
+  {
+    params.length > 0 ? (
+      <table class="params">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>In</th>
+            <th>Required</th>
+            <th>Type</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {params.map((p) => (
+            <tr>
+              <td><code>{p.name}</code></td>
+              <td>{p.in}</td>
+              <td>{p.required ? "yes" : "no"}</td>
+              <td>{p.schema?.type ?? ""}</td>
+              <td>{p.descriptionEn ?? p.description ?? ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    ) : (
+      <p class="tryit__hint">This endpoint takes no parameters.</p>
+    )
+  }
+
+  <h2>Code samples</h2>
+  <CodeTabs curl={curl} js={js} py={py} id={`codetabs-${endpoint.id}`} />
+
+  <h2>Try it</h2>
+  {
+    canTryIt ? (
+      <TryIt
+        path={endpoint.path}
+        method={endpoint.method}
+        parameters={endpoint.parameters}
+      />
+    ) : (
+      <p class="tryit__hint">
+        No live console is available for this endpoint. It is an operational or
+        demo operation (for example a forced error) and is only documented here.
+        Use the code samples above to call it directly.
+      </p>
+    )
+  }
+</Docs>

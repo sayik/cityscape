@@ -1,0 +1,232 @@
+---
+// JSON-LD strukturierte Daten (DX-03, schema.org). type="WebAPI" auf der
+// Startseite, type="APIReference" je Endpunkt-Seite, type="FAQPage" für Q&A-
+// Blöcke (GEO: KI-Antwortmaschinen + Google-Rich-Results) und
+// type="SoftwareApplication" für den MCP-Server. Das schema.org-Objekt wird mit
+// JSON.stringify serialisiert (gültiges, escaptes JSON; kein manuelles
+// String-Bauen, T-12-SEO-INJECT). Felder konservativ nach schema.org gehalten
+// (T-12-SEO-INVALID: invalid schema wäre schlechter als keins, daher nur
+// Kernfelder).
+interface Props {
+  type:
+    | "WebAPI"
+    | "APIReference"
+    | "FAQPage"
+    | "SoftwareApplication"
+    | "Dataset"
+    | "Organization"
+    | "WebSite";
+  // APIReference / SoftwareApplication / Dataset
+  name?: string;
+  abstract?: string;
+  url?: string;
+  // WebAPI / SoftwareApplication / Dataset
+  description?: string;
+  documentation?: string;
+  // SoftwareApplication
+  applicationCategory?: string;
+  // FAQPage: Liste von Frage/Antwort-Paaren (q/a, reiner Text).
+  faq?: { q: string; a: string }[];
+  // Dataset (DX: Google Dataset Search). Konservativ nach schema.org/Dataset.
+  keywords?: string[];
+  license?: string;
+  identifier?: string; // z.B. DOI-URL
+  spatialCoverage?: string;
+  temporalCoverage?: string;
+  variableMeasured?: string[];
+  creatorName?: string;
+  // distribution[]: je Bezugsquelle eine DataDownload (contentUrl + Format).
+  distributions?: { url: string; format: string; name?: string }[];
+  sameAs?: string[];
+}
+
+const {
+  type,
+  name,
+  abstract,
+  url,
+  description,
+  documentation,
+  applicationCategory,
+  faq,
+  keywords,
+  license,
+  identifier,
+  spatialCoverage,
+  temporalCoverage,
+  variableMeasured,
+  creatorName,
+  distributions,
+  sameAs,
+} = Astro.props;
+
+const site = Astro.site?.toString().replace(/\/$/, "") ?? "";
+
+let data: Record<string, unknown>;
+
+if (type === "WebAPI") {
+  data = {
+    "@context": "https://schema.org",
+    "@type": "WebAPI",
+    name: name ?? "InfraNode API",
+    description:
+      description ??
+      "Kostenlose, öffentliche Open-Data-REST-API für normalisierte offene Daten deutscher Großstädte.",
+    documentation: documentation ?? `${site}/quickstart/`,
+    provider: {
+      "@type": "Organization",
+      name: "InfraNode",
+    },
+    termsOfService: `${site}/`,
+  };
+} else if (type === "FAQPage") {
+  data = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: (faq ?? []).map(({ q, a }) => ({
+      "@type": "Question",
+      name: q,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: a,
+      },
+    })),
+  };
+} else if (type === "SoftwareApplication") {
+  data = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: name ?? "InfraNode MCP-Server",
+    description:
+      description ??
+      "Gehosteter Model-Context-Protocol-Server mit Tools für offene Stadtdaten deutscher Großstädte.",
+    url: url ?? `${site}/mcp/`,
+    applicationCategory: applicationCategory ?? "DeveloperApplication",
+    operatingSystem: "Any",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "EUR",
+    },
+    provider: {
+      "@type": "Organization",
+      name: "InfraNode",
+    },
+  };
+} else if (type === "Organization") {
+  // Marken-Entitaet mit stabiler @id, damit DE- und EN-Startseite dieselbe
+  // Organisation referenzieren. sameAs = autoritative Profile (GitHub-Repo,
+  // PulseMCP-Listing) zur Entitaets-Disambiguierung gegen fremde Namensvettern
+  // ("InfraNodus" / infranode.eu), GEO/Knowledge-Graph-Signal.
+  data = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": `${site}/#organization`,
+    name: name ?? "InfraNode",
+    // alternateName + disambiguatingDescription schaerfen die Marken-Entitaet
+    // gegen gleichnamige Dritte (InfraNodus = Knowledge-Graph-Tool, Infranode =
+    // Infrastruktur-Investor infranode.eu), damit KI-Antwortmaschinen und der
+    // Knowledge-Graph infranode.dev korrekt zuordnen.
+    alternateName: ["InfraNode.dev", "InfraNode Open Data", "InfraNode MCP"],
+    disambiguatingDescription:
+      "InfraNode ist eine Open-Data-REST-API und ein MCP-Server für offene Daten deutscher Städte (infranode.dev). Kein Zusammenhang mit InfraNodus (Knowledge-Graph-Werkzeug) oder Infranode (Infrastruktur-Investor, infranode.eu).",
+    url: `${site}/`,
+    logo: `${site}/logo-infranode.png`,
+    description:
+      description ??
+      "Open-Data-REST-API und MCP-Server für normalisierte offene Daten deutscher Großstädte, keylos und kostenlos.",
+    sameAs: sameAs ?? [
+      "https://github.com/street1983nk/infranode",
+      "https://www.pulsemcp.com/servers/infranode",
+      "https://glama.ai/mcp/servers/@street1983nk/infranode",
+      "https://smithery.ai/server/infranode/infranode",
+    ],
+  };
+} else if (type === "WebSite") {
+  // WebSite-Entitaet mit stabiler @id, verweist als publisher auf die
+  // Organization (#organization). Traegt die Marke + alternateName in den
+  // Knowledge-Graph (Brand-Disambiguierung, siehe Organization). Bewusst OHNE
+  // potentialAction/SearchAction: die Doku-Suche (Pagefind) laeuft rein
+  // clientseitig ohne Such-URL, ein SearchAction-Target waere unehrlich/ungueltig.
+  data = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": `${site}/#website`,
+    name: name ?? "InfraNode",
+    alternateName: ["InfraNode.dev", "InfraNode Open Data API", "InfraNode MCP"],
+    url: `${site}/`,
+    description:
+      description ??
+      "Offene Daten deutscher Großstädte über eine kostenlose, keylose REST-API und einen MCP-Server für KI-Agenten.",
+    inLanguage: ["de", "en"],
+    publisher: { "@id": `${site}/#organization` },
+  };
+} else if (type === "Dataset") {
+  data = {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    name: name ?? "InfraNode: Open Data deutscher Großstädte",
+    description:
+      description ??
+      "Normalisierte offene Daten für deutsche Großstädte über eine kostenlose REST-API: Wetter, Luftqualität, Verkehr, ÖPNV und mehr.",
+    url: url ?? `${site}/staedte/`,
+    license: license ?? "https://www.govdata.de/dl-de/by-2-0",
+    isAccessibleForFree: true,
+    creator: {
+      "@type": "Organization",
+      name: creatorName ?? "InfraNode",
+      url: `${site}/`,
+    },
+    // dateModified = Build-Datum: die API liefert laufend aktuelle Werte, die
+    // Doku/Snapshot wird mit jedem Deploy neu erzeugt. Gibt Google Dataset
+    // Search ein Frische-Signal.
+    dateModified: new Date().toISOString().slice(0, 10),
+    // Verweis auf den DCAT-AP-Katalog (EU-harvestbar), stärkt die Einordnung
+    // als Datensatz.
+    includedInDataCatalog: {
+      "@type": "DataCatalog",
+      name: "InfraNode DCAT-AP Catalog",
+      url: `${site}/api/v1/catalog.jsonld`,
+    },
+    ...(keywords && keywords.length ? { keywords } : {}),
+    ...(spatialCoverage
+      ? { spatialCoverage: { "@type": "Place", name: spatialCoverage } }
+      : {}),
+    ...(temporalCoverage ? { temporalCoverage } : {}),
+    ...(variableMeasured && variableMeasured.length
+      ? { variableMeasured }
+      : {}),
+    ...(identifier ? { identifier } : {}),
+    ...(sameAs && sameAs.length ? { sameAs } : {}),
+    ...(distributions && distributions.length
+      ? {
+          distribution: distributions.map((d) => ({
+            "@type": "DataDownload",
+            ...(d.name ? { name: d.name } : {}),
+            encodingFormat: d.format,
+            contentUrl: d.url,
+          })),
+        }
+      : {}),
+  };
+} else {
+  data = {
+    "@context": "https://schema.org",
+    "@type": "APIReference",
+    name: name ?? "",
+    abstract: abstract ?? "",
+    url: url ?? "",
+    programmingModel: "REST",
+    targetPlatform: "HTTP",
+    isPartOf: {
+      "@type": "WebAPI",
+      name: "InfraNode API",
+      url: `${site}/`,
+    },
+  };
+}
+
+const json = JSON.stringify(data);
+---
+
+<script type="application/ld+json" set:html={json} />

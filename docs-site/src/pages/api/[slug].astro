@@ -1,0 +1,149 @@
+---
+// Per-Endpunkt-Seite je OpenAPI-Operation (D-04, SEO Longtail). getStaticPaths
+// baut über ALLE Operationen der endpoints-Collection (params.slug =
+// operationId). Rendert Titel (Methode + Pfad), summary/description, eine
+// Parameter-Tabelle aus endpoint.parameters, die umschaltbaren CodeTabs
+// (curl/JS/Python) und, NUR für aufrufbare Endpunkte, die Try-it-Konsole.
+import { getCollection } from "astro:content";
+import Docs from "../../layouts/Docs.astro";
+import CodeTabs from "../../components/CodeTabs.astro";
+import TryIt from "../../components/TryIt.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { curlFor, jsFor, pyFor } from "../../lib/codegen";
+
+export async function getStaticPaths() {
+  const endpoints = await getCollection("endpoints");
+  return endpoints.map((entry) => ({
+    params: { slug: entry.data.id },
+    props: { endpoint: entry.data },
+  }));
+}
+
+interface OpenApiParameter {
+  name?: string;
+  in?: string;
+  required?: boolean;
+  description?: string;
+  schema?: { type?: string; enum?: unknown[] };
+}
+
+const { endpoint } = Astro.props;
+
+// Try-it nur für aufrufbare Endpunkte (Blocker 2): kind === "city" deckt
+// getSources/getCities/compareCities und alle /cities/{slug}/... ab. meta
+// (insb. getBoom = _boom, 503; Health; Spec) bekommt kein Try-it,
+// sondern einen kurzen Hinweis.
+const canTryIt = endpoint.kind === "city";
+
+const params = (endpoint.parameters as unknown[]).map((p) =>
+  p != null && typeof p === "object" ? (p as OpenApiParameter) : {},
+);
+
+const methodClass = endpoint.method.toLowerCase() === "post" ? "method--post" : "method--get";
+
+const curl = curlFor(endpoint);
+const js = jsFor(endpoint);
+const py = pyFor(endpoint);
+
+// SEO: keyword-reicher Title aus der sprechenden Summary (statt METHOD /pfad),
+// damit die Longtail-Endpunktseiten suchrelevante Begriffe im Title tragen.
+// Titel-Budget: 53 Zeichen (SeoHead haengt " | InfraNode" an, 12 Zeichen,
+// Gesamt max 65, Bing-Scan 2026-07-01). Zu lange Summaries werden an der
+// letzten Wortgrenze gekuerzt. APIReference-JSON-LD behaelt die volle Form
+// mit Methode + Pfad im name (jsonLdName).
+// Gemessen wird die HTML-escapte Laenge (Astro escapt z.B. ' zu &#39;),
+// damit auch der rohe <title>-Inhalt im Build das Budget einhaelt.
+function escLen(s: string): number {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;").length;
+}
+function shortTitle(text: string | undefined, max = 53): string {
+  if (!text) return "";
+  if (escLen(text) <= max) return text;
+  let cut = "";
+  for (const word of text.split(" ")) {
+    const next = cut ? `${cut} ${word}` : word;
+    if (escLen(next) + 1 > max) break;
+    cut = next;
+  }
+  if (!cut) cut = text.slice(0, max - 1);
+  return `${cut.replace(/[\s,;:]+$/, "")}…`;
+}
+const seoTitle = shortTitle(endpoint.summary) || `${endpoint.method} ${endpoint.path}`;
+const jsonLdName = endpoint.summary
+  ? `${endpoint.summary} (${endpoint.method} ${endpoint.path})`
+  : `${endpoint.method} ${endpoint.path}`;
+const seoDescription = endpoint.summary || endpoint.description;
+const site = Astro.site?.toString().replace(/\/$/, "") ?? "";
+const pageUrl = `${site}/api/${endpoint.id}/`;
+---
+
+<Docs title={seoTitle} description={seoDescription} current={endpoint.id}>
+  <JsonLd
+    slot="jsonld"
+    type="APIReference"
+    name={jsonLdName}
+    abstract={seoDescription}
+    url={pageUrl}
+  />
+  <h1>
+    <span class={`method ${methodClass}`}>{endpoint.method}</span>
+    <span class="path">{endpoint.path}</span>
+  </h1>
+  {endpoint.summary && <p><strong>{endpoint.summary}</strong></p>}
+  {endpoint.description && <p>{endpoint.description}</p>}
+
+  <h2>Parameter</h2>
+  {
+    params.length > 0 ? (
+      <table class="params">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>In</th>
+            <th>Pflicht</th>
+            <th>Typ</th>
+            <th>Beschreibung</th>
+          </tr>
+        </thead>
+        <tbody>
+          {params.map((p) => (
+            <tr>
+              <td><code>{p.name}</code></td>
+              <td>{p.in}</td>
+              <td>{p.required ? "ja" : "nein"}</td>
+              <td>{p.schema?.type ?? ""}</td>
+              <td>{p.description ?? ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    ) : (
+      <p class="tryit__hint">Dieser Endpunkt nimmt keine Parameter.</p>
+    )
+  }
+
+  <h2>Code-Beispiele</h2>
+  <CodeTabs curl={curl} js={js} py={py} id={`codetabs-${endpoint.id}`} />
+
+  <h2>Try it</h2>
+  {
+    canTryIt ? (
+      <TryIt
+        path={endpoint.path}
+        method={endpoint.method}
+        parameters={endpoint.parameters}
+      />
+    ) : (
+      <p class="tryit__hint">
+        Für diesen Endpunkt steht keine Live-Konsole bereit. Er ist eine
+        Betriebs- oder Demo-Operation (z.B. erzwungener Fehler) und wird hier
+        nur dokumentiert. Nutze die Code-Beispiele oben für einen direkten Aufruf.
+      </p>
+    )
+  }
+</Docs>
