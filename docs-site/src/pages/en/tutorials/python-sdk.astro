@@ -1,17 +1,17 @@
 ---
-// Tutorial EN: the official Python package "infranode" (client + LangChain/LlamaIndex).
+// Tutorial EN: the official Python package "cityscape" (client + LangChain/LlamaIndex).
 import Docs from "../../../layouts/Docs.astro";
 import JsonLd from "../../../components/JsonLd.astro";
 
-const title = "InfraNode with Python: the infranode package";
+const title = "cityscape with Python: the cityscape package";
 const description =
-  "Tutorial: fetch open data for German cities with the keyless Python package infranode, sync and async, plus ready-made LangChain and LlamaIndex tools for AI agents.";
+  "Tutorial: fetch open data for German cities with the keyless Python package cityscape, sync and async, plus ready-made LangChain and LlamaIndex tools for AI agents.";
 
-const install = `pip install infranode`;
+const install = `pip install cityscape`;
 
-const basic = `from infranode import InfraNode
+const basic = `from cityscape import cityscape
 
-api = InfraNode()
+api = cityscape()
 rec = api.weather("berlin")
 print(rec.payload["temperature_c"], "degC")
 print("Source:", rec.attribution["text"])   # always show attribution
@@ -21,35 +21,35 @@ fuel = api.record("hamburg", "fuel-prices")
 cities = api.cities()                          # all 84 cities`;
 
 const async_ = `import asyncio
-from infranode import AsyncInfraNode
+from cityscape import Asynccityscape
 
 async def main():
-    async with AsyncInfraNode() as api:
+    async with Asynccityscape() as api:
         rec = await api.air("muenchen")
         print(rec.payload)
 
 asyncio.run(main())`;
 
-const langchain = `pip install "infranode[langchain]"`;
+const langchain = `pip install "cityscape[langchain]"`;
 
-const langchainCode = `from infranode.integrations.langchain import infranode_tools
+const langchainCode = `from cityscape.integrations.langchain import cityscape_tools
 
-tools = infranode_tools()   # bind these to your LangChain agent`;
+tools = cityscape_tools()   # bind these to your LangChain agent`;
 
-const llamaindex = `pip install "infranode[llamaindex]"`;
+const llamaindex = `pip install "cityscape[llamaindex]"`;
 
-const llamaindexCode = `from infranode.integrations.llamaindex import infranode_tools
+const llamaindexCode = `from cityscape.integrations.llamaindex import cityscape_tools
 
-tools = infranode_tools()   # pass to your LlamaIndex agent`;
+tools = cityscape_tools()   # pass to your LlamaIndex agent`;
 
 const faq = [
   {
     q: "Do I need an API key?",
-    a: "No. The package talks to the keyless, free InfraNode API. No key, no signup.",
+    a: "No. The package talks to the keyless, free cityscape API. No key, no signup.",
   },
   {
     q: "Sync or async?",
-    a: "Both. InfraNode is the synchronous client, AsyncInfraNode the asynchronous one. They share the same method API.",
+    a: "Both. cityscape is the synchronous client, Asynccityscape the asynchronous one. They share the same method API.",
   },
   {
     q: "How is this different from the MCP server?",
@@ -93,16 +93,16 @@ const faq = [
   <pre><code>{llamaindex}</code></pre>
   <pre><code>{llamaindexCode}</code></pre>
   <p>
-    Both expose <code>infranode_get_city_data(city, dataset)</code> and
-    <code>infranode_list_cities()</code>. The tool description lists valid
+    Both expose <code>cityscape_get_city_data(city, dataset)</code> and
+    <code>cityscape_list_cities()</code>. The tool description lists valid
     datasets so the model picks the right one. If your runtime speaks MCP, use
-    the <a href="/en/mcp/">InfraNode MCP server</a>.
+    the <a href="/en/mcp/">cityscape MCP server</a>.
   </p>
 
   <h2>Learn more</h2>
   <p>
     Source and issues:
-    <a href="https://github.com/street1983nk/infranode-python">github.com/street1983nk/infranode-python</a>.
+    <a href="https://github.com/street1983nk/cityscape-python">github.com/street1983nk/cityscape-python</a>.
     For plain notebook analysis without the package, see
     <a href="/en/tutorials/python-pandas-city-data/">City data with Python and pandas</a>.
   </p>

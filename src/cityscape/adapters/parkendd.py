@@ -3,7 +3,7 @@
 ParkenDD (https://api.parkendd.de, https://github.com/ParkenDD) ist ein offener
 Aggregator, der die Parkhaus-Belegung vieler deutscher Städte aus deren
 amtlichen Parkleitsystemen bündelt und keylos als JSON bereitstellt. Ein einziger
-Adapter erschließt damit viele InfraNode-Städte gleichzeitig (Dedup-Prinzip:
+Adapter erschließt damit viele cityscape-Städte gleichzeitig (Dedup-Prinzip:
 EIN Parking-Endpunkt mit ParkenDD als bevorzugter Live-Quelle, statt je Stadt ein
 eigener Connector).
 
@@ -27,7 +27,7 @@ import httpx
 
 _BASE = "https://api.parkendd.de"
 
-# InfraNode-Slug -> ParkenDD-Stadt-ID (Pfadsegment). NUR die 13 Städte, deren
+# cityscape-Slug -> ParkenDD-Stadt-ID (Pfadsegment). NUR die 13 Städte, deren
 # Parkdaten-Ursprung eine OFFENE Standardlizenz führt (Lizenz-Recherche je Ursprung
 # 2026-06-23, Owner-Entscheidung: keine Tier-B/C-/NC-Auslieferung). Die übrigen 9
 # ParkenDD-Städte wurden bewusst ENTFERNT (-> automatisch not_covered): bonn ist

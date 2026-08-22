@@ -46,7 +46,7 @@ def load_solar_roofs(ags: str | None) -> dict | None:
     ``ags`` oder unbekannte Gemeinde -> ``None`` (kein Crash, KEIN Fremd-API).
     Der Bezugszeitraum (``reference_date`` aus ``_meta``) wird in das zurück-
     gegebene dict gehoben. Der Seed-Pfad wird lazy via ``seeds_dir()`` aufgelöst
-    (respektiert ``INFRANODE_SEEDS_DIR``, Prod-Volume-Override).
+    (respektiert ``CITYSCAPE_SEEDS_DIR``, Prod-Volume-Override).
     """
     if not ags:
         return None

@@ -10,7 +10,7 @@ Mehrjahresmittel, keinen Messzeitpunkt; der Bezugszeitraum steht als
 ``period_start``/``period_end`` im Payload (record_id fällt damit auf
 ``retrieved_at`` zurück, ARCH-02).
 
-KRITISCH (GOV-03): PVGIS-Daten sind aufbereitet (InfraNode normiert auf 1 kWp bei
+KRITISCH (GOV-03): PVGIS-Daten sind aufbereitet (cityscape normiert auf 1 kWp bei
 optimalem Winkel und formt das Schema um), daher trägt die Attribution
 ``modified=True`` und den wortgenauen PVGIS-Hinweis. Lizenz und Tier sind
 hartkodiert: EU-Reuse-Policy (EC_REUSE, faktisch CC BY 4.0, frei nutzbar mit

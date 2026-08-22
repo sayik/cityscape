@@ -6,14 +6,14 @@
 # Caddy bleibt der EINZIGE Ingress; die api ist nur intern via expose:8000 erreichbar.
 
 # Site-Block-Adresse aus der Umgebung (Caddy-Env-Substitution). Wird zur Validierungs-
-# UND Laufzeit aufgeloest, daher beim `caddy validate` INFRANODE_PUBLIC_DOMAIN setzen.
-{$INFRANODE_PUBLIC_DOMAIN} {
+# UND Laufzeit aufgeloest, daher beim `caddy validate` CITYSCAPE_PUBLIC_DOMAIN setzen.
+{$CITYSCAPE_PUBLIC_DOMAIN} {
 	encode zstd gzip
 
 	tls {
 		# DNS-01-Challenge via Cloudflare-API-Token (Zone.Zone:Read + Zone.DNS:Edit).
 		# Token kommt aus der Umgebung (env_file), NIE im Caddyfile hartkodiert.
-		dns cloudflare {env.INFRANODE_CF_DNS_TOKEN}
+		dns cloudflare {env.CITYSCAPE_CF_DNS_TOKEN}
 		resolvers 1.1.1.1
 	}
 
@@ -97,11 +97,11 @@
 # intern via kuma:3001 erreichbar; Caddy bleibt der EINZIGE Ingress (Gateway-
 # Invariante). Das Kuma-Dashboard unter /dashboard ist Login-geschuetzt (starkes
 # Admin-Passwort, secrets/SERVER.md); oeffentlich ist nur die Status-Page.
-status.{$INFRANODE_PUBLIC_DOMAIN} {
+status.{$CITYSCAPE_PUBLIC_DOMAIN} {
 	encode zstd gzip
 
 	tls {
-		dns cloudflare {env.INFRANODE_CF_DNS_TOKEN}
+		dns cloudflare {env.CITYSCAPE_CF_DNS_TOKEN}
 		resolvers 1.1.1.1
 	}
 
@@ -115,11 +115,11 @@ status.{$INFRANODE_PUBLIC_DOMAIN} {
 # anderen Bloecke. MCP nutzt JSON-RPC ueber HTTP + SSE; reverse_proxy reicht den
 # SSE-Stream automatisch durch (der Server sendet x-accel-buffering:no, was auch
 # Cloudflare das Buffern abschaltet).
-mcp.{$INFRANODE_PUBLIC_DOMAIN} {
+mcp.{$CITYSCAPE_PUBLIC_DOMAIN} {
 	encode zstd gzip
 
 	tls {
-		dns cloudflare {env.INFRANODE_CF_DNS_TOKEN}
+		dns cloudflare {env.CITYSCAPE_CF_DNS_TOKEN}
 		resolvers 1.1.1.1
 	}
 
@@ -133,7 +133,7 @@ mcp.{$INFRANODE_PUBLIC_DOMAIN} {
 	@browser {
 		header Accept *text/html*
 	}
-	redir @browser https://{$INFRANODE_PUBLIC_DOMAIN}/mcp/ 302
+	redir @browser https://{$CITYSCAPE_PUBLIC_DOMAIN}/mcp/ 302
 
 	# Reine Maschinen-Schnittstelle (JSON-RPC/SSE), keine HTML-Auslieferung -> keine CSP.
 	header {

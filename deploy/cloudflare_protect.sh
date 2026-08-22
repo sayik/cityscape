@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy/cloudflare_protect.sh - Cloudflare-Schutzschicht fuer InfraNode (Security-Haertung 2026-06-21)
+# deploy/cloudflare_protect.sh - Cloudflare-Schutzschicht fuer cityscape (Security-Haertung 2026-06-21)
 #
 # Richtet die EDGE-seitige Verteidigung ein, die der App-Code nicht leisten kann:
 #   1. Rate Limiting Rule: harte IP-Volumengrenze gegen Floods (grobe aeussere
@@ -10,7 +10,7 @@
 #      Scraper, der dieselben Endpunkte haemmert, trifft den Edge-Cache, nicht
 #      das Origin.
 #
-# BEWUSST NICHT aktiviert: Bot Fight Mode / "Block AI bots". InfraNode ist eine
+# BEWUSST NICHT aktiviert: Bot Fight Mode / "Block AI bots". cityscape ist eine
 # ABSICHTLICH maschinenfreundliche, keylose API (MCP-Clients, Data-Science-
 # Skripte, Agenten). Ein Bot-Blocker wuerde genau die legitimen Nutzer aussperren
 # (Managed Challenge laesst sich von einem API-Client nicht loesen). Siehe
@@ -19,7 +19,7 @@
 # Voraussetzungen:
 #   - CF_API_TOKEN: Token mit den Zone-Rechten "Zone WAF: Edit",
 #     "Zone Cache Rules: Edit" (bzw. "Dynamic Redirect/Config Rules: Edit").
-#   - CF_ZONE_ID:  Zone-ID von infranode.dev (Cloudflare Dashboard -> Overview).
+#   - CF_ZONE_ID:  Zone-ID von cityscape.dev (Cloudflare Dashboard -> Overview).
 #   - curl, jq.
 #
 # Nutzung:
@@ -39,7 +39,7 @@ DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
 
 : "${CF_API_TOKEN:?CF_API_TOKEN fehlt (Token mit Zone WAF + Cache Rules Edit)}"
-: "${CF_ZONE_ID:?CF_ZONE_ID fehlt (Zone-ID von infranode.dev)}"
+: "${CF_ZONE_ID:?CF_ZONE_ID fehlt (Zone-ID von cityscape.dev)}"
 
 # Konfigurierbare Schwellen (Env-overridebar). Die Edge-Grenze liegt bewusst
 # DEUTLICH ueber dem App-Limit (120/min): sie kappt nur grobe Volumen-Floods,
@@ -59,7 +59,7 @@ RL_TIMEOUT="${RL_TIMEOUT:-10}"
 #     ABSICHTLICH erlaubt (GEO/Auffindbarkeit in KI-Antworten),
 #   - generische HTTP-Clients (python-requests/httpx/curl/node-fetch): das sind
 #     legitime Data-Science-/Vibecoder-Nutzer der keylosen API.
-# Diese Bots sind kommerzielle SEO-Crawler, die InfraNode-Daten ohne Nutzen
+# Diese Bots sind kommerzielle SEO-Crawler, die cityscape-Daten ohne Nutzen
 # abgreifen und oft robots.txt ignorieren -> harte Block-Regel (kein Challenge,
 # das wuerde nur CPU kosten ohne dass ein Bot es loest). Per BAD_BOTS (kommagetrennt,
 # Substring-Match auf den lowercased User-Agent) anpassbar; leer = WAF-Regel aus.
@@ -91,7 +91,7 @@ check_ok() {
   echo "$resp"
 }
 
-echo "== InfraNode Cloudflare-Schutz =="
+echo "== cityscape Cloudflare-Schutz =="
 echo "Zone: $CF_ZONE_ID"
 echo "Rate-Limit: > ${RL_REQUESTS} Requests / ${RL_PERIOD}s pro IP -> block ${RL_TIMEOUT}s"
 echo
@@ -109,8 +109,8 @@ RL_BODY="$(jq -n \
   --argjson req "$RL_REQUESTS" --argjson per "$RL_PERIOD" --argjson to "$RL_TIMEOUT" '{
   rules: [{
     action: "block",
-    description: "InfraNode: harte IP-Volumengrenze (Flood-Schutz; feines Limit macht die App; verifizierte Crawler ausgenommen)",
-    expression: "((http.host eq \"infranode.dev\") or (http.host eq \"mcp.infranode.dev\")) and (not cf.client.bot)",
+    description: "cityscape: harte IP-Volumengrenze (Flood-Schutz; feines Limit macht die App; verifizierte Crawler ausgenommen)",
+    expression: "((http.host eq \"cityscape.dev\") or (http.host eq \"mcp.cityscape.dev\")) and (not cf.client.bot)",
     ratelimit: {
       characteristics: ["ip.src", "cf.colo.id"],
       period: $per,
@@ -123,7 +123,7 @@ RL_BODY="$(jq -n \
 # --- Phase 3: WAF Custom Rule (Bad-Bot-Block) ------------------------------------
 # Blockt bekannte aggressive SEO-/Scraper-Bots per User-Agent-Substring. Eine
 # Custom-WAF-Regel (mehrere OR-Bedingungen = 1 Regel; im Free-Plan verfuegbar).
-# Greift NUR auf den InfraNode-Hosts. Leeres BAD_BOTS -> Regelsatz leer (Phase aus).
+# Greift NUR auf den cityscape-Hosts. Leeres BAD_BOTS -> Regelsatz leer (Phase aus).
 WAF_EXPR=""
 if [[ -n "$BAD_BOTS" ]]; then
   IFS=',' read -ra _bots <<<"$BAD_BOTS"
@@ -135,14 +135,14 @@ if [[ -n "$BAD_BOTS" ]]; then
     _ua="${_ua:+$_ua or }$cond"
   done
   # nur auf den eigenen Hosts greifen, sonst Bot-UA egal.
-  WAF_EXPR="((http.host eq \"infranode.dev\") or (http.host eq \"mcp.infranode.dev\")) and (${_ua})"
+  WAF_EXPR="((http.host eq \"cityscape.dev\") or (http.host eq \"mcp.cityscape.dev\")) and (${_ua})"
 fi
 
 if [[ -n "$WAF_EXPR" ]]; then
   WAF_BODY="$(jq -n --arg expr "$WAF_EXPR" '{
     rules: [{
       action: "block",
-      description: "InfraNode: bekannte aggressive SEO-/Scraper-Bots blocken (keine AI-Crawler, keine generischen HTTP-Clients)",
+      description: "cityscape: bekannte aggressive SEO-/Scraper-Bots blocken (keine AI-Crawler, keine generischen HTTP-Clients)",
       expression: $expr
     }]
   }')"
@@ -157,7 +157,7 @@ fi
 CACHE_BODY="$(jq -n '{
   rules: [{
     action: "set_cache_settings",
-    description: "InfraNode: API-JSON am Edge cachen, Origin-Cache-Control respektieren",
+    description: "cityscape: API-JSON am Edge cachen, Origin-Cache-Control respektieren",
     expression: "(starts_with(http.request.uri.path, \"/api/v1/\"))",
     action_parameters: {
       cache: true,

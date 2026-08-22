@@ -1,14 +1,14 @@
 """Rate-Limit für ChatGPT-GPT-Action-Traffic (Muster: mcp/ratelimit.py).
 
-Warum ein EIGENES Limit: ALLE Nutzer des InfraNode-GPTs kommen serverseitig
+Warum ein EIGENES Limit: ALLE Nutzer des cityscape-GPTs kommen serverseitig
 über WENIGE OpenAI-Egress-IPs (openai.com/chatgpt-actions.json). Damit ein
 einzelner Power-Nutzer nicht das gemeinsame IP-Budget aller ChatGPT-Nutzer
-leert, stehen die OpenAI-Ranges auf der INFRANODE_RATELIMIT_ALLOWLIST
+leert, stehen die OpenAI-Ranges auf der CITYSCAPE_RATELIMIT_ALLOWLIST
 (Bypass von slowapi-IP-Limit + AbuseGuard, gleiches Muster wie
 Anthropic-Egress beim MCP-Server). Dieses Modul ist der BACKSTOP dazu: ein
 Moving-Window-Limit je GPT-NUTZER (ephemere OpenAI-Nutzer-Kennung, Fallback
 Konversation/GPT/IP) mit demselben Default wie der MCP-Endpunkt (480/min,
-INFRANODE_LIMIT_GPT). Storage in Redis (über Worker geteilt), Fallback
+CITYSCAPE_LIMIT_GPT). Storage in Redis (über Worker geteilt), Fallback
 In-Memory wie beim MCP-Limiter.
 
 Spoofing: Die OpenAI-Header sind fälschbar, aber ein Spoofer ohne

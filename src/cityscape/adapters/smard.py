@@ -5,7 +5,7 @@
 Tages-Index (Liste der Datei-Buckets), dann der jüngste Bucket, daraus der letzte
 Datenpunkt mit Wert (``None``-Werte am Reihenende werden übersprungen).
 
-Damit deckt InfraNode die Verbrauchs- und Preis-Seite ab (Ergänzung zu MaStR =
+Damit deckt cityscape die Verbrauchs- und Preis-Seite ab (Ergänzung zu MaStR =
 installierte Erzeugung): Filter 410 = Stromverbrauch (Netzlast), 4169 =
 Day-ahead-Großhandelspreis. Verbrauch liegt je Regelzone vor (50Hertz/Amprion/
 TenneT/TransnetBW), der Preis bundesweit (Gebotszone DE/LU).

@@ -1,7 +1,7 @@
 """Zentrale Konfiguration (FND-02).
 
 Eine einzige ``Settings``-Quelle liest ``.env`` + Umgebungsvariablen mit dem
-Prefix ``INFRANODE_``. Per-Source ``enable_*``-Flags ermöglichen Graceful
+Prefix ``CITYSCAPE_``. Per-Source ``enable_*``-Flags ermöglichen Graceful
 Degradation; Schlüssel-Felder sind ``SecretStr | None`` (Default None =
 Quelle nicht nutzbar, kein Secret im Code).
 
@@ -14,7 +14,7 @@ EINER flachen Klasse. Das ist bewusst KEINE verschachtelte Struktur
 weil (a) die Quellen-Toggles an mehreren Stellen dynamisch über
 ``getattr(settings, f"enable_{name}")`` aufgelöst werden (sources/live/cities/
 watchdog/admin) und (b) verschachtelte Modelle die Env-Variablennamen ändern
-würden (``INFRANODE_ADMIN__PASSWORD`` statt ``INFRANODE_ADMIN_PASSWORD``), was
+würden (``CITYSCAPE_ADMIN__PASSWORD`` statt ``CITYSCAPE_ADMIN_PASSWORD``), was
 die produktive .env bräche. Neue Felder in die thematisch passende Mixin-Klasse.
 """
 
@@ -40,16 +40,16 @@ class CoreSettings(BaseSettings):
     # credentialed APIs. Hier wird allow_credentials in main.py auf False
     # gesetzt, sobald "*" aktiv ist (CORS-Spec: "*" + credentials schließen sich
     # aus). Das Admin-Dashboard ist same-origin (Cookie cs_admin SameSite=strict)
-    # und von CORS unberührt. Per INFRANODE_CORS_ORIGINS auf eine Whitelist
+    # und von CORS unberührt. Per CITYSCAPE_CORS_ORIGINS auf eine Whitelist
     # einschränkbar (dann wird wieder credentialed CORS verwendet).
     cors_origins: list[str] = ["*"]
 
     # Optionaler Override des Upstream-User-Agents (RES-05). None = die
-    # USER_AGENT-Konstante aus infra/http.py greift; per INFRANODE_HTTP_USER_AGENT
+    # USER_AGENT-Konstante aus infra/http.py greift; per CITYSCAPE_HTTP_USER_AGENT
     # überschreibbar (z.B. für Staging-Kennzeichnung).
     http_user_agent: str | None = None
 
-    # Wurzelpfad des lokalen Datenverzeichnisses. Per INFRANODE_ARCHIVE_DIR
+    # Wurzelpfad des lokalen Datenverzeichnisses. Per CITYSCAPE_ARCHIVE_DIR
     # überschreibbar, damit Tests nach tmp_path schreiben statt ins echte data/.
     # (Feld-/Env-Name aus Kompatibilitätsgründen unverändert.)
     archive_dir: str = "data/archive"
@@ -58,7 +58,7 @@ class CoreSettings(BaseSettings):
     # Drei defensive Deckel gegen Connection-Pool-Exhaustion. Rein defensiv: im
     # Normalbetrieb aendert sich NICHTS (die Defaults spiegeln die bisherigen
     # effektiven Werte), nur bei Ueberlast greifen die Deckel. Alle acht Felder
-    # sind per INFRANODE_*-Env ohne Code-Deploy einstellbar. BEWUSST NICHT Teil
+    # sind per CITYSCAPE_*-Env ohne Code-Deploy einstellbar. BEWUSST NICHT Teil
     # dieser Aenderung: die Umstellung des MCP-Servers auf stateless_http
     # (separate Design-Entscheidung) und Auto-Scaling.
     #
@@ -101,7 +101,7 @@ class RateLimitSettings(BaseSettings):
     # Data-Science-/Dashboard-Spitzen UND ein nachhaltiges STUNDEN-Budget gegen
     # Dauer-Scraping. Beide gelten gleichzeitig: ANON_LIMIT kombiniert sie
     # semikolon-getrennt, slowapi/limits ``parse_many`` liest das als MEHRERE
-    # Limits. Per INFRANODE_LIMIT_ANON überschreibbar (z.B. Tests).
+    # Limits. Per CITYSCAPE_LIMIT_ANON überschreibbar (z.B. Tests).
     # Historie: früher pauschal 300/min (=18.000/h), dann 120/min + 3000/h
     # (Härtung 2026-06-21). Owner 2026-06-24 auf 300/min Burst + 6000/h nachhaltig
     # angehoben (Schnitt 100/min), damit KI-Agenten/Power-User-Flows nicht in 429
@@ -125,7 +125,7 @@ class RateLimitSettings(BaseSettings):
     # BEWUSST hoch (Default 3000/min = ~10x das IP-Burst-Budget), damit legitime
     # NAT-/Campus-Nutzer hinter einer gemeinsamen IP NICHT getroffen werden; es
     # greift erst, wenn aus EINEM Subnetz untypisch viele Anfragen kommen. Leer
-    # ("") = deaktiviert. Per INFRANODE_LIMIT_SUBNET überschreibbar.
+    # ("") = deaktiviert. Per CITYSCAPE_LIMIT_SUBNET überschreibbar.
     # Owner 2026-06-24 von 1200 auf 3000/min mitgezogen (proportional zum auf
     # 300/min angehobenen IP-Burst, Verhältnis ~10x bleibt -> keine Lücke für
     # Bot-Schwärme, NAT-Schutz erhalten).
@@ -141,7 +141,7 @@ class RateLimitSettings(BaseSettings):
     # NUR Limit-Bypass, KEINE Auth; das Admin-Login-Limit (Brute-Force-Schutz)
     # gilt IMMER, auch für allowlistete IPs. FAIL-SAFE: leer (Default) oder
     # Müll-Einträge = niemand allowlistet (Ist-Verhalten). Per Env
-    # INFRANODE_RATELIMIT_ALLOWLIST ohne Code-Deploy änderbar; dieselbe Env
+    # CITYSCAPE_RATELIMIT_ALLOWLIST ohne Code-Deploy änderbar; dieselbe Env
     # liest auch der MCP-Container (infra/allowlist.py, stdlib-only).
     ratelimit_allowlist: str = ""
     # Rate-Limit je ChatGPT-GPT-Nutzer (api/v1/gpt_guard.py): OpenAI-Actions-
@@ -149,7 +149,7 @@ class RateLimitSettings(BaseSettings):
     # die dafür auf der Allowlist stehen; dieses Limit ist der Backstop je
     # ephemerer OpenAI-Nutzer-Kennung. Default wie der MCP-Endpunkt (480/min,
     # Owner-Historie s. mcp/ratelimit.py). Leer ("") = deaktiviert. Per
-    # INFRANODE_LIMIT_GPT überschreibbar.
+    # CITYSCAPE_LIMIT_GPT überschreibbar.
     limit_gpt: str = "480/minute"
     # Optionaler Cloudflare-Bot-Score-Schwellwert (1-99; 0 = deaktiviert). Greift
     # NUR, wenn Cloudflare den Header ``cf-bot-score`` setzt (Bot Management /
@@ -201,7 +201,7 @@ class SourceToggleSettings(BaseSettings):
     enable_wikidata: bool = True
     enable_dwd: bool = True
     enable_overpass: bool = True
-    # Overpass-Endpunkt operator-konfigurierbar (INFRANODE_OVERPASS_BASE_URL). Die
+    # Overpass-Endpunkt operator-konfigurierbar (CITYSCAPE_OVERPASS_BASE_URL). Die
     # öffentliche Instanz untersagt Drittnutzer-Backends im Dauerbetrieb (Fair-Use);
     # für Produktion auf eine eigene Instanz (Planet-Dump) oder einen kommerziellen
     # Dienst (z.B. Geofabrik) umstellen. Env = Operator-Input (kein User-Input) ->
@@ -211,7 +211,7 @@ class SourceToggleSettings(BaseSettings):
     # Datenarten). Früher hart 200 -> kappte ~67-87% aller Objekte still (Köln
     # Spielplätze 200 statt 1540). Default jetzt 2000; der echte Gesamtbestand
     # kommt unabhängig über Overpass ``out count;`` als ``total_available`` +
-    # ``truncated``-Flag. Per INFRANODE_OVERPASS_MAX_ELEMENTS anpassbar.
+    # ``truncated``-Flag. Per CITYSCAPE_OVERPASS_MAX_ELEMENTS anpassbar.
     overpass_max_elements: int = 2000
     enable_autobahn: bool = True
     enable_hvv: bool = False
@@ -226,14 +226,14 @@ class SourceToggleSettings(BaseSettings):
     enable_dwd_pollen: bool = True
     # DWD Waldbrand-/Graslandfeuerindex (keylos, GeoNutzV, Tier A). Daten ueber
     # einen oeffentlichen ArcGIS-FeatureServer (DWD-Daten-Re-Host). Host operator-
-    # konfigurierbar (INFRANODE_DWD_FIRE_BASE_URL); Env = Operator-Input (kein
+    # konfigurierbar (CITYSCAPE_DWD_FIRE_BASE_URL); Env = Operator-Input (kein
     # User-Input) -> SSRF-Invariante bleibt gewahrt.
     enable_dwd_fire: bool = True
     dwd_fire_base_url: str = "https://services2.arcgis.com/7wuv6DH7DYhDuwvU/ArcGIS/rest/services/DWD/FeatureServer"
     # EEA Badegewaesserqualitaet (keylos, CC-BY 4.0, Tier A). Jahres-MapServer der
     # EEA DiscoMap; der Jahres-Teil der URL + eea_bathing_year werden nachgezogen,
     # sobald die EEA die neue Badesaison bewertet. Host operator-konfigurierbar
-    # (INFRANODE_EEA_BATHING_BASE_URL) -> SSRF-Invariante bleibt gewahrt.
+    # (CITYSCAPE_EEA_BATHING_BASE_URL) -> SSRF-Invariante bleibt gewahrt.
     enable_eea_bathing: bool = True
     eea_bathing_base_url: str = (
         "https://water.discomap.eea.europa.eu/arcgis/rest/services/BathingWater/"
@@ -251,7 +251,7 @@ class SourceToggleSettings(BaseSettings):
     # KEY-GATED: braucht einen kostenlosen Marketplace-Schluessel (Plan Free4All).
     # KEYED ueber DENSELBEN DB-API-Marketplace wie db_timetables/stada: nutzt die
     # gemeinsamen db_client_id/db_api_key (KEIN eigener Key, gleiche Anwendung
-    # "InfraNode"). Ohne diese Credentials liefert die Route source_status=disabled.
+    # "cityscape"). Ohne diese Credentials liefert die Route source_status=disabled.
     # Host operator-konfigurierbar.
     enable_db_fasta: bool = True
     db_fasta_base_url: str = (
@@ -414,7 +414,7 @@ class CredentialSettings(BaseSettings):
     """
 
     # Phase 8 GENESIS/Zensus (account-gated POST-API). Feldname genesis_username,
-    # weil der Owner genau INFRANODE_GENESIS_USERNAME (+ _PASSWORD) in der .env
+    # weil der Owner genau CITYSCAPE_GENESIS_USERNAME (+ _PASSWORD) in der .env
     # gesetzt hat. Zensus nutzt evtl. einen getrennten Account (eigene Felder).
     genesis_username: str | None = None
     genesis_password: SecretStr | None = None
@@ -425,7 +425,7 @@ class CredentialSettings(BaseSettings):
     hvv_api_key: SecretStr | None = None
     hvv_user: str | None = None
     # DATA-30: Tankerkönig-API-Key. Nur in den Query-Parameter ``apikey``. None ->
-    # Route liefert 200 source_status="disabled". Env INFRANODE_TANKERKOENIG_KEY.
+    # Route liefert 200 source_status="disabled". Env CITYSCAPE_TANKERKOENIG_KEY.
     tankerkoenig_key: SecretStr | None = None
     # DATA-34: DB-Timetables-Credentials (DB API Marketplace). Nur in die Header
     # DB-Client-Id/DB-Api-Key. None -> Route 200 disabled.
@@ -499,7 +499,7 @@ class TransitSettings(BaseSettings):
     transit_rt_source: str = "gtfs_de"
     # Mobilithek-DELFI-Realtime-Abo-ID als SSRF-Allowlist (aboId NIE aus User-Input).
     # None = Quelle nicht auflösbar. Owner-Abo nur in der gitignored .env
-    # (INFRANODE_TRANSIT_RT_DELFI_ABO_ID).
+    # (CITYSCAPE_TRANSIT_RT_DELFI_ABO_ID).
     transit_rt_delfi_abo_id: str | None = None
 
 
@@ -594,7 +594,7 @@ class MonitoringSettings(BaseSettings):
     # warnt, bevor der Redis-Speicheranteil (used_memory/maxmemory) die Eviction-
     # Grenze erreicht. capacity_hysteresis_ticks = 2 verlangt zwei aufeinander-
     # folgende Ueberschreitungen, damit ein einzelner Lastspitzen-Tick keinen
-    # Fehlalarm ausloest. Alle drei per INFRANODE_CAPACITY_*-Env ueberschreibbar.
+    # Fehlalarm ausloest. Alle drei per CITYSCAPE_CAPACITY_*-Env ueberschreibbar.
     capacity_load_per_core_warn: float = 0.75
     capacity_redis_mem_warn: float = 0.80
     capacity_hysteresis_ticks: int = 2
@@ -611,17 +611,17 @@ class Settings(
     BulkPathSettings,
     MonitoringSettings,
 ):
-    """Validierte Anwendungs-Settings aus Env/.env (Prefix INFRANODE_).
+    """Validierte Anwendungs-Settings aus Env/.env (Prefix CITYSCAPE_).
 
     Erbt alle Felder flach aus den thematischen Mixin-Klassen oben. ``model_config``
     steht NUR hier (greift via Vererbung für alle geerbten Felder). Zugriff bleibt
     flach: ``settings.enable_vgn``, ``getattr(settings, "enable_<name>")``,
-    Env ``INFRANODE_<FELD>`` - unverändert gegenüber der früheren flachen Klasse.
+    Env ``CITYSCAPE_<FELD>`` - unverändert gegenüber der früheren flachen Klasse.
     """
 
     model_config = SettingsConfigDict(
         env_file=".env",
-        env_prefix="INFRANODE_",
+        env_prefix="CITYSCAPE_",
         extra="ignore",
     )
 

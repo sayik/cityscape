@@ -1,4 +1,4 @@
-# InfraNode API - Multi-Stage uv-Build (FND-01)
+# cityscape API - Multi-Stage uv-Build (FND-01)
 # Quelle: uv Docker Guide (https://docs.astral.sh/uv/guides/integration/docker/) [CITED: STACK.md]
 # Basis: python:3.13-slim-bookworm (multi-arch; laeuft auf der Prod-Box als
 # linux/amd64, AMD EPYC-Genoa/x86_64); bewusst slim-bookworm statt musl-basierter
@@ -39,8 +39,8 @@ COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 
 # Konfigurations-Seeds an einen Pfad AUSSERHALB des Daten-Volumes legen
-# (CR-01): das Prod-Volume infranode_data mountet auf /app/data und wuerde dort
-# liegende Seeds verschatten. Gelesen ueber INFRANODE_SEEDS_DIR.
+# (CR-01): das Prod-Volume cityscape_data mountet auf /app/data und wuerde dort
+# liegende Seeds verschatten. Gelesen ueber CITYSCAPE_SEEDS_DIR.
 COPY data/seeds /app/seeds
 
 # OpenAPI-first-Vertrag: api/v1/openapi.py liest docs/openapi.yaml beim Import
@@ -48,10 +48,10 @@ COPY data/seeds /app/seeds
 COPY docs/openapi.yaml /app/docs/openapi.yaml
 
 # venv-Binaries (uvicorn) in den PATH; Quellen importierbar machen.
-# INFRANODE_SEEDS_DIR zeigt auf die ins Image kopierten Seeds (volume-frei).
+# CITYSCAPE_SEEDS_DIR zeigt auf die ins Image kopierten Seeds (volume-frei).
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app/src" \
-    INFRANODE_SEEDS_DIR="/app/seeds"
+    CITYSCAPE_SEEDS_DIR="/app/seeds"
 
 USER app
 EXPOSE 8000
@@ -60,5 +60,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
     CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health').status==200 else 1)"]
 
-# infranode.main:app ist der Modul-Ebenen-app aus Plan 01-01 (create_app()-Factory).
-CMD ["uvicorn", "infranode.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# cityscape.main:app ist der Modul-Ebenen-app aus Plan 01-01 (create_app()-Factory).
+CMD ["uvicorn", "cityscape.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

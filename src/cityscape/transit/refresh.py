@@ -9,7 +9,7 @@ die ``trip_id`` zwischen RT-Feed und veralteter Statik auseinander
 
 Kadenz-Empfehlung: WÖCHENTLICH (an die 7-Tage-Basic-Gültigkeit gekoppelt), nicht
 monatlich. Der Batch läuft ausschließlich manuell bzw. per Timer
-(``python -m infranode.transit.refresh <ziel.zip>``), NIE im Request-Pfad oder im
+(``python -m cityscape.transit.refresh <ziel.zip>``), NIE im Request-Pfad oder im
 Lifespan. Die OS-Registrierung des Timers (OPS-05-Muster, systemd) erfolgt
 außerhalb dieser Phase.
 
@@ -99,7 +99,7 @@ async def refresh_static_gtfs(http, *, url: str, dest_path: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """CLI-Entrypoint: ``python -m infranode.transit.refresh <ziel.zip>``.
+    """CLI-Entrypoint: ``python -m cityscape.transit.refresh <ziel.zip>``.
 
     Ziel-Pfad aus ``argv[1]`` ODER ``Settings().gtfs_rt_static_path``; ist
     keiner gesetzt -> Hinweis auf stderr + ``sys.exit(2)`` (analog
@@ -116,8 +116,8 @@ def main(argv: list[str] | None = None) -> None:
     dest_path = argv[1] if len(argv) > 1 else settings.gtfs_rt_static_path
     if not dest_path:
         print(
-            "Kein GTFS-ZIP-Zielpfad. Nutzung: python -m infranode.transit.refresh "
-            "<ziel.zip> oder INFRANODE_GTFS_RT_STATIC_PATH setzen.",
+            "Kein GTFS-ZIP-Zielpfad. Nutzung: python -m cityscape.transit.refresh "
+            "<ziel.zip> oder CITYSCAPE_GTFS_RT_STATIC_PATH setzen.",
             file=sys.stderr,
         )
         sys.exit(2)

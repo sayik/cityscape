@@ -1,4 +1,4 @@
-"""Strukturierte Output-Typen der InfraNode-MCP-Tools (DX-05).
+"""Strukturierte Output-Typen der cityscape-MCP-Tools (DX-05).
 
 Jedes Tool gibt zur Laufzeit weiterhin den rohen API-Envelope als ``dict`` 1:1
 durch (Blocker-4-Aufrufvertrag, keine Mapping-Logik hier). Die Tool-Funktionen
@@ -40,7 +40,7 @@ class ToolMeta(TypedDict, total=False):
 
 
 class ToolEnvelope(TypedDict):
-    """Kanonischer InfraNode-Antwort-Envelope: normalisierte ``data`` + ``meta``.
+    """Kanonischer cityscape-Antwort-Envelope: normalisierte ``data`` + ``meta``.
 
     ``data`` ist ``null`` wenn die Quelle keine Daten lieferte (siehe
     ``meta.source_status``); sonst ein Objekt oder eine Liste je Ressource.

@@ -5,7 +5,7 @@ Plattform ``oeffentlichevergabe.de`` (Datenservice Öffentlicher Einkauf,
 Beschaffungsamt des BMI) über den Endpunkt ``/api/notice-exports`` und parst die
 im ZIP enthaltenen OCDS-Release-JSONs defensiv zu schlanken, kompakten
 Bekanntmachungs-dicts (Notices). Keine Stadt-Zuordnung hier (die liegt in
-``infranode.tenders.matching``); kein Cache/Breaker/Store (das liefert die
+``cityscape.tenders.matching``); kein Cache/Breaker/Store (das liefert die
 Fassade). Rein in dem Sinne, dass nur der eine HTTP-Abruf I/O macht.
 
 Sicherheit:

@@ -611,7 +611,7 @@ async def city_weather(slug: str, request: Request) -> dict:
 # damit eine langsame/leere Quelle den Overview nie blockiert. Nicht-abgedeckte
 # Datenarten werden nicht verschwiegen,
 # sondern vorwärts gewandt dargestellt (wo gibt es sie schon + Roadmap), weil
-# InfraNode laufend mehr Daten und Städte bekommt (Owner-Botschaft).
+# cityscape laufend mehr Daten und Städte bekommt (Owner-Botschaft).
 
 # Highlight-Quellen des Snapshots: (source, fetch_fn, mapper, toggle), gleiche Form
 # wie compare.RESOURCE_MAP. Bewusst keylos + flächendeckend (alle 84) -> liefern
@@ -625,10 +625,10 @@ _SNAPSHOT_SOURCES: dict[str, tuple] = {
 # langsame Quelle darf den Overview nie über diese Schranke hinaus aufhalten.
 _SNAPSHOT_BUDGET_SECONDS = 3.0
 
-# Eine Botschaft, überall gleich: InfraNode wächst. Steht im Overview-Envelope
+# Eine Botschaft, überall gleich: cityscape wächst. Steht im Overview-Envelope
 # (und gespiegelt in docs-site/README/Registries).
 OVERVIEW_GROWTH_NOTE = (
-    "InfraNode wächst laufend: weitere Datenarten und Städte kommen regelmäßig dazu."
+    "cityscape wächst laufend: weitere Datenarten und Städte kommen regelmäßig dazu."
 )
 
 
@@ -787,11 +787,11 @@ async def city_overview(slug: str, request: Request) -> dict:
 
     # Stufe 2: Live-Highlights parallel + zeitgedeckelt (hängt nie). Bei
     # Budget-Überschreitung liefern noch offene Highlights ehrlich "error".
-    # Budget per INFRANODE_OVERVIEW_SNAPSHOT_BUDGET überschreibbar (Default 3s);
+    # Budget per CITYSCAPE_OVERVIEW_SNAPSHOT_BUDGET überschreibbar (Default 3s);
     # bei Überschreitung liefern noch offene Highlights ehrlich "error", der
     # Overview antwortet trotzdem sofort (hängt nie).
     budget = float(
-        os.environ.get("INFRANODE_OVERVIEW_SNAPSHOT_BUDGET", _SNAPSHOT_BUDGET_SECONDS)
+        os.environ.get("CITYSCAPE_OVERVIEW_SNAPSHOT_BUDGET", _SNAPSHOT_BUDGET_SECONDS)
     )
 
     async def _bounded(name: str, coro) -> tuple[str, dict]:
@@ -815,7 +815,7 @@ async def city_overview(slug: str, request: Request) -> dict:
     # "verstehen, dass sie viele Daten bekommen koennen"). Der volle data_types-
     # Katalog oben listet JEDE Datenart mit ihrem Tool; die headline fasst zusammen.
     headline = (
-        f"InfraNode covers {len(catalog)} data types for German cities. "
+        f"cityscape covers {len(catalog)} data types for German cities. "
         f"{available} are available for {entry.slug} right now, each with the tool "
         f"to call in the catalog above. Across {cities_total} cities and thousands "
         "of live data streams, all keyless and free."
@@ -1049,7 +1049,7 @@ async def city_district_heating(slug: str) -> dict:
 
     KRITISCH (kein WFS im Request-Pfad, T-08-DEP): liest AUSSCHLIESSLICH read-only
     den jüngsten Snapshot aus ``tier_a/district_heating/`` (Batch-Ingest
-    ``python -m infranode.ingest.district_heating``), NIE den WFS, KEIN
+    ``python -m cityscape.ingest.district_heating``), NIE den WFS, KEIN
     ``resilient_client``.
 
     Vier ``source_status``-Werte (analog /solar-roofs):
@@ -1732,7 +1732,7 @@ async def city_station_facilities(slug: str, request: Request) -> dict:
 
     KEY-GATED: Die FaSta-API laeuft ueber denselben DB-API-Marketplace wie
     db_timetables/stada und nutzt die gemeinsamen ``db_client_id``/``db_api_key``
-    (gleiche "InfraNode"-Anwendung, kein eigener Key). Ohne diese Credentials (oder
+    (gleiche "cityscape"-Anwendung, kein eigener Key). Ohne diese Credentials (oder
     bei ``enable_db_fasta=False``) liefert die Route 200 ``source_status=disabled``
     (nie 5xx). Echtzeit-Barrierefreiheit (ACTIVE/INACTIVE/UNKNOWN je Anlage),
     ORTSNAH gefiltert (Pitfall 4, ``distance_km`` je Anlage). Graceful Degradation:
@@ -3813,7 +3813,7 @@ def _regio_configured() -> bool:
     """
     s = Settings()
     # SecretStr-Objekte sind immer truthy -> den eigentlichen Wert prüfen, damit
-    # ein leer gesetzter Key (INFRANODE_REGIO_USER="") als "fehlt" gilt.
+    # ein leer gesetzter Key (CITYSCAPE_REGIO_USER="") als "fehlt" gilt.
     user = s.regio_user.get_secret_value() if s.regio_user else None
     pw = s.regio_pass.get_secret_value() if s.regio_pass else None
     return bool(s.enable_regionalstatistik and user and pw)
@@ -4366,7 +4366,7 @@ async def city_fuel_prices(slug: str, request: Request) -> dict:
     settings = Settings()
     key = settings.tankerkoenig_key
     # disabled: Toggle aus ODER kein (leerer) Key (analog hvv_geofox). Ein leerer
-    # Env-String INFRANODE_TANKERKOENIG_KEY="" ist KEIN None -> ``get_secret_value``
+    # Env-String CITYSCAPE_TANKERKOENIG_KEY="" ist KEIN None -> ``get_secret_value``
     # zusätzlich prüfen, damit der Guard deterministisch greift.
     if not settings.enable_tankerkoenig or key is None or not key.get_secret_value():
         return {

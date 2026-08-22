@@ -110,7 +110,7 @@ def map_destination_one_events(
     for event in events:
         if not _is_future(event, today=today):
             continue
-        # CC-*-ND (No Derivatives): InfraNode normalisiert (= Bearbeitung), was ND
+        # CC-*-ND (No Derivatives): cityscape normalisiert (= Bearbeitung), was ND
         # untersagt. Solche Events werden gar nicht ausgeliefert (nicht nur Tier-C).
         raw_lic = (event.get("license_raw") or "").lower()
         raw_lic = raw_lic.replace("-", " ").replace("_", " ")
@@ -138,7 +138,7 @@ def map_destination_one_events(
                 attribution=Attribution(
                     text=_ATTRIBUTION_TEXT,
                     license_url=_LICENSE_URLS.get(license_id),
-                    modified=True,  # InfraNode normalisiert die Events (Bearbeitung)
+                    modified=True,  # cityscape normalisiert die Events (Bearbeitung)
                 ),
                 payload=EventPayload(
                     city_source="destination_one",

@@ -1,4 +1,4 @@
-"""InfraNode MCP-Server-Paket (DX-05).
+"""cityscape MCP-Server-Paket (DX-05).
 
 Ein dünner Wrapper, der die bestehende Live-FastAPI als MCP-Tools exponiert.
 Die eigentliche Mapping-/Lizenz-Logik bleibt ausschließlich in der API; dieses

@@ -68,14 +68,14 @@ if (type === "WebAPI") {
   data = {
     "@context": "https://schema.org",
     "@type": "WebAPI",
-    name: name ?? "InfraNode API",
+    name: name ?? "cityscape API",
     description:
       description ??
       "Kostenlose, öffentliche Open-Data-REST-API für normalisierte offene Daten deutscher Großstädte.",
     documentation: documentation ?? `${site}/quickstart/`,
     provider: {
       "@type": "Organization",
-      name: "InfraNode",
+      name: "cityscape",
     },
     termsOfService: `${site}/`,
   };
@@ -96,7 +96,7 @@ if (type === "WebAPI") {
   data = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: name ?? "InfraNode MCP-Server",
+    name: name ?? "cityscape MCP-Server",
     description:
       description ??
       "Gehosteter Model-Context-Protocol-Server mit Tools für offene Stadtdaten deutscher Großstädte.",
@@ -110,36 +110,36 @@ if (type === "WebAPI") {
     },
     provider: {
       "@type": "Organization",
-      name: "InfraNode",
+      name: "cityscape",
     },
   };
 } else if (type === "Organization") {
   // Marken-Entitaet mit stabiler @id, damit DE- und EN-Startseite dieselbe
   // Organisation referenzieren. sameAs = autoritative Profile (GitHub-Repo,
   // PulseMCP-Listing) zur Entitaets-Disambiguierung gegen fremde Namensvettern
-  // ("InfraNodus" / infranode.eu), GEO/Knowledge-Graph-Signal.
+  // ("InfraNodus" / cityscape.eu), GEO/Knowledge-Graph-Signal.
   data = {
     "@context": "https://schema.org",
     "@type": "Organization",
     "@id": `${site}/#organization`,
-    name: name ?? "InfraNode",
+    name: name ?? "cityscape",
     // alternateName + disambiguatingDescription schaerfen die Marken-Entitaet
-    // gegen gleichnamige Dritte (InfraNodus = Knowledge-Graph-Tool, Infranode =
-    // Infrastruktur-Investor infranode.eu), damit KI-Antwortmaschinen und der
-    // Knowledge-Graph infranode.dev korrekt zuordnen.
-    alternateName: ["InfraNode.dev", "InfraNode Open Data", "InfraNode MCP"],
+    // gegen gleichnamige Dritte (InfraNodus = Knowledge-Graph-Tool, cityscape =
+    // Infrastruktur-Investor cityscape.eu), damit KI-Antwortmaschinen und der
+    // Knowledge-Graph cityscape.dev korrekt zuordnen.
+    alternateName: ["cityscape.dev", "cityscape Open Data", "cityscape MCP"],
     disambiguatingDescription:
-      "InfraNode ist eine Open-Data-REST-API und ein MCP-Server für offene Daten deutscher Städte (infranode.dev). Kein Zusammenhang mit InfraNodus (Knowledge-Graph-Werkzeug) oder Infranode (Infrastruktur-Investor, infranode.eu).",
+      "cityscape ist eine Open-Data-REST-API und ein MCP-Server für offene Daten deutscher Städte (cityscape.dev). Kein Zusammenhang mit InfraNodus (Knowledge-Graph-Werkzeug) oder cityscape (Infrastruktur-Investor, cityscape.eu).",
     url: `${site}/`,
-    logo: `${site}/logo-infranode.png`,
+    logo: `${site}/logo-cityscape.png`,
     description:
       description ??
       "Open-Data-REST-API und MCP-Server für normalisierte offene Daten deutscher Großstädte, keylos und kostenlos.",
     sameAs: sameAs ?? [
-      "https://github.com/street1983nk/infranode",
-      "https://www.pulsemcp.com/servers/infranode",
-      "https://glama.ai/mcp/servers/@street1983nk/infranode",
-      "https://smithery.ai/server/infranode/infranode",
+      "https://github.com/street1983nk/cityscape",
+      "https://www.pulsemcp.com/servers/cityscape",
+      "https://glama.ai/mcp/servers/@street1983nk/cityscape",
+      "https://smithery.ai/server/cityscape/cityscape",
     ],
   };
 } else if (type === "WebSite") {
@@ -152,8 +152,8 @@ if (type === "WebAPI") {
     "@context": "https://schema.org",
     "@type": "WebSite",
     "@id": `${site}/#website`,
-    name: name ?? "InfraNode",
-    alternateName: ["InfraNode.dev", "InfraNode Open Data API", "InfraNode MCP"],
+    name: name ?? "cityscape",
+    alternateName: ["cityscape.dev", "cityscape Open Data API", "cityscape MCP"],
     url: `${site}/`,
     description:
       description ??
@@ -165,7 +165,7 @@ if (type === "WebAPI") {
   data = {
     "@context": "https://schema.org",
     "@type": "Dataset",
-    name: name ?? "InfraNode: Open Data deutscher Großstädte",
+    name: name ?? "cityscape: Open Data deutscher Großstädte",
     description:
       description ??
       "Normalisierte offene Daten für deutsche Großstädte über eine kostenlose REST-API: Wetter, Luftqualität, Verkehr, ÖPNV und mehr.",
@@ -174,7 +174,7 @@ if (type === "WebAPI") {
     isAccessibleForFree: true,
     creator: {
       "@type": "Organization",
-      name: creatorName ?? "InfraNode",
+      name: creatorName ?? "cityscape",
       url: `${site}/`,
     },
     // dateModified = Build-Datum: die API liefert laufend aktuelle Werte, die
@@ -185,7 +185,7 @@ if (type === "WebAPI") {
     // als Datensatz.
     includedInDataCatalog: {
       "@type": "DataCatalog",
-      name: "InfraNode DCAT-AP Catalog",
+      name: "cityscape DCAT-AP Catalog",
       url: `${site}/api/v1/catalog.jsonld`,
     },
     ...(keywords && keywords.length ? { keywords } : {}),
@@ -220,7 +220,7 @@ if (type === "WebAPI") {
     targetPlatform: "HTTP",
     isPartOf: {
       "@type": "WebAPI",
-      name: "InfraNode API",
+      name: "cityscape API",
       url: `${site}/`,
     },
   };

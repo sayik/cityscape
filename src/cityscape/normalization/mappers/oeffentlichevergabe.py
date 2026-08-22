@@ -7,7 +7,7 @@ geparstes OCDS-Notice-dict deterministisch auf einen ``CanonicalRecord`` mit
 Tier A.
 
 Die Stadt-Zuordnung passiert NICHT hier, sondern in
-``infranode.tenders.matching``; der Mapper nimmt den bereits aufgelösten
+``cityscape.tenders.matching``; der Mapper nimmt den bereits aufgelösten
 ``slug`` und die ``match``-Liste (``buyer_city`` | ``place_of_performance``) als
 Argumente und schreibt sie ins Payload. ``buyer_city`` trägt den
 (slugifizierten) Stadt-Bezug, ``nuts`` den NUTS-3-Code des Auftraggebers.

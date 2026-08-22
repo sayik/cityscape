@@ -9,7 +9,7 @@ Adapter baut die Overpass-QL deterministisch auf:
   ``amenity``-Tag gemappt.
 
 Sicherheit (T-05-09 Injection / T-05-12 SSRF): Der Host stammt aus ``_BASE`` bzw.
-dem operator-gesetzten ``base_url`` (Env ``INFRANODE_OVERPASS_BASE_URL``, KEIN
+dem operator-gesetzten ``base_url`` (Env ``CITYSCAPE_OVERPASS_BASE_URL``, KEIN
 User-Input) -> SSRF-Invariante bleibt gewahrt. Hintergrund: Die öffentliche
 Overpass-Instanz untersagt Drittnutzer-Backends im Dauerbetrieb (Fair-Use); für
 Produktion auf eine eigene Instanz (Planet-Dump) oder Geofabrik umstellen. Der
@@ -64,7 +64,7 @@ _AREA_OFFSET = 3600000000
 
 # Default-Element-Limit (Audit K9): die ausgelieferte Stichprobe wird auf diesen
 # Wert gedeckelt (statt hart 200). Operator-konfigurierbar über das Setting
-# ``overpass_max_elements`` (Env INFRANODE_OVERPASS_MAX_ELEMENTS), das die Routen
+# ``overpass_max_elements`` (Env CITYSCAPE_OVERPASS_MAX_ELEMENTS), das die Routen
 # als ``max_elements`` durchreichen. Der ECHTE Gesamtbestand kommt unabhängig
 # davon über ``out count;`` (siehe Modul-Docstring) als ``total_available``.
 _DEFAULT_MAX_ELEMENTS = 2000

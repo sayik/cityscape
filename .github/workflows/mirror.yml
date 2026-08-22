@@ -1,13 +1,13 @@
 name: Mirror to GitLab
 
-# Spiegelt dieses oeffentliche Repo (street1983nk/infranode) nach GitLab.
+# Spiegelt dieses oeffentliche Repo (street1983nk/cityscape) nach GitLab.
 # Mechanismus: GitHub-Runner pusht bei jedem Push auf main (und manuell) per
 # Token zu GitLab. GitLabs eingebautes PULL-Mirroring ist Premium -> bewusst NICHT
 # genutzt. Solange die beiden Secrets fehlen, ueberspringt der Job sauber (gruen),
 # damit keine roten Laeufe entstehen, bevor GitLab eingerichtet ist.
 #
 # Benoetigte Repo-Secrets (Settings -> Secrets and variables -> Actions):
-#   GITLAB_MIRROR_URL   = gitlab.com/<namespace>/infranode.git   (ohne https://)
+#   GITLAB_MIRROR_URL   = gitlab.com/<namespace>/cityscape.git   (ohne https://)
 #   GITLAB_MIRROR_TOKEN = GitLab Personal Access Token, Scope write_repository
 
 on:

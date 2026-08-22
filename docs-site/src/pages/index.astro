@@ -1,5 +1,5 @@
 ---
-// Landing-Page der InfraNode-Doku. Hero mit Zahlen-Badges, ehrliche
+// Landing-Page der cityscape-Doku. Hero mit Zahlen-Badges, ehrliche
 // Feature-Sektion (kanonischer Envelope, source_status-Semantik, Cache/ETag,
 // MCP, llms.txt). Nutzt das Docs-Layout (Drei-Spalten, Suche im Topbar). Der
 // Content-Slot ist data-pagefind-body, damit die Startseite indexiert wird.
@@ -16,7 +16,7 @@ const faqs = [
   },
   {
     q: "Was kostet die Nutzung?",
-    a: "Nichts. InfraNode ist eine kostenlose, öffentliche Open-Data-API, ohne Werbung und ohne Bezahlschranke. Der Quellcode ist öffentlich auf GitHub verfügbar (Apache-2.0).",
+    a: "Nichts. cityscape ist eine kostenlose, öffentliche Open-Data-API, ohne Werbung und ohne Bezahlschranke. Der Quellcode ist öffentlich auf GitHub verfügbar (Apache-2.0).",
   },
   {
     q: "Welche Städte sind abgedeckt?",
@@ -24,7 +24,7 @@ const faqs = [
   },
   {
     q: "Woher kommen die Daten?",
-    a: "Aus öffentlichen, amtlichen Quellen. InfraNode bündelt sie hinter einer Schnittstelle und reicht sie normalisiert durch. Jede Antwort nennt im attribution-Block Lizenz und Herkunft.",
+    a: "Aus öffentlichen, amtlichen Quellen. cityscape bündelt sie hinter einer Schnittstelle und reicht sie normalisiert durch. Jede Antwort nennt im attribution-Block Lizenz und Herkunft.",
   },
   {
     q: "Gibt es Rate-Limits?",
@@ -58,7 +58,7 @@ const faqJsonLd = JSON.stringify({
   <JsonLd
     slot="jsonld"
     type="WebAPI"
-    name="InfraNode API"
+    name="cityscape API"
     description="Kostenlose, öffentliche Open-Data-REST-API für normalisierte offene Daten deutscher Großstädte."
   />
   <JsonLd slot="jsonld" type="Organization" />
@@ -77,7 +77,7 @@ const faqJsonLd = JSON.stringify({
   <div class="tldr">
     <p class="tldr__title">Kurz gesagt</p>
     <p>
-      InfraNode ist eine kostenlose, öffentliche Open-Data-REST-API, die offene
+      cityscape ist eine kostenlose, öffentliche Open-Data-REST-API, die offene
       Daten deutscher Großstädte hinter einer einheitlichen Schnittstelle
       bereitstellt. Statt dich bei Dutzenden Portalen anzumelden, fragst du alles
       über einen konsistenten JSON-Envelope ab, ohne API-Schlüssel.
@@ -119,11 +119,11 @@ const faqJsonLd = JSON.stringify({
     </a>
   </div>
 
-  <figure class="hero-code" aria-label="Beispiel-Aufruf der InfraNode-API">
+  <figure class="hero-code" aria-label="Beispiel-Aufruf der cityscape-API">
     <div class="hero-code__bar" aria-hidden="true">
       <i></i><i></i><i></i><span>Terminal, erster Aufruf in Sekunden</span>
     </div>
-    <pre><code><span class="c-dim">$</span> <span class="c-cmd">curl https://infranode.dev/api/v1/cities/berlin/weather</span>
+    <pre><code><span class="c-dim">$</span> <span class="c-cmd">curl https://cityscape.dev/api/v1/cities/berlin/weather</span>
 &#123;
   <span class="c-key">"data"</span>: &#123;
     <span class="c-key">"payload"</span>: &#123; <span class="c-key">"temperature_c"</span>: 12.9, <span class="c-key">"condition"</span>: <span class="c-str">"dry"</span>, <span class="c-dim">…</span> &#125;,
@@ -136,7 +136,7 @@ const faqJsonLd = JSON.stringify({
 
   <h2>Abdeckung, ehrlich erklärt</h2>
   <p>
-    InfraNode kennt alle <strong>84 deutschen Großstädte über 100.000
+    cityscape kennt alle <strong>84 deutschen Großstädte über 100.000
     Einwohner</strong>. Davon sind <strong>28 Kern-Städte</strong> mit voller
     Quellen-Abdeckung gepflegt; die übrigen Städte werden von den
     automatischen, AGS- und geobasierten Quellen bedient. Wo eine Quelle für
@@ -217,7 +217,7 @@ const faqJsonLd = JSON.stringify({
         Ein MCP-Server stellt die Endpunkte als Werkzeuge für KI-Agenten
         bereit. Zusätzlich liegt eine <code>llms.txt</code> an der Wurzel für
         den direkten Maschinen-Konsum. In ChatGPT geht es noch schneller: das
-        fertige <a href="/chatgpt/">InfraNode-GPT</a> beantwortet
+        fertige <a href="/chatgpt/">cityscape-GPT</a> beantwortet
         Live-Stadtdaten-Fragen direkt im GPT Store.
       </p>
     </li>
@@ -227,7 +227,7 @@ const faqJsonLd = JSON.stringify({
         Echtzeitdaten unter /live
       </h3>
       <p>
-        Unter <code>/api/v1/live/*</code> liefert InfraNode aktuelle Messwerte:
+        Unter <code>/api/v1/live/*</code> liefert cityscape aktuelle Messwerte:
         Verkehrslage, Baustellen, Parken, Laden und ÖPNV-Echtzeit mit
         Verspätungen je Halt, Fahrt und Linie. Einige Live-Quellen sind
         stadtspezifisch, etwa Hamburg HVV-Abfahrten oder die Dortmunder
@@ -241,7 +241,7 @@ const faqJsonLd = JSON.stringify({
         Betrieb in Deutschland
       </h3>
       <p>
-        InfraNode läuft auf einem Server in Deutschland, ohne Werbung, ohne
+        cityscape läuft auf einem Server in Deutschland, ohne Werbung, ohne
         Tracking und ohne Cookies. Eine öffentliche
         <a href="/abdeckung/">Status-Seite</a> zeigt die Verfügbarkeit je
         Datenbereich; die <code>/abdeckung</code>-Seite nennt ehrlich, welcher
@@ -256,7 +256,7 @@ const faqJsonLd = JSON.stringify({
     springe direkt zu einem Endpunkt in der linken Navigation. Jede Operation
     hat Code-Beispiele in curl, JavaScript und Python sowie eine Live-Konsole
     für die aufrufbaren Endpunkte. Alle Endpunkte gibt es auch als
-    <a href="https://www.postman.com/alster83-7133231/infranode/collection/pft781f/infranode-api" target="_blank" rel="noopener">InfraNode API auf dem Postman API Network</a>
+    <a href="https://www.postman.com/alster83-7133231/cityscape/collection/pft781f/cityscape-api" target="_blank" rel="noopener">cityscape API auf dem Postman API Network</a>
     mit echten Beispiel-Antworten, ohne API-Key direkt im Browser ausprobierbar.
   </p>
 

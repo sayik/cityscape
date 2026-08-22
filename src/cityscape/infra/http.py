@@ -6,7 +6,7 @@ bedient alle Upstreams. Der Client wird im Lifespan-Startup erzeugt
 Pool-Limits und ein konservativer Default-Timeout schützen vor hängenden
 Upstreams; per-Source-Timeout ist je Request überschreibbar
 (``per_source_timeout``), ohne den Pool zu vervielfachen. Der User-Agent trägt
-"InfraNode" plus Repo-URL auf JEDEM Request (Fair-Use, T-03-04).
+"cityscape" plus Repo-URL auf JEDEM Request (Fair-Use, T-03-04).
 """
 
 from __future__ import annotations
@@ -16,11 +16,11 @@ import httpx
 from cityscape import __version__
 
 #: Descriptive User-Agent auf JEDEM Upstream-Request (RES-05, T-03-04). Die Version
-#: stammt aus der einzigen Quelle ``infranode.__version__`` (kein hartkodierter
+#: stammt aus der einzigen Quelle ``cityscape.__version__`` (kein hartkodierter
 #: Versionsstring, der mit Releases driftet).
 USER_AGENT = (
-    f"InfraNodeAPI/{__version__} "
-    "(+https://github.com/street1983nk/infranode-api; open data proxy)"
+    f"cityscapeAPI/{__version__} "
+    "(+https://github.com/street1983nk/cityscape-api; open data proxy)"
 )
 
 #: Prozessweiter Pool-Singleton. ``create_http_client`` gibt für denselben

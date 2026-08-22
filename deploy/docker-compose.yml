@@ -30,10 +30,10 @@ services:
       # Named volume fuer den append-only Tier-A-Store unter /app/data/archive (WORKDIR /app
       # -> Default-Pfad data/archive). Muss Container-Neustarts ueberleben, sonst geht die
       # nicht-nachholbare Historie (ARCH-01) bei `docker compose down` verloren (Pitfall 6, T-04-02).
-      - infranode_data:/app/data
+      - cityscape_data:/app/data
     environment:
       # Service-Name-DNS im Compose-Netz; ueberschreibt einen evtl. abweichenden .env-Wert.
-      INFRANODE_REDIS_URL: redis://redis:6379/0
+      CITYSCAPE_REDIS_URL: redis://redis:6379/0
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health').status==200 else 1)"]
       interval: 10s
@@ -72,6 +72,6 @@ services:
 
 # Persistente Volumes ueberleben den Container-Lifecycle (ARCH-01-Historie, Pitfall 6).
 volumes:
-  infranode_data:
+  cityscape_data:
   # Kuma-Daten (Monitore + Settings) persistent, ohne Docker-Socket.
   kuma_data:

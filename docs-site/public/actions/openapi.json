@@ -1,13 +1,13 @@
 {
  "openapi": "3.1.0",
  "info": {
-  "title": "InfraNode, offene Stadtdaten Deutschland",
+  "title": "cityscape, offene Stadtdaten Deutschland",
   "version": "1.0.0",
   "description": "Kostenlose, keylose Open-Data-API fuer 84 deutsche Grossstaedte. Einstieg: getCities liefert alle Stadt-Slugs, getCityOverview(slug) liefert Stammdaten, den Katalog aller Datenarten mit Abdeckungsstatus und einen Live-Schnappschuss. Jede Antwort traegt data.attribution (Lizenz/Quelle, bei Nennung IMMER wiedergeben) und meta.source_status."
  },
  "servers": [
   {
-   "url": "https://infranode.dev"
+   "url": "https://cityscape.dev"
   }
  ],
  "paths": {

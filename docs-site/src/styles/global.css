@@ -1,9 +1,9 @@
-/* InfraNode Doku, Premium-Design (D-01). Drei-Spalten-Layout, ruhiger
+/* cityscape Doku, Premium-Design (D-01). Drei-Spalten-Layout, ruhiger
    Whitespace, dunkle Code-Bloecke, Method-Badges, sticky Sidebar. Kein
    Framework. Farben aus dem Logo gesampelt: Petrol + Gruen. */
 
 :root {
-  /* Markenfarben, aus public/logo-infranode.png gesampelt.
+  /* Markenfarben, aus public/logo-cityscape.png gesampelt.
      Petrol-Familie #004050/#105050, Gruen-Familie #80b030/#90b030.
      Fuer WCAG-AA-Kontrast auf Weiss leicht justiert. */
   --color-primary: #1d4e5c; /* Petrol, Links/Buttons/aktive Nav */
@@ -30,7 +30,8 @@
   --maxw: 1320px;
   --nav-w: 260px;
   --toc-w: 220px;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+  --font:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
@@ -870,7 +871,8 @@ code {
 .hero {
   border-bottom: 1px solid var(--border-strong);
   background:
-    linear-gradient(to right, var(--border) 1px, transparent 1px) -1px 0 / 72px 100%,
+    linear-gradient(to right, var(--border) 1px, transparent 1px) -1px 0 / 72px
+      100%,
     var(--bg);
 }
 

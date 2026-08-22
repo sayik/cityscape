@@ -2,7 +2,7 @@
 // Abdeckung & Status (/abdeckung): Dev-Seite, die ehrlich zeigt, welche Endpunkte
 // für welche Städte Daten liefern, und wo Devs über Störungen informiert
 // werden. Datenquelle der Teilabdeckung: src/data/coverage.json (driftfrei aus
-// der API-Single-Source infranode.registry.coverage.PARTIAL_COVERAGE).
+// der API-Single-Source cityscape.registry.coverage.PARTIAL_COVERAGE).
 //
 // coverage.json regenerieren:
 //   uv run python scripts/export-coverage.py
@@ -11,7 +11,7 @@ import coverage from "../data/coverage.json";
 import { API_BASE } from "../lib/codegen";
 
 // Öffentliche Uptime-Kuma-Status-Page (Störungsinfo für Devs).
-const STATUS_URL = "https://status.infranode.dev";
+const STATUS_URL = "https://status.cityscape.dev";
 
 // Anzeige-Metadaten der teilabgedeckten Endpunkte (Reihenfolge = Anzeige).
 // covered-Slugs kommen aus coverage.json (Single Source), hier nur Label/Pfad/Link.
@@ -104,7 +104,7 @@ const partialMap: Record<string, string[]> = coverage.partial;
 
 <Docs
   title="Abdeckung & Status"
-  description="Welche InfraNode-Endpunkte für welche Städte Daten liefern: flächendeckende Endpunkte, teilabgedeckte Endpunkte mit Städteliste, geo- und live-basierte Sonderfälle, source_status-Werte und die Live-Status-Page für Störungen."
+  description="Welche cityscape-Endpunkte für welche Städte Daten liefern: flächendeckende Endpunkte, teilabgedeckte Endpunkte mit Städteliste, geo- und live-basierte Sonderfälle, source_status-Werte und die Live-Status-Page für Störungen."
   current="abdeckung"
   lang="de"
   altLangPath="/en/coverage/"
@@ -112,7 +112,7 @@ const partialMap: Record<string, string[]> = coverage.partial;
   <h1>Abdeckung & Status</h1>
 
   <p>
-    InfraNode deckt {total} deutsche Großstädte ab. Die meisten Endpunkte liefern
+    cityscape deckt {total} deutsche Großstädte ab. Die meisten Endpunkte liefern
     für alle {total} Städte Daten. Einige wenige sind <strong>teilabgedeckt</strong>:
     sie bedienen nur kuratierte Städte. Diese Seite zeigt ehrlich, welcher Endpunkt
     welche Städte bedient, und wo du über Störungen informiert wirst.

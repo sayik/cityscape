@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
-const logoPath = join(root, "public", "logo-infranode.png");
+const logoPath = join(root, "public", "logo-cityscape.png");
 const outPath = join(root, "public", "og-image.png");
 
 const W = 1200;
@@ -21,7 +21,10 @@ const logoW = 380;
 const logoH = Math.round((logoW * 768) / 1408);
 const logoBuf = await sharp(logoPath)
   .trim({ threshold: 12 })
-  .resize(logoW, logoH, { fit: "inside", background: { r: 255, g: 255, b: 255, alpha: 0 } })
+  .resize(logoW, logoH, {
+    fit: "inside",
+    background: { r: 255, g: 255, b: 255, alpha: 0 },
+  })
   .png()
   .toBuffer();
 const logoMeta = await sharp(logoBuf).metadata();
@@ -44,7 +47,11 @@ const svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http
 
 await sharp(Buffer.from(svg))
   .composite([
-    { input: logoBuf, top: logoTop, left: Math.round((W - (logoMeta.width ?? logoW)) / 2) },
+    {
+      input: logoBuf,
+      top: logoTop,
+      left: Math.round((W - (logoMeta.width ?? logoW)) / 2),
+    },
   ])
   .png()
   .toFile(outPath);

@@ -6,7 +6,7 @@ import { API_BASE } from "../../../lib/codegen";
 
 const title = "Use German open city data in Home Assistant";
 const description =
-  "Step-by-step guide: bring weather, air quality and electricity price for your city into Home Assistant as a sensor through the free, keyless InfraNode API.";
+  "Step-by-step guide: bring weather, air quality and electricity price for your city into Home Assistant as a sensor through the free, keyless cityscape API.";
 
 const restSensor = `# configuration.yaml
 sensor:
@@ -29,7 +29,7 @@ const priceSensor = `  - platform: rest
 const faq = [
   {
     q: "Do I need an API key for Home Assistant?",
-    a: "No. The InfraNode API is keyless and free. The REST sensor calls the URL directly, without headers or tokens.",
+    a: "No. The cityscape API is keyless and free. The REST sensor calls the URL directly, without headers or tokens.",
   },
   {
     q: "How often can I poll?",
@@ -48,10 +48,10 @@ const faq = [
   <h1>{title}</h1>
   <p class="lead">{description}</p>
 
-  <h2>Why InfraNode for Home Assistant</h2>
+  <h2>Why cityscape for Home Assistant</h2>
   <p>
     To couple smart home automations to real environmental data you need a
-    source that works without sign-up and returns stable JSON. InfraNode bundles
+    source that works without sign-up and returns stable JSON. cityscape bundles
     open data for 84 major German cities behind a free, keyless REST API. Every
     response carries source, license and timestamp, so you can filter reliably
     in Home Assistant.

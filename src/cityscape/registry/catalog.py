@@ -244,7 +244,7 @@ CITY_DATA_CATALOG: tuple[DataType, ...] = (
 # nur noch Dokumentation; maßgeblich ist diese Ableitung. Neue Datenarten
 # zeigen automatisch auf get_city_resource. Der Overview-/Katalog-Konsument
 # übergibt bei get_city_resource den ``type``-Schlüssel als resource-Argument
-# (Hinweis steht in der infranode://catalog-Note und den Server-Instructions).
+# (Hinweis steht in der cityscape://catalog-Note und den Server-Instructions).
 _NAMED_TOOLS: dict[str, str] = {
     "base": "get_city",
     "overview": "get_city_overview",

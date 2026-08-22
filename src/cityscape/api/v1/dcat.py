@@ -1,8 +1,8 @@
 """DCAT-AP-Katalog-Endpunkt ``/api/v1/catalog.jsonld`` (EU-Harvesting).
 
-Liefert einen maschinenlesbaren DCAT-AP-Katalog (JSON-LD) der von InfraNode
+Liefert einen maschinenlesbaren DCAT-AP-Katalog (JSON-LD) der von cityscape
 bereitgestellten Datensätze. Ziel: von ``data.europa.eu`` / GovData / sonstigen
-CKAN-Harvestern indexierbar machen, ohne dass InfraNode selbst eine öffentliche
+CKAN-Harvestern indexierbar machen, ohne dass cityscape selbst eine öffentliche
 Stelle sein muss (der Katalog beschreibt die *Distributionen* = API-Endpunkte +
 die offen lizenzierten Bulk-Snapshots auf Zenodo/Hugging Face).
 
@@ -30,9 +30,9 @@ from cityscape.api.v1.sources import SOURCE_LICENSE
 
 router = APIRouter()
 
-BASE = "https://infranode.dev/api/v1"
-HOMEPAGE = "https://infranode.dev"
-PUBLISHER_NAME = "InfraNode"
+BASE = "https://cityscape.dev/api/v1"
+HOMEPAGE = "https://cityscape.dev"
+PUBLISHER_NAME = "cityscape"
 
 # EU-Daten-Themen-Vokabular (Authority-Table publications.europa.eu).
 _THEME = "http://publications.europa.eu/resource/authority/data-theme/{}"
@@ -96,8 +96,8 @@ def _dataset_node(d: dict) -> dict:
     distribution = {
         "@type": "dcat:Distribution",
         "dct:title": _lang(
-            f"InfraNode API: /cities/{{slug}}/{d['endpoint']}",
-            f"InfraNode API: /cities/{{slug}}/{d['endpoint']}",
+            f"cityscape API: /cities/{{slug}}/{d['endpoint']}",
+            f"cityscape API: /cities/{{slug}}/{d['endpoint']}",
         ),
         "dcat:accessURL": {"@id": access},
         "dct:format": {"@id": _FILE_TYPE.format("JSON")},
@@ -152,8 +152,8 @@ def _snapshot_dataset() -> dict:
         "@id": f"{HOMEPAGE}/catalog/german-cities-snapshot",
         "dct:identifier": "german-cities-snapshot",
         "dct:title": _lang(
-            "InfraNode Querschnitt deutscher Staedte (Open-Data-Snapshot)",
-            "InfraNode German Cities Open-Data Snapshot",
+            "cityscape Querschnitt deutscher Staedte (Open-Data-Snapshot)",
+            "cityscape German Cities Open-Data Snapshot",
         ),
         "dct:description": _lang(
             "Reproduzierbarer, offen lizenzierter Querschnitt offener Daten fuer "
@@ -183,17 +183,17 @@ def build_catalog() -> dict:
         "@type": "dcat:Catalog",
         "@id": f"{HOMEPAGE}/catalog",
         "dct:title": _lang(
-            "InfraNode Open-Data-Katalog deutscher Staedte",
-            "InfraNode Open Data Catalogue for German cities",
+            "cityscape Open-Data-Katalog deutscher Staedte",
+            "cityscape Open Data Catalogue for German cities",
         ),
         "dct:description": _lang(
-            "DCAT-AP-Katalog der ueber die InfraNode-API bereitgestellten offenen "
-            "Datensaetze deutscher Staedte. InfraNode buendelt amtliche offene "
+            "DCAT-AP-Katalog der ueber die cityscape-API bereitgestellten offenen "
+            "Datensaetze deutscher Staedte. cityscape buendelt amtliche offene "
             "Quellen (DWD, UBA, BNetzA, BORIS, Destatis u.a.) hinter einer "
             "einheitlichen, keylosen REST-API; je Datensatz sind Quelle, Lizenz "
             "und Pflicht-Attribution ausgewiesen.",
             "DCAT-AP catalogue of the open datasets for German cities provided via "
-            "the InfraNode API. InfraNode bundles official open sources (DWD, UBA, "
+            "the cityscape API. cityscape bundles official open sources (DWD, UBA, "
             "BNetzA, BORIS, Destatis and others) behind one keyless REST API; each "
             "dataset states its source, license and required attribution.",
         ),

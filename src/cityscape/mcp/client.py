@@ -1,4 +1,4 @@
-"""httpx-Wrapper um die lokale InfraNode-Live-FastAPI (DX-05).
+"""httpx-Wrapper um die lokale cityscape-Live-FastAPI (DX-05).
 
 Die MCP-Tools rufen ihre Daten über diesen Wrapper, nie direkt bei Upstreams.
 Die Funktion ``get_resource`` baut die URL ausschließlich aus der konfigurierten
@@ -8,7 +8,7 @@ geparste JSON unverändert zurück (keine Mapping-/Lizenz-Logik, D-07/D-08).
 Sicherheit:
 
 - T-12-MCP-SSRF: Die Base-URL stammt ausschließlich aus der Env
-  ``INFRANODE_MCP_API_BASE`` (Default ``http://localhost:8000/api/v1``). Ihr Host
+  ``CITYSCAPE_MCP_API_BASE`` (Default ``http://localhost:8000/api/v1``). Ihr Host
   wird gegen eine Allowlist geprüft; ein nicht-allowlisteter Host wird mit
   ``ValueError`` abgelehnt, bevor ein Request rausgeht. Eine arbitrary URL aus
   Tool-Argumenten ist nicht möglich.
@@ -53,7 +53,7 @@ ALLOWED_HOSTS: frozenset[str] = frozenset(
 # MetricsMiddleware erkennt ihn und macht MCP-Aktionen im Dashboard sichtbar +
 # löst einen ntfy-Push aus (Owner-Wunsch: MCP-Aktionen verfolgen). Best-effort-
 # Kennung, kein Auth-Mechanismus.
-_MCP_SOURCE_HEADER = "X-Infranode-Mcp"
+_MCP_SOURCE_HEADER = "X-cityscape-Mcp"
 
 # T-12-MCP-INJECT: erlaubte Ressourcen-Namen, exakt die City-Sub-Ressourcen aus
 # docs/openapi.yaml (GET /api/v1/cities/{slug}/<resource>). Roher Tool-Input wird
@@ -278,7 +278,7 @@ def _build_upstream_error(response: httpx.Response) -> UpstreamError:
     if not detail:
         detail = response.text[:200].strip() or response.reason_phrase
     return UpstreamError(
-        f"InfraNode-API {response.status_code}: {detail}",
+        f"cityscape-API {response.status_code}: {detail}",
         status_code=response.status_code,
     )
 
@@ -290,14 +290,14 @@ def _base_url() -> str:
     Löst ``ValueError`` aus, wenn das Schema nicht http/https ist oder der Host
     nicht in ``ALLOWED_HOSTS`` liegt (T-12-MCP-SSRF).
     """
-    # Basis-URL aus INFRANODE_MCP_API_BASE, sonst Default. So
+    # Basis-URL aus CITYSCAPE_MCP_API_BASE, sonst Default. So
     # funktioniert die nach außen dokumentierte Variable, ohne den bestehenden
     # Env-Vertrag zu brechen.
-    raw = os.environ.get("INFRANODE_MCP_API_BASE", _DEFAULT_BASE_URL)
+    raw = os.environ.get("CITYSCAPE_MCP_API_BASE", _DEFAULT_BASE_URL)
     parts = urlsplit(raw)
     if parts.scheme not in ("http", "https"):
         raise ValueError(
-            f"Ungueltiges Schema fuer INFRANODE_MCP_API_BASE: "
+            f"Ungueltiges Schema fuer CITYSCAPE_MCP_API_BASE: "
             f"{parts.scheme!r}. Erlaubt sind nur http/https."
         )
     if parts.hostname not in ALLOWED_HOSTS:

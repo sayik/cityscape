@@ -5,14 +5,14 @@ import JsonLd from "../../../components/JsonLd.astro";
 
 const title = "Set up an MCP server in Claude and ChatGPT";
 const description =
-  "Guide: set up the free, keyless InfraNode MCP server in Claude Code, Claude Desktop and ChatGPT to use open data for German cities directly in your AI assistant.";
+  "Guide: set up the free, keyless cityscape MCP server in Claude Code, Claude Desktop and ChatGPT to use open data for German cities directly in your AI assistant.";
 
-const claudeCode = "claude mcp add --transport http infranode https://mcp.infranode.dev/mcp";
+const claudeCode = "claude mcp add --transport http cityscape https://mcp.cityscape.dev/mcp";
 
 const connector = `{
   "mcpServers": {
-    "infranode": {
-      "url": "https://mcp.infranode.dev/mcp"
+    "cityscape": {
+      "url": "https://mcp.cityscape.dev/mcp"
     }
   }
 }`;
@@ -20,7 +20,7 @@ const connector = `{
 const faq = [
   {
     q: "Do I need an API key to set up the MCP server?",
-    a: "No. The InfraNode MCP server is keyless and free. You only enter the URL https://mcp.infranode.dev/mcp, no token, no sign-up.",
+    a: "No. The cityscape MCP server is keyless and free. You only enter the URL https://mcp.cityscape.dev/mcp, no token, no sign-up.",
   },
   {
     q: "Does the MCP server work with ChatGPT and Claude?",
@@ -41,7 +41,7 @@ const faq = [
 
   <h2>What you need</h2>
   <p>
-    Just the server URL <code>https://mcp.infranode.dev/mcp</code>. The InfraNode
+    Just the server URL <code>https://mcp.cityscape.dev/mcp</code>. The cityscape
     MCP server is free, keyless and remotely hosted, nothing to install and no
     key to request.
   </p>
@@ -55,7 +55,7 @@ const faq = [
   <pre><code>{connector}</code></pre>
   <p>
     In clients with a graphical interface, add a connector or remote MCP server
-    instead and enter the URL <code>https://mcp.infranode.dev/mcp</code>.
+    instead and enter the URL <code>https://mcp.cityscape.dev/mcp</code>.
   </p>
 
   <h2>Done: just ask</h2>

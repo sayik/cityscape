@@ -1,70 +1,74 @@
-# Beitragsleitfaden
+# Contribution Guide
 
-Danke, dass du zu InfraNode API beitragen möchtest. Dieser Leitfaden beschreibt das Setup, die verbindlichen Qualitäts-Gates und die Regel zum Umgang mit Secrets.
+Thank you for wanting to contribute to the cityscape API. This guide describes the setup, the mandatory quality gates, and the rules for handling secrets.
 
 ## Setup
 
-Das Projekt nutzt [uv](https://docs.astral.sh/uv/) für Dependency- und Environment-Management (Python 3.13).
+The project uses [uv](https://docs.astral.sh/uv/) for dependency and environment management (Python 3.13).
 
 ```bash
-# Abhängigkeiten installieren und virtuelle Umgebung aufbauen
+# Install dependencies and set up a virtual environment
 uv sync
 ```
 
-## Verbindliche Gate-Kommandos
+## Mandatory Gate Commands
 
-Bevor du einen Pull Request öffnest, müssen alle drei Gates lokal grün sein. Genau diese Kommandos laufen auch in der CI:
+Before you open a pull request, all three gates must pass locally. These are the exact same commands that run in CI:
+
+Translated with DeepL.com (free version)
 
 ```bash
 # Linting (ruff: E, F, I, UP, B, ASYNC, S)
 uv run ruff check .
 
-# Format-Prüfung (ruff format im Check-Modus)
+# Format-check (ruff format im Check-Modus)
 uv run ruff format --check .
 
 # Tests (pytest, async-Modus aktiv)
 uv run pytest -q
 ```
 
-Ein PR wird nur gemergt, wenn ruff (check + format) und pytest sauber durchlaufen. Das ist das verbindliche Abschluss-Gate des Projekts: Linting + Tests müssen grün sein, bevor etwas als "fertig" gilt.
+A PR is only merged if ruff (check + format) and pytest run successfully. This is the mandatory final gate for the project: linting and tests must pass before anything is considered “done.”
 
-## Secret-Regel: niemals Secrets committen
+## Secret Rule: Never commit secrets
 
-- Echte API-Keys, Tokens oder Zugangsdaten gehören **niemals** ins Repository.
-- Konfiguration läuft ausschließlich über Umgebungsvariablen mit dem Präfix `INFRANODE_`.
-- Nur `.env.example` (mit leeren Platzhaltern) wird versioniert. Deine lokale `.env` mit echten Werten ist durch `.gitignore` ausgeschlossen und darf das auch bleiben.
-- In CI läuft bei jedem Push und Pull Request ein **gitleaks**-Scan über die volle Git-History. Findet er ein Secret, schlägt die Pipeline fehl (`--exit-code 1`). Gefundene Secrets werden im CI-Log redigiert (`--redact`).
+- Real API keys, tokens, or credentials **never** belong in the repository.
+- Configuration is handled exclusively via environment variables prefixed with `CITYSCAPE_`.
+- Only `.env.example` (with empty placeholders) is versioned. Your local `.env` file with real values is excluded via `.gitignore` and should remain that way.
+- In CI, a **gitleaks** scan runs across the entire Git history with every push and pull request. If it finds a secret, the pipeline fails (`--exit-code 1`). Any secrets found are redacted in the CI log (`--redact`).
 
-Falls du versehentlich ein Secret committet hast: Rotiere den betroffenen Key sofort (gitleaks erkennt ihn auch in der History) und entferne ihn aus dem Verlauf, bevor du pushst.
+If you accidentally commit a secret: Rotate the affected key immediately (gitleaks also detects it in the history) and remove it from the history before you push.
 
-## Code-Stil
+## Code Style
 
-- Deutschsprachige Docstrings und Kommentare, korrekte Umlaute (ä/ö/ü/ß), keine ASCII-Ersatzschreibweise.
-- Folge den im Projekt etablierten Mustern (App-Factory, zentrales Error-Mapping, strukturiertes JSON-Logging, versioniertes Routing unter `/api/v1`).
+- German-language docstrings and comments, correct umlauts (ä/ö/ü/ß), no ASCII substitutions.
+- Follow the patterns established in the project (App Factory, centralized error mapping, structured JSON logging, versioned routing under `/api/v1`).
 
-## Datenquelle hinzufügen
 
-Eine neue Upstream-Quelle ist deklarativ an **einer** Stelle definiert:
-`src/infranode/registry/source_specs.py`. Ein `SourceSpec`-Eintrag dort speist
-automatisch die abgeleiteten Strukturen (Quellenliste der `/sources`-Route,
-Lizenz + Attribution, Cache-TTL, Breaker-Cooldown), sodass keine vier verstreuten
-Stellen mehr gepflegt werden müssen.
+## Add a Data Source
 
-Schritte für eine neue Quelle `meine_quelle`:
+A new upstream source is defined declaratively in **one** place:
+`src/cityscape/registry/source_specs.py`. A `SourceSpec` entry there automatically populates
+the derived structures (source list for the `/sources` route,
+license + attribution, cache TTL, breaker cooldown), so you no longer have to maintain four scattered
+locations.
 
-1. **Registry-Eintrag** in `registry/source_specs.py`:
-   `SourceSpec(name="meine_quelle", license_id="...", attribution="...", ttl=(fresh_s, stale_s), cooldown=...)`.
-   `ttl`/`cooldown` weglassen, wenn die Defaults passen (60 s frisch / 120 s stale, 30 s Breaker-Probe).
-2. **Toggle** in `config.py` (`SourceToggleSettings`): `enable_meine_quelle: bool = ...`.
-   Der Name MUSS exakt `enable_<name>` sein (dynamische Auflösung via `getattr`).
-3. **SourceId** in `normalization/enums.py`: ein gleichnamiger Enum-Wert
-   (dokumentierte Ausnahmen/Aliase stehen in `tests/unit/test_source_specs_registry.py`).
-4. **Lizenzzeile** in `DATA-LICENSES.md`: wortgenaue Attribution (fail-closed
-   gegen `tests/unit/test_source_license_map.py`).
+Steps for a new source `my_source`:
+
+1. **Registry entry** in `registry/source_specs.py`:
+   `SourceSpec(name=“my_source”, license_id="...", attribution="...", ttl=(fresh_s, stale_s), cooldown=...)`.
+   Omit `ttl`/`cooldown` if the defaults are appropriate (60 s fresh / 120 s stale, 30 s breaker probe).
+2. **Toggle** in `config.py` (`SourceToggleSettings`): `enable_my_source: bool = ...`.
+   The name MUST be exactly `enable_<name>` (dynamic resolution via `getattr`).
+3. **SourceId** in `normalization/enums.py`: an enum value with the same name
+   (documented exceptions/aliases are listed in `tests/unit/test_source_specs_registry.py`).
+4. **License line** in `DATA-LICENSES.md`: verbatim attribution (fail-closed
+   against `tests/unit/test_source_license_map.py`).
 5. **Adapter** (`adapters/<name>.py`, `fetch_*`) + **Mapper**
-   (`normalization/mappers/<name>.py`, `map_*` → kanonischer Envelope).
-6. **Route** (`api/v1/cities.py` bzw. `live.py`) + passender Eintrag in `docs/openapi.yaml`.
+   (`normalization/mappers/<name>.py`, `map_*` → canonical envelope).
+6. **Route** (`api/v1/cities.py` or `live.py`) + corresponding entry in `docs/openapi.yaml`.
 
-`tests/unit/test_source_specs_registry.py` erzwingt die Konsistenz (fehlender
-Toggle, fehlende SourceId, ungültige Lizenz/TTL/Cooldown) und schlägt fehl, wenn
-ein Schritt vergessen wurde.
+
+`tests/unit/test_source_specs_registry.py` enforces consistency (missing
+toggle, missing SourceId, invalid license/TTL/cooldown) and fails if
+a step was omitted.

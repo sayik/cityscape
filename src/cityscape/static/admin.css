@@ -1,4 +1,4 @@
-/* InfraNode Admin-Dashboard (OPS-01/OPS-02) selbstenthaltenes Stylesheet.
+/* cityscape Admin-Dashboard (OPS-01/OPS-02) selbstenthaltenes Stylesheet.
    Kein CDN, keine externen Assets (UI-SPEC Registry Safety). Tokens exakt nach
    UI-SPEC: 60/30/10-Palette, semantische Status-Farben, System-Font-Stack +
    Monospace fuer Logs, 8er-Spacing (12px nur fuer horizontales Tabellen-Padding),
@@ -25,7 +25,8 @@
   --xl: 32px;
   --radius: 8px;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+  --font:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }

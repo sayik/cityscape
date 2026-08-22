@@ -1,6 +1,6 @@
-# InfraNode MCP-Server: Installation, Tools und Vertrauen
+# cityscape MCP-Server: Installation, Tools und Vertrauen
 
-Dieses Dokument ist das vollständige Listing-Blatt für den InfraNode-MCP-Server:
+Dieses Dokument ist das vollständige Listing-Blatt für den cityscape-MCP-Server:
 Installation, alle Tools mit Beispiel-Argumenten und echten Ausgaben, ein
 Beispiel-Transkript inklusive Fehlerfall, die angeforderten Berechtigungen,
 Versions-Kompatibilität, Deinstallation und Provenance. Wer einen fremden
@@ -9,8 +9,8 @@ treffen zu können.
 
 ## Was dieser Server ist
 
-Der InfraNode-MCP-Server ist ein dünner, read-only Wrapper um die öffentliche
-InfraNode-Live-API. Jedes Tool ruft einen festen API-Endpunkt auf und gibt
+Der cityscape-MCP-Server ist ein dünner, read-only Wrapper um die öffentliche
+cityscape-Live-API. Jedes Tool ruft einen festen API-Endpunkt auf und gibt
 dessen normalisiertes JSON unverändert zurück (kanonischer `{data, meta}`-
 Envelope). Es gibt keine eigene Mapping-, Lizenz- oder Schreib-Logik im
 MCP-Server, keine Datenbank und keinen Zustand. Er bündelt offene Daten zu 84
@@ -31,15 +31,15 @@ Dies ist das wichtigste Vertrauenssignal, daher zuerst:
 | Dateisystem (lesen/schreiben) | Kein Zugriff. |
 | Shell / Prozess-Ausführung | Kein Zugriff. |
 | Browser / GUI-Automatisierung | Kein Zugriff. |
-| Netzwerk (ausgehend) | Nur GET an die allowlistete InfraNode-Base-URL. |
+| Netzwerk (ausgehend) | Nur GET an die allowlistete cityscape-Base-URL. |
 | Netzwerk (eingehend, stdio) | Kein offener Port. Lokaler Subprozess über stdio. |
 | Netzwerk (eingehend, Remote) | Nur der Remote-Server bindet einen Port (hinter Caddy/Cloudflare). Pro IP auf 60 Anfragen/Minute begrenzt (HTTP 429 + Retry-After bei Überschreitung). |
 | Schreibende Operationen | Keine. Alle Tools sind reine Lesezugriffe (HTTP GET). |
 
-Konkrete Schutzmechanismen im Code (`src/infranode/mcp/client.py`):
+Konkrete Schutzmechanismen im Code (`src/cityscape/mcp/client.py`):
 
 - **SSRF-Gate (T-12-MCP-SSRF):** Die Ziel-URL stammt ausschließlich aus der Env
-  `INFRANODE_MCP_API_BASE`. Ihr Host wird gegen eine enge Allowlist geprüft
+  `CITYSCAPE_MCP_API_BASE`. Ihr Host wird gegen eine enge Allowlist geprüft
   (`localhost`, `127.0.0.1`, `::1`, `api`); ein nicht-allowlisteter Host wird mit
   `ValueError` abgewiesen, bevor ein Request rausgeht. Tool-Argumente können keine
   beliebige URL erzwingen.
@@ -49,9 +49,9 @@ Konkrete Schutzmechanismen im Code (`src/infranode/mcp/client.py`):
   url-gequotet. Slugs mit Pfad- oder Host-Anteilen (`/`, `@`, `:`, Whitespace)
   werden abgewiesen, bevor ein Request rausgeht.
 - **Endlicher Timeout:** 30 s pro Aufruf, kein hängender Agent.
-- **Rate-Limit (Remote, `src/infranode/mcp/ratelimit.py`):** Der öffentliche
+- **Rate-Limit (Remote, `src/cityscape/mcp/ratelimit.py`):** Der öffentliche
   Streamable-HTTP-Endpunkt drosselt pro echter Client-IP (CF-Connecting-IP) mit
-  einem Moving-Window (Default 480/Minute, per `INFRANODE_MCP_RATE_LIMIT`
+  einem Moving-Window (Default 480/Minute, per `CITYSCAPE_MCP_RATE_LIMIT`
   einstellbar). Überschreitung liefert HTTP 429 mit `Retry-After`. Der lokale
   stdio-Transport ist davon unberührt (kein offener Port).
 
@@ -61,7 +61,7 @@ Konkrete Schutzmechanismen im Code (`src/infranode/mcp/client.py`):
 | --- | --- | --- |
 | MCP Python SDK (gebündeltes FastMCP) | `mcp[cli]==1.27.2` (exakt gepinnt) | im `mcp`-Dependency-Group fixiert |
 | Python | >= 3.13 | erforderlich |
-| InfraNode-Paket | 1.0.0 | siehe `pyproject.toml` |
+| cityscape-Paket | 1.0.0 | siehe `pyproject.toml` |
 | Claude Code | stdio + Remote-HTTP | manuell verifiziert |
 | Claude Desktop | stdio | manuell verifiziert |
 | Cursor und andere MCP-Clients | stdio + streamable-http | standardkonform, nicht separat verifiziert |
@@ -78,18 +78,18 @@ Der öffentliche Remote-Endpunkt ist keylos und read-only. Kein Klonen, kein
 Build, keine lokale API nötig.
 
 ```bash
-claude mcp add --transport http infranode https://mcp.infranode.dev/mcp
+claude mcp add --transport http cityscape https://mcp.cityscape.dev/mcp
 ```
 
 Manifest für die offizielle MCP-Registry: siehe `server.json` im Repo-Root.
 
 ### Variante B: Claude Code lokal (stdio)
 
-Voraussetzung: eine laufende lokale InfraNode-Live-API (Standard
+Voraussetzung: eine laufende lokale cityscape-Live-API (Standard
 `http://localhost:8000/api/v1`, siehe README). Dann:
 
 ```bash
-claude mcp add infranode -- uv run --group mcp python -m infranode.mcp
+claude mcp add cityscape -- uv run --group mcp python -m cityscape.mcp
 ```
 
 Claude Code startet den Server bei Bedarf als lokalen Subprozess über stdio.
@@ -104,11 +104,11 @@ Eintrag in `claude_desktop_config.json` unter `mcpServers`. Pfad:
 ```json
 {
   "mcpServers": {
-    "infranode": {
+    "cityscape": {
       "command": "uv",
-      "args": ["run", "--group", "mcp", "python", "-m", "infranode.mcp"],
+      "args": ["run", "--group", "mcp", "python", "-m", "cityscape.mcp"],
       "env": {
-        "INFRANODE_MCP_API_BASE": "http://localhost:8000/api/v1"
+        "CITYSCAPE_MCP_API_BASE": "http://localhost:8000/api/v1"
       }
     }
   }
@@ -120,8 +120,8 @@ es gilt die Default-Base-URL.
 
 ## Deinstallation und Rollback
 
-- Claude Code: `claude mcp remove infranode`
-- Claude Desktop: den `infranode`-Eintrag aus `claude_desktop_config.json`
+- Claude Code: `claude mcp remove cityscape`
+- Claude Desktop: den `cityscape`-Eintrag aus `claude_desktop_config.json`
   entfernen und neu starten.
 
 Der Server hält keinen Zustand, schreibt nichts und legt keine Dateien an. Nach
@@ -137,7 +137,7 @@ Ausnahmen sind unten markiert.
 | Tool | Argumente | Beschreibung | Quelle |
 | --- | --- | --- | --- |
 | `get_city` | `slug` | Base data for a German city (population, area, coordinates) | Wikidata |
-| `get_city_overview` | `slug` | One-call overview: base data, a catalog of all 67 data types with coverage status and the matching resource key, plus a live highlights snapshot (weather, air). Discovery entry point | InfraNode |
+| `get_city_overview` | `slug` | One-call overview: base data, a catalog of all 67 data types with coverage status and the matching resource key, plus a live highlights snapshot (weather, air). Discovery entry point | cityscape |
 | `get_city_resource` | `slug`, `resource` | Generic accessor: fetch ANY of the 67 data types by its resource key (kebab-case enum, see list below) | je Datenart |
 | `air_quality` | `slug` | Official air quality (PM10, PM2.5, NO2, O3, SO2) | UBA |
 | `weather` | `slug` | Current weather observations (not a forecast) | DWD |
@@ -145,9 +145,9 @@ Ausnahmen sind unten markiert.
 | `station_board_departures` | `eva` | Live departures of any station by EVA (all categories, incl. local trains + disruptions) | DB Timetables |
 | `station_board_arrivals` | `eva` | Live arrivals of any station by EVA (all categories, incl. local trains + disruptions) | DB Timetables |
 | `transit_departures` | `slug`, `stop_id?` | Live public-transport departures with real-time delays | GTFS-RT/HVV/VGN |
-| `list_cities` | keine | List all covered cities (slug, state, population, coverage) | InfraNode |
-| `sources` | keine | List all data sources with license, attribution and status | InfraNode |
-| `compare` | `resource`, `cities` | Compare one resource (weather, air, indicators, demographics, unemployment, tourism, charging-status, weather-warnings) across multiple cities | InfraNode |
+| `list_cities` | keine | List all covered cities (slug, state, population, coverage) | cityscape |
+| `sources` | keine | List all data sources with license, attribution and status | cityscape |
+| `compare` | `resource`, `cities` | Compare one resource (weather, air, indicators, demographics, unemployment, tourism, charging-status, weather-warnings) across multiple cities | cityscape |
 
 Das `pois`-Tool nimmt zusätzlich `type` aus der API-Whitelist (z.B. `hospital`,
 `school`, `pharmacy`, `restaurant`, `police`, `kindergarten`).
@@ -161,7 +161,7 @@ Alle Datenarten ohne eigenes Tool holt der Agent über
 in Berlin. Der `resource`-Parameter ist ein Enum mit 67 Schlüsseln
 (kebab-case). Welche Schlüssel eine Stadt abdeckt, zeigt
 `get_city_overview(slug)` (je Datenart Schlüssel plus Abdeckungsstatus); die
-Resource `infranode://catalog` listet alle Datenarten. Einige Datenarten haben
+Resource `cityscape://catalog` listet alle Datenarten. Einige Datenarten haben
 ein eigenes Tool (unten markiert), sind aber teilweise auch über den
 generischen Zugriff erreichbar.
 
@@ -411,10 +411,10 @@ Der veröffentlichte Code ist identisch mit dem Quellcode im öffentlichen Repo;
 es gibt keinen vorgebauten, abweichenden Artefakt-Stand. Lokaler Bau:
 
 ```bash
-git clone https://github.com/street1983nk/infranode
-cd infranode
+git clone https://github.com/street1983nk/cityscape
+cd cityscape
 uv sync --group mcp          # installiert exakt die Versionen aus uv.lock
-uv run --group mcp python -m infranode.mcp   # startet den Server (stdio)
+uv run --group mcp python -m cityscape.mcp   # startet den Server (stdio)
 ```
 
 `uv.lock` pinnt alle transitiven Abhängigkeiten; ein Klon ergibt damit denselben
@@ -425,8 +425,8 @@ lauffähigen Server.
 Primärer Transport ist stdio: der Server läuft als lokaler Subprozess des
 Clients und öffnet keinen Netzwerk-Port. Tool-Aufrufe gehen ausschließlich an die
 konfigurierte, allowlistete Base-URL. Der öffentliche Remote-Endpunkt
-(`https://mcp.infranode.dev/mcp`) nutzt streamable-http hinter Caddy/Cloudflare,
-keylos wie die API, aktiviert per `INFRANODE_MCP_TRANSPORT=streamable-http`.
+(`https://mcp.cityscape.dev/mcp`) nutzt streamable-http hinter Caddy/Cloudflare,
+keylos wie die API, aktiviert per `CITYSCAPE_MCP_TRANSPORT=streamable-http`.
 
 ## Lizenz und Provenance
 
@@ -438,9 +438,9 @@ keylos wie die API, aktiviert per `INFRANODE_MCP_TRANSPORT=streamable-http`.
 
 ## Betreiber und Reputation
 
-- Quellcode (öffentlich): https://github.com/street1983nk/infranode
-- Live-API und Doku: https://infranode.dev
-- Status-Page (Verfügbarkeit, Per-City-Coverage): https://status.infranode.dev
+- Quellcode (öffentlich): https://github.com/street1983nk/cityscape
+- Live-API und Doku: https://cityscape.dev
+- Status-Page (Verfügbarkeit, Per-City-Coverage): https://status.cityscape.dev
 - MCP-Registry-Manifest: `server.json` im Repo-Root
 
 ## End-to-End-Prüfung

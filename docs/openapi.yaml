@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: InfraNode API
+  title: cityscape API
   version: 1.0.0
   description: >-
     Open-Source-Proxy-REST-API für normalisierte offene Daten deutscher
@@ -18,7 +18,7 @@ info:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0
 servers:
-  - url: https://infranode.dev
+  - url: https://cityscape.dev
     description: Öffentliche gehostete API, keylos (Standard)
   - url: http://localhost
     description: Lokaler Caddy-Ingress (Docker Compose)
@@ -254,7 +254,21 @@ paths:
         - in: query
           name: resource
           required: true
-          schema: { type: string, enum: [weather, air, indicators, demographics, unemployment, tourism, charging-status, weather-warnings] }
+          schema:
+            {
+              type: string,
+              enum:
+                [
+                  weather,
+                  air,
+                  indicators,
+                  demographics,
+                  unemployment,
+                  tourism,
+                  charging-status,
+                  weather-warnings,
+                ],
+            }
           description: >-
             Zu vergleichende Ressource; unbekannt -> 400 invalid_request.
             weather/air = Live-Adapter (DWD/UBA); indicators, demographics,
@@ -535,7 +549,7 @@ paths:
         Bahn-Abfahrten), parallel und zeitgedeckelt. Ideal als Einstieg, um die ganze Breite je
         Stadt zu sehen (nicht nur Wetter). Eine noch nicht abgedeckte Datenart
         wird ehrlich, aber vorwärts gewandt dargestellt (sie nennt die bereits
-        abgedeckten Städte plus einen Roadmap-Hinweis, weil InfraNode laufend
+        abgedeckten Städte plus einen Roadmap-Hinweis, weil cityscape laufend
         mehr Daten und Städte bekommt). Unbekannte Stadt liefert 404.
       x-description-en: >-
         One-call overview of a city: base data, a catalog of ALL available data
@@ -544,7 +558,7 @@ paths:
         time-capped. Ideal as an entry point to see the full breadth per city,
         not just weather. A data type that is not yet covered is shown honestly
         but forward-looking (it lists the cities where it IS available plus a
-        roadmap note, because InfraNode keeps adding more data types and cities).
+        roadmap note, because cityscape keeps adding more data types and cities).
         An unknown city returns 404.
       operationId: getCityOverview
       parameters:
@@ -5887,7 +5901,19 @@ components:
           nullable: true
     CanonicalRecord:
       type: object
-      required: [city_slug, retrieved_at, source, license_id, license_tier, schema_version, record_id, content_hash, attribution, payload]
+      required:
+        [
+          city_slug,
+          retrieved_at,
+          source,
+          license_id,
+          license_tier,
+          schema_version,
+          record_id,
+          content_hash,
+          attribution,
+          payload,
+        ]
       properties:
         city_slug:
           type: string
@@ -5925,10 +5951,47 @@ components:
           format: date-time
         source:
           type: string
-          enum: [wikidata, dwd, osm, autobahn, bnetza, uba, delfi, hvv, pegelonline, hochwasser, dwd_pollen, genesis, zensus, mastr, bkg, bundeswahl, divi, feiertage, berlin_viz, hamburg_baustellen, koeln_verkehr, muenchen_baustellen, dortmund_baustellen, sperrinfosys, mobidata_bw]
+          enum:
+            [
+              wikidata,
+              dwd,
+              osm,
+              autobahn,
+              bnetza,
+              uba,
+              delfi,
+              hvv,
+              pegelonline,
+              hochwasser,
+              dwd_pollen,
+              genesis,
+              zensus,
+              mastr,
+              bkg,
+              bundeswahl,
+              divi,
+              feiertage,
+              berlin_viz,
+              hamburg_baustellen,
+              koeln_verkehr,
+              muenchen_baustellen,
+              dortmund_baustellen,
+              sperrinfosys,
+              mobidata_bw,
+            ]
         license_id:
           type: string
-          enum: [cc0, cc_by_4_0, dl_de_by_2_0, dl_de_zero_2_0, geonutzv, odbl, cc_by_sa_4_0, unknown]
+          enum:
+            [
+              cc0,
+              cc_by_4_0,
+              dl_de_by_2_0,
+              dl_de_zero_2_0,
+              geonutzv,
+              odbl,
+              cc_by_sa_4_0,
+              unknown,
+            ]
         license_tier:
           type: string
           enum: [A, B, C]

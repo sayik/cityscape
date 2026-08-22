@@ -1,5 +1,5 @@
 // Liefert die kuratierte OpenAPI-Spec an der Build-Wurzel aus:
-// https://infranode.dev/openapi.yaml. Single Source ist docs/openapi.yaml; sie
+// https://cityscape.dev/openapi.yaml. Single Source ist docs/openapi.yaml; sie
 // wird per Vite ?raw-Import zur Build-Zeit eingebettet (robust gegen das
 // Bundle-Pfadproblem eines Laufzeit-readFileSync). Stabile, offizielle Spec-URL
 // für API-Verzeichnisse (APIs.guru), Codegen, Postman/Swagger.

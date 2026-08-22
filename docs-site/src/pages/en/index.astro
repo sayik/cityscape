@@ -12,7 +12,7 @@ const faqs = [
   },
   {
     q: "What does it cost?",
-    a: "Nothing. InfraNode is a free, public open-data API, ad-free and with no paywall. The source code is available on GitHub (Apache-2.0).",
+    a: "Nothing. cityscape is a free, public open-data API, ad-free and with no paywall. The source code is available on GitHub (Apache-2.0).",
   },
   {
     q: "Which cities are covered?",
@@ -20,7 +20,7 @@ const faqs = [
   },
   {
     q: "Where does the data come from?",
-    a: "From public, official sources. InfraNode brings them together behind one interface and passes them through in normalised form. Every response names licence and origin in its attribution block.",
+    a: "From public, official sources. cityscape brings them together behind one interface and passes them through in normalised form. Every response names licence and origin in its attribution block.",
   },
   {
     q: "Are there rate limits?",
@@ -53,7 +53,7 @@ const faqJsonLd = JSON.stringify({
   <JsonLd
     slot="jsonld"
     type="WebAPI"
-    name="InfraNode API"
+    name="cityscape API"
     description="Free, public open-data REST API for normalised open data of German cities."
   />
   <JsonLd
@@ -80,7 +80,7 @@ const faqJsonLd = JSON.stringify({
   <div class="tldr">
     <p class="tldr__title">In short</p>
     <p>
-      InfraNode is a free, public open-data REST API that serves open data for
+      cityscape is a free, public open-data REST API that serves open data for
       German cities behind one unified interface. Instead of signing up at dozens
       of portals, you query everything through a consistent JSON envelope, with no
       API key.
@@ -122,11 +122,11 @@ const faqJsonLd = JSON.stringify({
     </a>
   </div>
 
-  <figure class="hero-code" aria-label="Example call to the InfraNode API">
+  <figure class="hero-code" aria-label="Example call to the cityscape API">
     <div class="hero-code__bar" aria-hidden="true">
       <i></i><i></i><i></i><span>Terminal, first call in seconds</span>
     </div>
-    <pre><code><span class="c-dim">$</span> <span class="c-cmd">curl https://infranode.dev/api/v1/cities/berlin/weather</span>
+    <pre><code><span class="c-dim">$</span> <span class="c-cmd">curl https://cityscape.dev/api/v1/cities/berlin/weather</span>
 &#123;
   <span class="c-key">"data"</span>: &#123;
     <span class="c-key">"payload"</span>: &#123; <span class="c-key">"temperature_c"</span>: 12.9, <span class="c-key">"condition"</span>: <span class="c-str">"dry"</span>, <span class="c-dim">…</span> &#125;,
@@ -180,7 +180,7 @@ const faqJsonLd = JSON.stringify({
 
   <h2>Real-time data under /live</h2>
   <p>
-    Under <code>/api/v1/live/*</code> InfraNode serves current readings: traffic
+    Under <code>/api/v1/live/*</code> cityscape serves current readings: traffic
     conditions, roadworks, parking, charging and public-transit real-time with
     delays per stop, trip and route. Some live sources are city-specific, for
     example Hamburg HVV departures or Dortmund parking occupancy. The
@@ -192,11 +192,11 @@ const faqJsonLd = JSON.stringify({
   <p>
     Read the <a href="/en/quickstart/">Quickstart</a> for your first call, or set
     up the <a href="/en/mcp/">MCP server</a> for AI agents. In ChatGPT you can
-    simply use the ready-made <a href="/en/chatgpt/">InfraNode GPT</a> from the
+    simply use the ready-made <a href="/en/chatgpt/">cityscape GPT</a> from the
     GPT Store. The full endpoint
     reference lives in the left navigation. Reference content is in German, the
     code samples are universal. Every endpoint is also available as the
-    <a href="https://www.postman.com/alster83-7133231/infranode/collection/pft781f/infranode-api" target="_blank" rel="noopener">InfraNode API on the Postman API Network</a>,
+    <a href="https://www.postman.com/alster83-7133231/cityscape/collection/pft781f/cityscape-api" target="_blank" rel="noopener">cityscape API on the Postman API Network</a>,
     with real example responses you can try in the browser without an API key.
   </p>
 

@@ -16,7 +16,7 @@ KRITISCH (Ehrlichkeit, Pitfall 4): Badegewaesser liegen ORTSNAH (Seen/Kueste im
 Umland), NICHT im Stadtzentrum. Der raw-dict weist je Stelle ``distance_km`` aus.
 Inland-Staedte ohne Badegewaesser im Umkreis liefern ehrlich ``count=0`` (kein
 Crash). Die Bbox-Grenzen sind nummerisch (kein User-Input, T-07-IN); der Host ist
-operator-konfigurierbar (``INFRANODE_EEA_BATHING_BASE_URL``).
+operator-konfigurierbar (``CITYSCAPE_EEA_BATHING_BASE_URL``).
 
 Der Adapter ist rein gegenueber Pydantic/Resilienz (kein CanonicalRecord, kein
 Cache/Breaker). ``raise_for_status`` schlaegt ein 5xx als ``httpx.HTTPError`` an

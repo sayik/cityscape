@@ -37,7 +37,7 @@ const cityEndpoints = (await getCollection("endpoints"))
     example: e.data.path.replace(/\{[^}]+\}/, city.slug),
   }))
   .sort((a, b) => a.summary.localeCompare(b.summary, "en"));
-// Title budget: 53 chars (SeoHead appends " | InfraNode", total max 65,
+// Title budget: 53 chars (SeoHead appends " | cityscape", total max 65,
 // Bing scan 2026-07-01). Use the long form only if it fits, otherwise a
 // compact form for long city names (e.g. Ludwigshafen am Rhein).
 const metaTitleLong = `Open data API for ${city.name}: free and keyless`;
@@ -57,12 +57,12 @@ const airExample = `${API_BASE}/api/v1/cities/${city.slug}/air-uba`;
   <JsonLd
     slot="jsonld"
     type="Dataset"
-    name={`InfraNode: Open data for ${city.name}`}
+    name={`cityscape: Open data for ${city.name}`}
     description={`Normalized open data for ${city.name} (${stateName}) through a free, keyless REST API: ${available.map((t) => t.en.h1.replace(/ \(.*\)$/, "").replace(/ API.*/, "")).join(", ")}. Machine-readable as JSON.`}
     url={`/en/cities/${city.slug}/`}
     license="https://www.govdata.de/dl-de/by-2-0"
     identifier="https://doi.org/10.5281/zenodo.20752355"
-    creatorName="InfraNode"
+    creatorName="cityscape"
     spatialCoverage={`${city.name}, ${stateName}, Germany`}
     keywords={[
       `open data ${city.name}`,
@@ -79,7 +79,7 @@ const airExample = `${API_BASE}/api/v1/cities/${city.slug}/air-uba`;
     ]}
     distributions={[
       {
-        name: `InfraNode REST API (${city.name})`,
+        name: `cityscape REST API (${city.name})`,
         url: `${API_BASE}/api/v1/cities/${city.slug}`,
         format: "application/json",
       },
@@ -138,14 +138,14 @@ const airExample = `${API_BASE}/api/v1/cities/${city.slug}/air-uba`;
   </ul>
   <p>
     An overview of all cities is on the
-    <a href="/en/cities/">cities page</a>. InfraNode is also available as an
+    <a href="/en/cities/">cities page</a>. cityscape is also available as an
     <a href="/en/mcp/">MCP server for AI assistants</a>.
   </p>
 
   <h2>{city.name} via MCP server in Claude and ChatGPT</h2>
   <p>
     All open data for {city.name} is also available through the free, keyless
-    <a href="/en/mcp/">InfraNode MCP server</a> for AI agents. Connect it once to
+    <a href="/en/mcp/">cityscape MCP server</a> for AI agents. Connect it once to
     Claude or ChatGPT and ask in natural language, for example "Give me an
     overview of {city.name}" (calls <code>get_city_overview</code>, the catalog
     of all data types with live highlights) or more specifically "What is the

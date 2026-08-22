@@ -357,7 +357,7 @@ def _load_extended() -> tuple[CityRegistryEntry, ...]:
     Fehlt die Datei, bleibt es beim Kern-Register (Graceful Degradation).
 
     Der Seed-Pfad wird über ``seeds_dir()`` aufgelöst (respektiert
-    ``INFRANODE_SEEDS_DIR``, Live-Report M1): im Prod-Container liegen die Seeds
+    ``CITYSCAPE_SEEDS_DIR``, Live-Report M1): im Prod-Container liegen die Seeds
     unter ``/app/seeds`` (Named-Volume-Schatten auf ``/app/data``), sonst fehlten
     56 der 84 ``auto``-Städte aus registry_extended.json.
     """

@@ -1,6 +1,6 @@
 """Erkennung von ChatGPT-GPT-Action-Traffic (OpenAI Custom GPTs).
 
-Hintergrund: Das InfraNode-GPT im GPT Store ruft die API über OpenAI-Egress
+Hintergrund: Das cityscape-GPT im GPT Store ruft die API über OpenAI-Egress
 auf. OpenAI sendet dabei dokumentierte Kennungs-Header mit (je Aufruf):
 
 - ``openai-gpt-id``: welches GPT den Aufruf ausgelöst hat,

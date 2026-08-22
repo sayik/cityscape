@@ -22,7 +22,9 @@ interface OpenApiParameter {
 }
 
 function asParam(value: unknown): OpenApiParameter {
-  return value != null && typeof value === "object" ? (value as OpenApiParameter) : {};
+  return value != null && typeof value === "object"
+    ? (value as OpenApiParameter)
+    : {};
 }
 
 // Rendert einen Endpunkt als Markdown-Block (ohne fenced code via Backtick-Var,
@@ -67,7 +69,9 @@ function renderEndpoint(endpoint: Endpoint): string {
 
 export const GET: APIRoute = async () => {
   const collection = await getCollection("endpoints");
-  const endpoints: Endpoint[] = collection.map((entry) => entry.data as Endpoint);
+  const endpoints: Endpoint[] = collection.map(
+    (entry) => entry.data as Endpoint,
+  );
 
   // Nach tag gruppieren, je Gruppe nach id sortieren (stabile Reihenfolge).
   const groups = new Map<string, Endpoint[]>();
@@ -82,10 +86,10 @@ export const GET: APIRoute = async () => {
   const sortedTags = [...groups.keys()].sort();
 
   const lines: string[] = [];
-  lines.push("# InfraNode API | Vollständige Endpunkt-Referenz");
+  lines.push("# cityscape API | Vollständige Endpunkt-Referenz");
   lines.push("");
   lines.push(
-    "> Volltext aller Endpunkte der InfraNode API in einem Dokument. " +
+    "> Volltext aller Endpunkte der cityscape API in einem Dokument. " +
       "Normalisierte Open-Data-Proxy-API für deutsche Großstädte (84 Städte, " +
       "28 Kern-Städte voll abgedeckt; Stammdaten, Luftqualität, Wetter und " +
       "Wetterwarnungen, ÖPNV inkl. Echtzeit, Verkehr, Energie und Strommarkt, " +

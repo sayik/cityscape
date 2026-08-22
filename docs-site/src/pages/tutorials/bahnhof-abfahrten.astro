@@ -6,7 +6,7 @@ import { API_BASE } from "../../lib/codegen";
 
 const title = "Live-Abfahrten jedes Bahnhofs abrufen";
 const description =
-  "Tutorial: alle Bahnhöfe einer deutschen Stadt auflisten und für jeden Bahnhof Live-Abfahrten und -Ankünfte inklusive Nahverkehr, Verspätungen und Störungen über die kostenlose InfraNode-API abrufen.";
+  "Tutorial: alle Bahnhöfe einer deutschen Stadt auflisten und für jeden Bahnhof Live-Abfahrten und -Ankünfte inklusive Nahverkehr, Verspätungen und Störungen über die kostenlose cityscape-API abrufen.";
 
 const catalog = `import requests
 
@@ -46,7 +46,7 @@ const faq = [
   },
   {
     q: "Brauche ich einen Schlüssel?",
-    a: "Für den öffentlichen Aufruf der InfraNode-API nicht. Intern speist sich die Tafel aus der DB-Timetables-API (CC BY 4.0); zeige die Attribution Deutsche Bahn AG an.",
+    a: "Für den öffentlichen Aufruf der cityscape-API nicht. Intern speist sich die Tafel aus der DB-Timetables-API (CC BY 4.0); zeige die Attribution Deutsche Bahn AG an.",
   },
 ];
 ---
@@ -85,7 +85,7 @@ const faq = [
   <p>
     KI-Agenten nutzen dieselben Daten über die Tools <code>stations</code>,
     <code>station_board_departures</code> und <code>station_board_arrivals</code>
-    des <a href="/mcp/">InfraNode-MCP-Servers</a>.
+    des <a href="/mcp/">cityscape-MCP-Servers</a>.
   </p>
 
   <h2>Häufige Fragen</h2>

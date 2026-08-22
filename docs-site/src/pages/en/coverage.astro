@@ -2,7 +2,7 @@
 // Coverage & status (/en/coverage): dev page that honestly shows which endpoints
 // serve which cities, and where devs are informed about outages. Partial-coverage
 // data source: src/data/coverage.json (drift-free from the API single source
-// infranode.registry.coverage.PARTIAL_COVERAGE).
+// cityscape.registry.coverage.PARTIAL_COVERAGE).
 //
 // Regenerate coverage.json:
 //   uv run python scripts/export-coverage.py
@@ -11,7 +11,7 @@ import coverage from "../../data/coverage.json";
 import { API_BASE } from "../../lib/codegen";
 
 // Public Uptime Kuma status page (outage info for devs).
-const STATUS_URL = "https://status.infranode.dev";
+const STATUS_URL = "https://status.cityscape.dev";
 
 const PARTIAL = [
   {
@@ -102,7 +102,7 @@ const partialMap: Record<string, string[]> = coverage.partial;
 
 <Docs
   title="Coverage & status"
-  description="Which InfraNode endpoints serve which cities: fully-covered endpoints, partially-covered endpoints with their city list, geo- and live-based special cases, source_status values and the live status page for outages."
+  description="Which cityscape endpoints serve which cities: fully-covered endpoints, partially-covered endpoints with their city list, geo- and live-based special cases, source_status values and the live status page for outages."
   current="abdeckung"
   lang="en"
   altLangPath="/abdeckung/"
@@ -110,7 +110,7 @@ const partialMap: Record<string, string[]> = coverage.partial;
   <h1>Coverage & status</h1>
 
   <p>
-    InfraNode covers {total} large German cities. Most endpoints return data for
+    cityscape covers {total} large German cities. Most endpoints return data for
     all {total} cities. A few are <strong>partially covered</strong>: they only
     serve curated cities. This page honestly shows which endpoint serves which
     cities, and where you get informed about outages.

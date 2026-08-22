@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy/harden_firewall.sh - CF-only-Origin-Firewall fuer InfraNode (Security-Audit HIGH-2)
+# deploy/harden_firewall.sh - CF-only-Origin-Firewall fuer cityscape (Security-Audit HIGH-2)
 #
 # Beschraenkt die Origin-Ports 80/443 auf die offiziellen Cloudflare-IP-Ranges.
 # Ohne diese Beschraenkung kann jeder, der die Origin-IP kennt, Cloudflare
@@ -104,6 +104,6 @@ ufw status verbose | sed 's/^/   /'
 echo
 echo "Fertig ($MODE)."
 echo " - Die CF-Ranges aendern sich selten. Monatlichen Re-Check als Cron einrichten:"
-echo "     echo '0 4 1 * * root $(readlink -f "$0") --refresh >> /var/log/cf-firewall.log 2>&1' > /etc/cron.d/infranode-cf-firewall"
+echo "     echo '0 4 1 * * root $(readlink -f "$0") --refresh >> /var/log/cf-firewall.log 2>&1' > /etc/cron.d/cityscape-cf-firewall"
 echo " - Verifizieren: sudo bash $(basename "$0") --check"
 echo " - Langfristig ideal: Cloudflare Tunnel, dann ist die Origin-IP gar nicht exponiert."

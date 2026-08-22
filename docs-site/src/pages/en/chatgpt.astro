@@ -1,5 +1,5 @@
 ---
-// English ChatGPT/OpenAI page: InfraNode as a Custom GPT action (curated
+// English ChatGPT/OpenAI page: cityscape as a Custom GPT action (curated
 // actions OpenAPI at /actions/openapi.json) plus ChatGPT as an MCP client.
 // Counterpart of /en/mcp/ for the OpenAI ecosystem.
 import Docs from "../../layouts/Docs.astro";
@@ -8,15 +8,15 @@ import JsonLd from "../../components/JsonLd.astro";
 const faq = [
   {
     q: "What is the difference between the GPT action and the MCP server?",
-    a: "Both talk to the same InfraNode API. The GPT action is the path for Custom GPTs in the ChatGPT ecosystem (OpenAPI import, no extra service required). The MCP server is the path for MCP-capable clients such as Claude, ChatGPT connectors or your own agents, and offers more convenient discovery with its 12 tools.",
+    a: "Both talk to the same cityscape API. The GPT action is the path for Custom GPTs in the ChatGPT ecosystem (OpenAPI import, no extra service required). The MCP server is the path for MCP-capable clients such as Claude, ChatGPT connectors or your own agents, and offers more convenient discovery with its 12 tools.",
   },
   {
     q: "Do I need an API key for the action?",
-    a: "No. The InfraNode API is keyless and free. In the GPT editor simply set authentication to None.",
+    a: "No. The cityscape API is keyless and free. In the GPT editor simply set authentication to None.",
   },
   {
     q: "Can I use the action in my own Custom GPT?",
-    a: "Yes, that is exactly what it is for. Import the OpenAPI spec from https://infranode.dev/actions/openapi.json in the GPT editor under Actions. The spec is curated down to the 23 most useful operations (ChatGPT allows a maximum of 30).",
+    a: "Yes, that is exactly what it is for. Import the OpenAPI spec from https://cityscape.dev/actions/openapi.json in the GPT editor under Actions. The spec is curated down to the 23 most useful operations (ChatGPT allows a maximum of 30).",
   },
   {
     q: "What data can a GPT fetch with it?",
@@ -30,7 +30,7 @@ const faq = [
 ---
 
 <Docs
-  title="InfraNode for ChatGPT: GPT action for city data"
+  title="cityscape for ChatGPT: GPT action for city data"
   description="Open data of German cities in ChatGPT: curated GPT action (OpenAPI) for Custom GPTs, keyless and free, 23 operations from weather and transit to live EV charging occupancy, for all 84 large cities."
   current="chatgpt"
   lang="en"
@@ -39,14 +39,14 @@ const faq = [
   <JsonLd
     slot="jsonld"
     type="SoftwareApplication"
-    name="InfraNode GPT action"
+    name="cityscape GPT action"
     description="Curated OpenAPI action for Custom GPTs: open city data for 84 large German cities, keyless and free."
   />
   <JsonLd slot="jsonld" type="FAQPage" faq={faq} />
 
-  <h1>InfraNode in ChatGPT: Custom GPTs and GPT actions</h1>
+  <h1>cityscape in ChatGPT: Custom GPTs and GPT actions</h1>
   <p>
-    InfraNode is also available for the OpenAI ecosystem: a curated
+    cityscape is also available for the OpenAI ecosystem: a curated
     <strong>GPT action</strong> makes the open data of all 84 large German
     cities usable in Custom GPTs, keyless, free and without registration. A
     GPT can query weather, air quality, transit departures, parking, EV
@@ -55,11 +55,11 @@ const faq = [
   </p>
 
   <div class="tldr">
-    <p class="tldr__title">Try the InfraNode GPT for ChatGPT</p>
+    <p class="tldr__title">Try the cityscape GPT for ChatGPT</p>
     <p>
       Live open data for 84 German cities, right inside ChatGPT:
       <a
-        href="https://chatgpt.com/g/g-6a48bf065e648191b062bc86256c1897-infranode-live-data-for-german-cities"
+        href="https://chatgpt.com/g/g-6a48bf065e648191b062bc86256c1897-cityscape-live-data-for-german-cities"
         rel="noopener"
         target="_blank"><strong>Open in ChatGPT</strong></a>
       (GPT Store, category Research &amp; Analysis, free). Example prompts to
@@ -79,7 +79,7 @@ const faq = [
     <p class="tldr__title">Connect right away</p>
     <p>
       The actions OpenAPI is publicly available at
-      <code>https://infranode.dev/actions/openapi.json</code>. In the GPT
+      <code>https://cityscape.dev/actions/openapi.json</code>. In the GPT
       editor choose <strong>Actions, Import from URL</strong>, paste the URL,
       set authentication to <strong>None</strong>, done. 23 curated
       operations, all GET, no keys.
@@ -92,12 +92,12 @@ const faq = [
       In the <a href="https://chatgpt.com/gpts/editor" rel="noopener" target="_blank">GPT editor</a>
       go to <strong>Configure, Actions, Create new action</strong>, choose
       <strong>Import from URL</strong> and paste
-      <code>https://infranode.dev/actions/openapi.json</code>.
+      <code>https://cityscape.dev/actions/openapi.json</code>.
     </li>
     <li>
       Leave authentication at <strong>None</strong> (the API is keyless). As
       privacy policy you can use
-      <code>https://infranode.dev/en/privacy/</code>.
+      <code>https://cityscape.dev/en/privacy/</code>.
     </li>
     <li>
       In the instructions tell the GPT to start with
@@ -109,7 +109,7 @@ const faq = [
 
   <h2>Recommended GPT instructions</h2>
   <p>A proven building block to copy into the instructions field:</p>
-  <pre><code>You answer questions about German cities using live data from the InfraNode API.
+  <pre><code>You answer questions about German cities using live data from the cityscape API.
 Rules:
 1. City unclear? Call getCities first and pick the matching slug.
 2. Entry point per city: getCityOverview(slug) shows what data exists.
@@ -156,9 +156,9 @@ Rules:
 
   <h2>ChatGPT as an MCP client</h2>
   <p>
-    Independently of Custom GPTs, ChatGPT can also use the InfraNode MCP
+    Independently of Custom GPTs, ChatGPT can also use the cityscape MCP
     server directly as a connector (streamable HTTP, URL
-    <code>https://mcp.infranode.dev/mcp</code>). That is the most convenient
+    <code>https://mcp.cityscape.dev/mcp</code>). That is the most convenient
     path with all 12 tools and 67 data types. Setup is described on the
     <a href="/en/mcp/">MCP server page</a>.
   </p>

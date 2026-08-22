@@ -6,7 +6,7 @@ import { API_BASE } from "../../../lib/codegen";
 
 const title = "Get live departures for any railway station";
 const description =
-  "Tutorial: list every railway station in a German city, then fetch live departures and arrivals for any station including local trains, delays and disruptions via the free keyless InfraNode API.";
+  "Tutorial: list every railway station in a German city, then fetch live departures and arrivals for any station including local trains, delays and disruptions via the free keyless cityscape API.";
 
 const catalog = `import requests
 
@@ -46,7 +46,7 @@ const faq = [
   },
   {
     q: "Do I need a key?",
-    a: "Not for calling the public InfraNode API. Internally the board is sourced from the DB Timetables API (CC BY 4.0); show the attribution Deutsche Bahn AG.",
+    a: "Not for calling the public cityscape API. Internally the board is sourced from the DB Timetables API (CC BY 4.0); show the attribution Deutsche Bahn AG.",
   },
 ];
 ---
@@ -84,7 +84,7 @@ const faq = [
   <p>
     AI agents use the same data through the <code>stations</code>,
     <code>station_board_departures</code> and <code>station_board_arrivals</code>
-    tools of the <a href="/en/mcp/">InfraNode MCP server</a>.
+    tools of the <a href="/en/mcp/">cityscape MCP server</a>.
   </p>
 
   <h2>FAQ</h2>

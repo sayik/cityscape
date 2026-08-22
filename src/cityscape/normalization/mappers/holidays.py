@@ -50,7 +50,7 @@ def _read_seed(filename: str, state: str) -> list[dict]:
     werden nie als Bundesland interpretiert (der Lookup ist exakt ``state``).
 
     Der Seed-Pfad wird lazy via ``seeds_dir()`` aufgelöst (respektiert
-    ``INFRANODE_SEEDS_DIR``, Live-Report M1): nie auf Import-Zeit einfrieren,
+    ``CITYSCAPE_SEEDS_DIR``, Live-Report M1): nie auf Import-Zeit einfrieren,
     sonst greift im Prod-Container der Volume-Override nicht.
     """
     path = seeds_dir() / filename

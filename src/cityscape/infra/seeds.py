@@ -1,18 +1,18 @@
-"""Gemeinsame, env-overridebare Auflösung des Seed-Verzeichnisses (CR-01).
+"""Shared, env-overrideable resolution of the seed directory (CR-01).
+A single source of truth for the path to committed seeds (REST rule 6,
+no duplicates). Previously, ``collector/plan.py``, ``mappers/holidays.py``,
+``registry/cities.py``, and ``export/enrich.py`` each resolved the path individually using
+``Path(__file__).resolve().parents[...] / “data” / “seeds”`` and ignored
+``CITYSCAPE_SEEDS_DIR`` in the process (Live Report 2026-06-12, M1): In the production container,
+the named volume ``cityscape_data`` shadows the path ``/app/data``, which is why
+the Dockerfile places the seeds in ``/app/seeds`` and sets ``CITYSCAPE_SEEDS_DIR``
+to that location. If the environment override was ignored, seeds were missing (holidays no_data,
+56 missing cities from registry_extended.json).
+CRITICAL: Resolve lazily at runtime (read ``os.environ`` on every call),
+NEVER hardcode into a constant at module import time. Otherwise, tests can no
+longer set the environment override (Settings singleton caching).
 
-Eine Quelle der Wahrheit für den Pfad der committeten Seeds (REST-Regel 6,
-keine Duplikate). Früher lösten ``collector/plan.py``, ``mappers/holidays.py``,
-``registry/cities.py`` und ``export/enrich.py`` den Pfad je einzeln per
-``Path(__file__).resolve().parents[...] / "data" / "seeds"`` auf und ignorierten
-dabei ``INFRANODE_SEEDS_DIR`` (Live-Report 2026-06-12, M1): im Prod-Container
-verschattet das Named Volume ``infranode_data`` den Pfad ``/app/data``, weshalb
-das Dockerfile die Seeds nach ``/app/seeds`` legt und ``INFRANODE_SEEDS_DIR``
-darauf setzt. Wurde der Env-Override ignoriert, fehlten Seeds (holidays no_data,
-56 fehlende Städte aus registry_extended.json).
-
-KRITISCH: Lazy zur Laufzeit auflösen (``os.environ`` bei jedem Aufruf lesen),
-NIE auf Modul-Import-Zeit in eine Konstante einfrieren. Sonst können Tests den
-Env-Override nicht mehr setzen (Settings-Singleton-Caching).
+Translated with DeepL.com (free version)
 """
 
 from __future__ import annotations
@@ -20,19 +20,19 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# Repo-Layout-Fallback: diese Datei liegt unter src/infranode/infra/seeds.py,
-# also ist der Repo-Root parents[3]; data/seeds/ liegt direkt darunter.
+# Repo layout fallback: this file is located in src/cityscape/infra/seeds.py,
+# so the repo root is parents[3]; data/seeds/ is directly below it.
 _REPO_SEED_DIR = Path(__file__).resolve().parents[3] / "data" / "seeds"
 
 
 def seeds_dir() -> Path:
-    """Loest das Seed-Verzeichnis lazy auf (Env-Override gewinnt, sonst Repo-Layout).
+    """Resolves the seed directory lazily (environment override takes precedence; otherwise, the repo layout is used).
 
-    ``INFRANODE_SEEDS_DIR`` (Prod-Container: ``/app/seeds``) hat Vorrang; ohne
-    gesetzten Override gilt das Repo-Layout (lokal, Tests). Wird bei jedem Aufruf
-    frisch aus ``os.environ`` gelesen, damit per-Test gesetzte Overrides greifen.
+    ``CITYSCAPE_SEEDS_DIR`` (production container: ``/app/seeds``) takes precedence; if
+    no override is set, the repo layout applies (local, tests). Is read fresh from ``os.environ``
+    on every call so that overrides set per test take effect.
     """
-    override = os.environ.get("INFRANODE_SEEDS_DIR")
+    override = os.environ.get("CITYSCAPE_SEEDS_DIR")
     if override:
         return Path(override)
     return _REPO_SEED_DIR

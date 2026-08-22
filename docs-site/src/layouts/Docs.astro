@@ -66,8 +66,8 @@ const isEndpointPage =
 const mdUrl = isEndpointPage ? `/api/${current}.md` : "";
 const actionPrompt = isEndpointPage
   ? isEn
-    ? `Here is the InfraNode API documentation for ${title} in Markdown format. Help me use this endpoint. Docs URL:`
-    : `Hier ist die InfraNode-API-Doku für ${title} im Markdown-Format. Hilf mir, diesen Endpunkt zu nutzen. Doku-URL:`
+    ? `Here is the cityscape API documentation for ${title} in Markdown format. Help me use this endpoint. Docs URL:`
+    : `Hier ist die cityscape-API-Doku für ${title} im Markdown-Format. Hilf mir, diesen Endpunkt zu nutzen. Doku-URL:`
   : "";
 
 // Nav-Einträge aus der endpoints-Collection (Single Source openapi.yaml),
@@ -112,15 +112,15 @@ const endpointSections = [
   <body>
     <a class="skip-link" href="#main">{isEn ? "Skip to content" : "Zum Inhalt springen"}</a>
     <header class="topbar">
-      <a class="topbar__brand" href={isEn ? "/en/" : "/"} aria-label={isEn ? "InfraNode home" : "InfraNode Startseite"}>
+      <a class="topbar__brand" href={isEn ? "/en/" : "/"} aria-label={isEn ? "cityscape home" : "cityscape Startseite"}>
         <img
           class="topbar__logo"
-          src="/logo-infranode.png"
-          alt="InfraNode"
+          src="/logo-cityscape.png"
+          alt="cityscape"
           width="68"
           height="64"
         />
-        <span class="topbar__wordmark">InfraNode<span class="topbar__wordmark-tld">.dev</span></span>
+        <span class="topbar__wordmark">cityscape<span class="topbar__wordmark-tld">.dev</span></span>
       </a>
       <Search lang={lang} />
       <nav class="langswitch" aria-label={isEn ? "Language" : "Sprache"}>
@@ -148,8 +148,8 @@ const endpointSections = [
           <span class="mcphint__badge">MCP</span>
           <span class="mcphint__text">
             {isEn
-              ? "InfraNode is also available as an MCP server for AI assistants like Claude and ChatGPT."
-              : "InfraNode gibt es auch als MCP-Server für KI-Assistenten wie Claude und ChatGPT."}
+              ? "cityscape is also available as an MCP server for AI assistants like Claude and ChatGPT."
+              : "cityscape gibt es auch als MCP-Server für KI-Assistenten wie Claude und ChatGPT."}
           </span>
           <span class="mcphint__arrow" aria-hidden="true">→</span>
         </a>
@@ -394,7 +394,7 @@ const endpointSections = [
 
     <footer class="footer">
       <div class="footer__inner">
-        <p class="footer__brand">InfraNode</p>
+        <p class="footer__brand">cityscape</p>
         {
           isEn ? (
             <nav class="footer__nav" aria-label="Footer">

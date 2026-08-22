@@ -2,7 +2,7 @@
 
 Plan-21-02-Artefakt: eine reine, deterministische Stadt-Zuordnungsfunktion in
 der Normalisierungs-Bibliothek. Die eigentliche Matching-Logik lebt als die EINE
-Quelle der Wahrheit in :mod:`infranode.tenders.matching` (REST-Regel 6, keine
+Quelle der Wahrheit in :mod:`cityscape.tenders.matching` (REST-Regel 6, keine
 Duplikate); dieses Modul stellt die in der Normalisierungs-Lib erwartete
 Signatur ``match_tender_cities(buyer_address, place_addresses)`` bereit und
 lädt dafür den Geo-Crosswalk-Seed (``tender_geo_crosswalk.json``) lazy +
@@ -54,7 +54,7 @@ def match_tender_cities(
     tragen nichts bei (kein falscher Treffer).
 
     Delegiert an die eine Quelle der Wahrheit
-    (:func:`infranode.tenders.matching.match_tender_cities`) mit dem
+    (:func:`cityscape.tenders.matching.match_tender_cities`) mit dem
     lazy-geladenen Crosswalk-Seed.
     """
     return _match(buyer_address, place_addresses, load_tender_crosswalk())

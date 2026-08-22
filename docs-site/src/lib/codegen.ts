@@ -10,8 +10,8 @@ import type { Endpoint } from "./openapi";
 // Try-it-Konsole weiterhin lokal/konfigurierbar bleibt; das Produktions-
 // Beispiel zeigt die öffentliche Domain. ASCII-only (CLAUDE.md: Code/URLs).
 export const API_BASE: string =
-  (typeof process !== "undefined" && process.env?.INFRANODE_DOCS_API_BASE) ||
-  "https://infranode.dev";
+  (typeof process !== "undefined" && process.env?.CITYSCAPE_DOCS_API_BASE) ||
+  "https://cityscape.dev";
 
 // Beispiel-Stadt-Slug für {slug}-Pfadparameter (registrierte Stadt).
 const SLUG_EXAMPLE = "hamburg";
@@ -23,11 +23,18 @@ interface OpenApiParameter {
   in?: string;
   required?: boolean;
   example?: unknown;
-  schema?: { type?: string; enum?: unknown[]; default?: unknown; example?: unknown };
+  schema?: {
+    type?: string;
+    enum?: unknown[];
+    default?: unknown;
+    example?: unknown;
+  };
 }
 
 function asParam(value: unknown): OpenApiParameter {
-  return value != null && typeof value === "object" ? (value as OpenApiParameter) : {};
+  return value != null && typeof value === "object"
+    ? (value as OpenApiParameter)
+    : {};
 }
 
 // Liefert einen Beispielwert für einen Parameter. Reihenfolge: expliziter
@@ -41,10 +48,16 @@ function exampleFor(param: OpenApiParameter): string {
     return String(param.example);
   }
   const schema = param.schema ?? {};
-  if (typeof schema.example === "string" || typeof schema.example === "number") {
+  if (
+    typeof schema.example === "string" ||
+    typeof schema.example === "number"
+  ) {
     return String(schema.example);
   }
-  if (typeof schema.default === "string" || typeof schema.default === "number") {
+  if (
+    typeof schema.default === "string" ||
+    typeof schema.default === "number"
+  ) {
     return String(schema.default);
   }
   if (Array.isArray(schema.enum) && schema.enum.length > 0) {
@@ -76,7 +89,10 @@ function resolvePath(endpoint: Endpoint): string {
 function requiredQuery(endpoint: Endpoint): Array<[string, string]> {
   return endpoint.parameters
     .map(asParam)
-    .filter((p) => p.in === "query" && p.required === true && typeof p.name === "string")
+    .filter(
+      (p) =>
+        p.in === "query" && p.required === true && typeof p.name === "string",
+    )
     .map((p) => [p.name as string, exampleFor(p)] as [string, string]);
 }
 

@@ -37,7 +37,7 @@ const others = topics.filter((o) => o.id !== topic.id);
     url={`/daten/${t.slug}/`}
     license={t.licenseUrl}
     identifier="https://doi.org/10.5281/zenodo.20752355"
-    creatorName="InfraNode"
+    creatorName="cityscape"
     spatialCoverage="Deutschland"
     keywords={t.keywords}
     variableMeasured={t.vars}
@@ -47,7 +47,7 @@ const others = topics.filter((o) => o.id !== topic.id);
     ]}
     distributions={[
       {
-        name: "InfraNode REST API",
+        name: "cityscape REST API",
         url: exampleUrl,
         format: "application/json",
       },
@@ -102,7 +102,7 @@ const others = topics.filter((o) => o.id !== topic.id);
   <p>
     Alle Parameter, Felder und Antwort-Beispiele stehen in der
     <a href={`/api/${topic.endpointId}/`}>API-Referenz zu diesem Endpunkt</a>.
-    InfraNode gibt es zusätzlich als
+    cityscape gibt es zusätzlich als
     <a href="/mcp/">MCP-Server für KI-Assistenten</a>.
   </p>
 

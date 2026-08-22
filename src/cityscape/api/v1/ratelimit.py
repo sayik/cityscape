@@ -41,10 +41,10 @@ def ANON_LIMIT() -> str:
     Gibt beide Limits semikolon-getrennt zurück; slowapi/limits ``parse_many``
     liest das als MEHRERE gleichzeitig geltende Limits (Burst pro Minute bremst
     Spitzen, das Stunden-Limit bremst Dauer-Scraping). Ist nur limit_anon gesetzt
-    (z.B. Test-Override INFRANODE_LIMIT_ANON), gilt allein dieses.
+    (z.B. Test-Override CITYSCAPE_LIMIT_ANON), gilt allein dieses.
 
     Frisch instanziiert statt get_settings()-Cache (Konvention Toggle-Lookup), da
-    @limiter.limit das Limit pro Request liest und per-Test gesetzte INFRANODE_-
+    @limiter.limit das Limit pro Request liest und per-Test gesetzte CITYSCAPE_-
     Env-Vars greifen müssen.
     """
     s = Settings()
@@ -116,7 +116,7 @@ def build_limiter(settings: Settings) -> Limiter:
     ``_check_request_limit`` ist der EINE Choke-Point, durch den slowapi ALLE
     Prüfungen zieht (default_limits via RateLimitMiddleware UND die
     @limiter.limit-Decorator von /sources, /compare, /admin/login). CIDRs aus
-    INFRANODE_RATELIMIT_ALLOWLIST (z.B. Anthropic-Egress: viele Endnutzer
+    CITYSCAPE_RATELIMIT_ALLOWLIST (z.B. Anthropic-Egress: viele Endnutzer
     hinter wenigen IPs) werden dort nicht gezählt und nie gedrosselt.
     AUSNAHME /admin*: das Admin-Login-Limit ist Brute-Force-Schutz (Auth-nah,
     HIGH-1) und gilt IMMER, auch für allowlistete IPs (NUR Limit-Bypass, KEINE

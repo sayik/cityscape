@@ -1,5 +1,5 @@
 // Liefert die kuratierte OpenAPI-Spec als JSON aus:
-// https://infranode.dev/openapi.json. Single Source ist docs/openapi.yaml (per
+// https://cityscape.dev/openapi.json. Single Source ist docs/openapi.yaml (per
 // Vite ?raw-Import eingebettet), hier YAML -> JSON geparst. Viele Tools (Swagger
 // UI, Postman, Codegen) erwarten JSON. Stabile, offizielle Spec-URL.
 import type { APIRoute } from "astro";

@@ -86,7 +86,7 @@ _SOURCE_TTL: dict[str, tuple[float, float]] = dict(_REGISTRY_TTL)
 _SOURCE_MAX_CONCURRENCY: dict[str, int] = {"wikidata": 5}
 # Mindestabstand (Sekunden) zwischen Upstream-Calls je Quelle (Aggregat-Rate).
 # DB-Timetables-ToS: <=60 Aufrufe/Minute -> >=1.0s. Quellen ohne Eintrag: kein
-# Limit. Alle InfraNode-Nutzer teilen sich den DB-Key, daher Aggregat begrenzen.
+# Limit. Alle cityscape-Nutzer teilen sich den DB-Key, daher Aggregat begrenzen.
 _SOURCE_MIN_INTERVAL_S: dict[str, float] = {"db_timetables": 1.0}
 
 _semaphores: dict[str, asyncio.Semaphore] = {}
@@ -134,17 +134,17 @@ async def _run_limited(source: str, fetch_fn: Callable[[], Awaitable]):
 
 
 class ResilientSourceClient:
-    """Fassade: kombiniert Pool + Cache + SWR + Single-Flight + Breaker zu fetch().
+    """Facade: Combines pool, cache, SWR, single-flight, and breaker into `fetch()`.
 
     Args:
-        http: prozessweiter, gepoolter ``httpx.AsyncClient`` (app.state.http).
-        redis: redis.asyncio-kompatibler Client (app.state.redis).
-        breakers: prozessweite ``BreakerRegistry`` (app.state.breakers). Default:
-            eine frische Registry (Breaker-State lebt dann nur für diese
-            Instanz; in der App wird eine geteilte Registry injiziert, damit der
-            Breaker-State request-übergreifend lebt).
-        schedule: plant die SWR-Background-Refresh-Coroutine (Default: der
-            asyncio-Task-Halter aus ``cache_get_or_set``).
+        http: process-wide, pooled ``httpx.AsyncClient`` (app.state.http).
+        redis: redis.asyncio-compatible client (app.state.redis).
+        breakers: process-wide ``BreakerRegistry`` (app.state.breakers). Default:
+            a fresh registry (the breaker state then persists only for this
+            instance; a shared registry is injected into the app so that the
+            breaker state persists across requests).
+        schedule: schedules the SWR background refresh coroutine (default: the
+            asyncio task holder from ``cache_get_or_set``).
     """
 
     def __init__(

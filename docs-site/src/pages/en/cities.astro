@@ -38,7 +38,7 @@ const coreCount = sorted.filter((c) => c.coverage === "full").length;
 
 <Docs
   title="Open Data API for 84 German Cities: Overview"
-  description="All 84 German cities over 100,000 inhabitants covered by InfraNode with a free, keyless open data API: name, slug, state, population and coverage. Searchable."
+  description="All 84 German cities over 100,000 inhabitants covered by cityscape with a free, keyless open data API: name, slug, state, population and coverage. Searchable."
   current="cities"
   lang="en"
   altLangPath="/staedte/"
@@ -46,12 +46,12 @@ const coreCount = sorted.filter((c) => c.coverage === "full").length;
   <JsonLd
     slot="jsonld"
     type="Dataset"
-    name="InfraNode: Open Data for German Cities"
+    name="cityscape: Open Data for German Cities"
     description={`Normalised open data for ${total} German cities via a free, key-less REST API: weather (DWD), air quality (Umweltbundesamt), traffic and roadworks (Autobahn), public-transport departures (GTFS/DB), base data (Wikidata) and more. Machine-readable as JSON; reproducible snapshots as CSV/Parquet.`}
     url="/en/cities/"
     license="https://www.govdata.de/dl-de/by-2-0"
     identifier="https://doi.org/10.5281/zenodo.20752355"
-    creatorName="InfraNode"
+    creatorName="cityscape"
     spatialCoverage="Germany"
     keywords={[
       "open data",
@@ -80,7 +80,7 @@ const coreCount = sorted.filter((c) => c.coverage === "full").length;
     ]}
     distributions={[
       {
-        name: "InfraNode REST API (all cities)",
+        name: "cityscape REST API (all cities)",
         url: `${API_BASE}/cities`,
         format: "application/json",
       },
@@ -99,7 +99,7 @@ const coreCount = sorted.filter((c) => c.coverage === "full").length;
   <h1>Open data API for 84 German cities</h1>
 
   <p>
-    InfraNode covers {total} German cities with more than 100,000 inhabitants.
+    cityscape covers {total} German cities with more than 100,000 inhabitants.
     Of these, {coreCount} are core cities with curated, hand-verified source
     coverage (badge <span class="city-badge city-badge--core">Core</span>). The
     remaining cities (badge <span class="city-badge city-badge--auto">Auto</span>)

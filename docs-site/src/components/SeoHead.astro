@@ -2,7 +2,7 @@
 // SEO-Head je Seite (DX-03): sauberer Title, Meta-Description und OpenGraph
 // (og:title/og:description/og:type/og:url) plus ein kanonischer Link. Die
 // absolute URL wird aus Astro.site + Astro.url.pathname gebildet (site-URL
-// aus astro.config.mjs / Env INFRANODE_DOCS_SITE). Keine schweren Scripts,
+// aus astro.config.mjs / Env CITYSCAPE_DOCS_SITE). Keine schweren Scripts,
 // reines statisches Head-Markup (CWV-tauglich).
 interface Props {
   title: string;
@@ -40,7 +40,7 @@ const deUrl = lang === "de" ? canonicalUrl : altUrl;
 const enUrl = lang === "en" ? canonicalUrl : altUrl;
 ---
 
-<title>{title} | InfraNode</title>
+<title>{title} | cityscape</title>
 {description && <meta name="description" content={description} />}
 {noindex && <meta name="robots" content="noindex,follow" />}
 {!noindex && <link rel="canonical" href={canonicalUrl} />}
@@ -57,7 +57,7 @@ const enUrl = lang === "en" ? canonicalUrl : altUrl;
 <link rel="icon" type="image/png" sizes="48x48" href="/favicon.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 <meta name="theme-color" content="#1d4e5c" />
-<link rel="me" href="https://mastodon.social/@infranode" />
+<link rel="me" href="https://mastodon.social/@cityscape" />
 <meta property="og:type" content="website" />
 <meta property="og:locale" content={lang === "en" ? "en_US" : "de_DE"} />
 <meta property="og:title" content={title} />

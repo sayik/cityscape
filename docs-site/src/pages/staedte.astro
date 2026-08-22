@@ -39,7 +39,7 @@ const coreCount = sorted.filter((c) => c.coverage === "full").length;
 
 <Docs
   title="Open-Data-API für 84 deutsche Großstädte: Übersicht"
-  description="Alle 84 von InfraNode abgedeckten deutschen Großstädte über 100.000 Einwohner mit kostenloser, keyloser Open-Data-API: Name, Slug, Bundesland, Einwohner und Abdeckung. Durchsuchbar."
+  description="Alle 84 von cityscape abgedeckten deutschen Großstädte über 100.000 Einwohner mit kostenloser, keyloser Open-Data-API: Name, Slug, Bundesland, Einwohner und Abdeckung. Durchsuchbar."
   current="staedte"
   lang="de"
   altLangPath="/en/cities/"
@@ -47,12 +47,12 @@ const coreCount = sorted.filter((c) => c.coverage === "full").length;
   <JsonLd
     slot="jsonld"
     type="Dataset"
-    name="InfraNode: Open Data deutscher Großstädte"
+    name="cityscape: Open Data deutscher Großstädte"
     description={`Normalisierte offene Daten für ${total} deutsche Großstädte über eine kostenlose, keylose REST-API: Wetter (DWD), Luftqualität (Umweltbundesamt), Verkehr und Baustellen (Autobahn), ÖPNV-Abfahrten (GTFS/DB), Stammdaten (Wikidata) und mehr. Maschinenlesbar als JSON; reproduzierbare Snapshots als CSV/Parquet.`}
     url="/staedte/"
     license="https://www.govdata.de/dl-de/by-2-0"
     identifier="https://doi.org/10.5281/zenodo.20752355"
-    creatorName="InfraNode"
+    creatorName="cityscape"
     spatialCoverage="Deutschland"
     keywords={[
       "Open Data",
@@ -81,7 +81,7 @@ const coreCount = sorted.filter((c) => c.coverage === "full").length;
     ]}
     distributions={[
       {
-        name: "InfraNode REST API (alle Städte)",
+        name: "cityscape REST API (alle Städte)",
         url: `${API_BASE}/cities`,
         format: "application/json",
       },
@@ -100,7 +100,7 @@ const coreCount = sorted.filter((c) => c.coverage === "full").length;
   <h1>Open-Data-API für 84 deutsche Großstädte</h1>
 
   <p>
-    InfraNode deckt {total} deutsche Großstädte über 100.000 Einwohner ab. Davon
+    cityscape deckt {total} deutsche Großstädte über 100.000 Einwohner ab. Davon
     sind {coreCount} Kern-Städte mit gepflegter, handverifizierter Quellen-Abdeckung
     (Badge <span class="city-badge city-badge--core">Kern</span>). Die übrigen
     Städte (Badge <span class="city-badge city-badge--auto">Auto</span>) werden

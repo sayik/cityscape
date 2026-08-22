@@ -2,7 +2,7 @@
 
 Löst Live-RT-Bezüge (trip_id, route_id, Halte) gegen das statische DELFI-GTFS
 auf. Grundlage ist das memory-konstante Zip-Entry-Streaming aus
-:func:`infranode.ingest.gtfs.stream_entry` (RESEARCH Pattern 3, T-06-03/T-19-MEM):
+:func:`cityscape.ingest.gtfs.stream_entry` (RESEARCH Pattern 3, T-06-03/T-19-MEM):
 
 - ``trips.txt`` ist klein -> vollständige ``{trip_id: route_id}``-Map im Speicher.
 - ``stop_times.txt`` ist mehrere GB entpackt -> NIE komplett laden. Wir streamen
@@ -97,7 +97,7 @@ def stops_with_geo_for_trip(
     ``departure_time``, "HH:MM:SS", >24h möglich) gegen den injizierten
     ``service_day_epoch`` in einen ``scheduled_epoch`` um (reine Funktion, keine
     Systemuhr). Halte ohne Geo ODER ohne parsebare Soll-Zeit werden übersprungen,
-    damit :func:`infranode.transit.interpolation.estimate_position` nur
+    damit :func:`cityscape.transit.interpolation.estimate_position` nur
     vollständige Halte sieht. Unbekannte ``trip_id`` -> leere Liste.
     """
     stops = stop_times_for_trip(zip_path, trip_id)
@@ -131,7 +131,7 @@ def slug_for_trip(zip_path: str | Path, trip_id: str) -> str | None:
     """Ordnet eine ``trip_id`` über ihren ersten Halt einer Register-Stadt zu.
 
     Hilfsfunktion für den optionalen Vorab-Index je Stadt (RESEARCH Pattern 3b):
-    nutzt :func:`infranode.ingest.delfi.city_for_stop` auf der ersten stop_id der
+    nutzt :func:`cityscape.ingest.delfi.city_for_stop` auf der ersten stop_id der
     Fahrt (KEIN neuer Geo-Code). Liefert den Register-Slug oder ``None`` (Fahrt
     außerhalb der 28 Register-Städte bzw. unbekannte trip_id).
     """

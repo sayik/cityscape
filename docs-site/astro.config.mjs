@@ -2,11 +2,11 @@
 import { defineConfig } from "astro/config";
 import sitemap from "@astrojs/sitemap";
 
-// Oeffentliche Doku-Domain: Doku + API liegen beide auf infranode.dev (kein
-// docs.-Subdomain). Per Env INFRANODE_DOCS_SITE ueberschreibbar (z.B. fuer
+// Oeffentliche Doku-Domain: Doku + API liegen beide auf cityscape.dev (kein
+// docs.-Subdomain). Per Env CITYSCAPE_DOCS_SITE ueberschreibbar (z.B. fuer
 // Preview-Deploys). sitemap() braucht eine absolute site-URL fuer den Index.
 // site steuert ausserdem canonical, og:url und die .md-Links in llms.txt.
-const site = process.env.INFRANODE_DOCS_SITE || "https://infranode.dev";
+const site = process.env.CITYSCAPE_DOCS_SITE || "https://cityscape.dev";
 
 // Build-Datum als lastmod fuer alle Sitemap-Eintraege (Crawl-Frische-Signal).
 // Wird je Deploy neu gesetzt. i18n erzeugt zusaetzlich xhtml:link-hreflang-

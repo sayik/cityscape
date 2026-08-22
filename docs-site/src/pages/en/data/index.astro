@@ -14,10 +14,10 @@ const description =
 const faq = [
   {
     q: "Is there a free data API for German cities?",
-    a: "InfraNode is a free, keyless data API for 84 major German cities. It serves weather, air quality, electricity price, land values, real-time public transport and more as consistent JSON, without an API key and without sign-up.",
+    a: "cityscape is a free, keyless data API for 84 major German cities. It serves weather, air quality, electricity price, land values, real-time public transport and more as consistent JSON, without an API key and without sign-up.",
   },
   {
-    q: "Is InfraNode suitable for data analysis?",
+    q: "Is cityscape suitable for data analysis?",
     a: "Yes. All endpoints return structured JSON with source and license, retrievable across all 84 cities. For offline analysis there are reproducible snapshots as CSV and Parquet via the Zenodo DOI and as a Hugging Face dataset.",
   },
   {
@@ -31,17 +31,17 @@ const faq = [
   <JsonLd
     slot="jsonld"
     type="Dataset"
-    name="InfraNode: data API for German cities"
+    name="cityscape: data API for German cities"
     description={description}
     url="/en/data/"
     license="https://www.govdata.de/dl-de/by-2-0"
     identifier="https://doi.org/10.5281/zenodo.20752355"
-    creatorName="InfraNode"
+    creatorName="cityscape"
     spatialCoverage="Germany"
     keywords={["data API", "data analysis API", "city data API", "open data API Germany", "German data API", "REST API", "MCP server data"]}
     sameAs={["https://doi.org/10.5281/zenodo.20752355", "https://huggingface.co/datasets/Khaledc83/german-cities-open-data"]}
     distributions={[
-      { name: "InfraNode REST API", url: `${API_BASE}/api/v1/cities`, format: "application/json" },
+      { name: "cityscape REST API", url: `${API_BASE}/api/v1/cities`, format: "application/json" },
       { name: "Zenodo snapshot (CSV/Parquet)", url: "https://doi.org/10.5281/zenodo.20752355", format: "text/csv" },
     ]}
   />

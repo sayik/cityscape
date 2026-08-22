@@ -1,6 +1,6 @@
 """Rate-Limiting für den öffentlichen MCP-Endpunkt (Security-Härtung 2026-06-21).
 
-Der Remote-MCP-Server (``mcp.infranode.dev/mcp``, streamable-http) lief bis hier
+Der Remote-MCP-Server (``mcp.cityscape.dev/mcp``, streamable-http) lief bis hier
 OHNE eigene Drosselung: Caddy reicht 1:1 durch und die slowapi-Limiter der
 FastAPI-App greifen nur auf dem API-Pfad, nicht auf dem MCP-Service. Ein Client
 konnte den MCP-Endpunkt also ungebremst hämmern (jeder Tool-Call löst zudem
@@ -8,7 +8,7 @@ einen API-Aufruf aus, der die Upstream-Last vervielfacht).
 
 Diese Middleware drosselt pro echter Client-IP mit einem Moving-Window
 (``limits``-Library, bereits via slowapi vorhanden). Der Storage liegt in REDIS
-(``INFRANODE_REDIS_URL``), damit das Budget über mehrere MCP-Replicas GETEILT
+(``CITYSCAPE_REDIS_URL``), damit das Budget über mehrere MCP-Replicas GETEILT
 ist (horizontale Skalierung): liefen N Replicas mit je eigenem In-Memory-Fenster,
 ver-N-fachte sich das effektive Limit. Ist Redis nicht erreichbar (z.B. lokaler
 stdio-Betrieb ohne Redis), fällt die Middleware auf einen prozesslokalen
@@ -36,7 +36,7 @@ from cityscape.infra.allowlist import ENV_VAR, ip_allowlisted, parse_allowlist
 
 logger = logging.getLogger(__name__)
 
-# Default-Budget pro IP für den MCP-Endpunkt. Per INFRANODE_MCP_RATE_LIMIT
+# Default-Budget pro IP für den MCP-Endpunkt. Per CITYSCAPE_MCP_RATE_LIMIT
 # (limits-Format "<zahl>/<einheit>") überschreibbar. Historie Owner 2026-06-24:
 # zuerst 60 -> 240/min (Discovery-Flows get_city_overview -> mehrere gezielte
 # Tool-Calls), dann 240 -> 480/min (mehr Luft für KI-Agenten-Sitzungen). Zielgröße
@@ -55,7 +55,7 @@ def _make_storage():
     prozesslokale Fallback, damit ein versehentlich fehlendes Redis den
     lokalen/stdio-MCP-Server nicht am Start hindert.
     """
-    url = os.environ.get("INFRANODE_REDIS_URL", "redis://redis:6379/0")
+    url = os.environ.get("CITYSCAPE_REDIS_URL", "redis://redis:6379/0")
     try:
         # Kurze Connect-/Read-Timeouts: ohne sie kann check() bei nicht
         # aufloesbarem/erreichbarem Host (lokaler stdio-Betrieb ohne Redis, oder
@@ -86,7 +86,7 @@ def _make_storage():
 def client_ip(request: Request) -> str:
     """Echte Client-IP: CF-Connecting-IP -> X-Forwarded-For[0] -> Peer.
 
-    Identische Quelle wie ``infranode.api.v1.ratelimit.real_client_ip``; hier
+    Identische Quelle wie ``cityscape.api.v1.ratelimit.real_client_ip``; hier
     eigenständig gehalten, damit der MCP-Server nicht den FastAPI-/slowapi-Pfad
     importieren muss. Vertrauenswürdig nur unter der CF-only-Firewall (sonst
     könnte ein Angreifer CF-Connecting-IP fälschen, s. DEPLOYMENT.md Abschnitt 2).
@@ -113,7 +113,7 @@ class MCPRateLimitMiddleware:
         self.app = app
         self._limiter = MovingWindowRateLimiter(_make_storage())
         self._item = parse(
-            limit or os.environ.get("INFRANODE_MCP_RATE_LIMIT", _DEFAULT_LIMIT)
+            limit or os.environ.get("CITYSCAPE_MCP_RATE_LIMIT", _DEFAULT_LIMIT)
         )
         # Fenster in Sekunden für den Retry-After-Header.
         self._retry_after = str(self._item.get_expiry())

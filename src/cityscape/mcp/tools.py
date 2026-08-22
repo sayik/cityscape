@@ -1,4 +1,4 @@
-"""Free-standing async tool functions of the InfraNode MCP server (DX-05).
+"""Free-standing async tool functions of the cityscape MCP server (DX-05).
 
 CALL CONTRACT (Blocker 4): each tool's logic lives here as a free-standing
 async module function that ``server.py`` registers thinly via ``@mcp.tool()``.
@@ -16,7 +16,7 @@ eigenes Tool (71 Stueck, ~30k Tokens Tool-Liste, Cursor-80-Tool-Limit in
 Sichtweite). Jetzt gibt es wenige NAMENTLICHE Tools (Einstieg, Meta,
 parametrisierte Faehigkeiten, die zwei populaersten Datenarten) plus EIN
 generisches ``get_city_resource(slug, resource)`` fuer den gesamten Long-Tail.
-Die Discovery uebernimmt ``get_city_overview``/``infranode://catalog``: beide
+Die Discovery uebernimmt ``get_city_overview``/``cityscape://catalog``: beide
 nennen je Datenart den ``resource``-Schluessel, und das ``resource``-Enum im
 inputSchema listet alle gueltigen Werte maschinenlesbar.
 
@@ -67,7 +67,7 @@ _ResourceKey = Annotated[
     Field(
         description=(
             "Data type key to fetch, exactly as listed by get_city_overview / the "
-            "infranode://catalog resource (the 'type' field), e.g. 'charging', "
+            "cityscape://catalog resource (the 'type' field), e.g. 'charging', "
             "'parking', 'demographics', 'solar', 'district-heating'."
         )
     ),
@@ -85,7 +85,7 @@ async def get_city(slug: _Slug) -> ToolEnvelope:
 
 
 async def get_city_overview(slug: _Slug) -> ToolEnvelope:
-    """Get a ONE-CALL overview of everything InfraNode knows about a German city.
+    """Get a ONE-CALL overview of everything cityscape knows about a German city.
 
     Start here for any city question. Returns: the city's base data, a CATALOG of
     all ~60 available data types (weather, air quality, public transit, trains,
@@ -95,7 +95,7 @@ async def get_city_overview(slug: _Slug) -> ToolEnvelope:
     data types that is ``get_city_resource(slug, resource=<type>)``), plus a small
     live highlights snapshot (current weather, air quality and train departures).
     Data types not yet covered for this city show where they ARE available so you
-    can pivot. InfraNode keeps adding data and cities, so the catalog grows over
+    can pivot. cityscape keeps adding data and cities, so the catalog grows over
     time. Read-only.
     """
     return await client.get_resource(slug, "overview")
@@ -104,7 +104,7 @@ async def get_city_overview(slug: _Slug) -> ToolEnvelope:
 async def get_city_resource(slug: _Slug, resource: _ResourceKey) -> ToolEnvelope:
     """Fetch ANY per-city data type by its key (generic accessor, ~60 data types).
 
-    One tool for the whole breadth of InfraNode: live data (air, traffic, transit
+    One tool for the whole breadth of cityscape: live data (air, traffic, transit
     stops, parking, charging, water-level, flood, sharing, fuel-prices, icu-live,
     webcams, station-departures/-arrivals/stations, ...), statistics
     (demographics, unemployment, tourism, accidents, crime-stats, indicators,
@@ -112,7 +112,7 @@ async def get_city_resource(slug: _Slug, resource: _ResourceKey) -> ToolEnvelope
     (solar, solar-roofs, district-heating, energy, heritage, tree-cadastre,
     playgrounds, public-toilets, markets, education, ...) and more. Discover the
     valid keys and per-city coverage with ``get_city_overview(slug)`` or the
-    ``infranode://catalog`` resource; the ``resource`` enum lists every key.
+    ``cityscape://catalog`` resource; the ``resource`` enum lists every key.
     Uncovered types return ``source_status="not_covered"`` (plus where they ARE
     available), never an error. Read-only.
     """
@@ -255,11 +255,11 @@ async def list_cities() -> ToolEnvelope:
 async def sources() -> ToolEnvelope:
     """List all data sources with license, attribution and availability.
 
-    Takes no arguments. Shows which upstream sources InfraNode bundles and
+    Takes no arguments. Shows which upstream sources cityscape bundles and
     whether each is currently active. Read-only.
     """
     # limit explizit auf MAX_LIMIT (API-Default 50 schnitt bei 76 Quellen ab:
-    # eround_charging & Co. fehlten im Tool UND in infranode://sources).
+    # eround_charging & Co. fehlten im Tool UND in cityscape://sources).
     return await client.get_collection("sources", {"limit": "200"})
 
 

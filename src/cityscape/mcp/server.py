@@ -1,21 +1,21 @@
-"""FastMCP-Server-Instanz des InfraNode-MCP-Servers (DX-05).
+"""FastMCP-Server-Instanz des cityscape-MCP-Servers (DX-05).
 
 Der Server registriert wenige namentliche Tools (Einstieg/Meta/parametrisiert)
 plus ein generisches ``get_city_resource`` fuer alle uebrigen Datenarten
 (Konsolidierung 2026-07-02, s. Kommentar am Registrierungsblock). Die eigentliche
-Tool-Logik liegt als freistehende async-Funktion in ``infranode.mcp.tools``
+Tool-Logik liegt als freistehende async-Funktion in ``cityscape.mcp.tools``
 (Blocker-4-Aufrufvertrag): ``@mcp.tool()`` wird hier nur dünn über diese
 Funktionen gelegt, sodass sie direkt als Coroutine testbar bleiben und der
 Decorator dennoch das FunctionTool für die FastMCP-API registriert.
 
 Es gibt KEINE Mapping-/Lizenz-Logik im Server: jedes Tool ruft über
-``infranode.mcp.client.get_resource`` die Live-FastAPI und gibt deren
+``cityscape.mcp.client.get_resource`` die Live-FastAPI und gibt deren
 normalisiertes JSON 1:1 zurück (D-07/D-08). Zwei Transporte:
 - stdio (Default): lokaler Subprozess für Claude Desktop/Code.
-- streamable-http: öffentlicher Remote-Endpunkt (z.B. mcp.infranode.dev),
-  hinter Caddy/Cloudflare, keylos wie die API. Per INFRANODE_MCP_TRANSPORT
-  =streamable-http aktiviert; INFRANODE_MCP_API_BASE zeigt dann auf die
-  öffentliche API (https://infranode.dev/api/v1).
+- streamable-http: öffentlicher Remote-Endpunkt (z.B. mcp.cityscape.dev),
+  hinter Caddy/Cloudflare, keylos wie die API. Per CITYSCAPE_MCP_TRANSPORT
+  =streamable-http aktiviert; CITYSCAPE_MCP_API_BASE zeigt dann auf die
+  öffentliche API (https://cityscape.dev/api/v1).
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ from cityscape.registry.catalog import CITY_DATA_CATALOG
 # 2026-07-01) und ist fuer JEDEN Client bei JEDEM Connect sichtbar, nicht nur fuer
 # Claude Code mit eigenem Memory.
 _INSTRUCTIONS = (
-    "InfraNode is a keyless, read-only open-data API for 84 German cities with "
+    "cityscape is a keyless, read-only open-data API for 84 German cities with "
     "~60 data types, exposed as {tool_count} MCP tools (count is live from this "
     "server, not a cached or remembered number). To answer ANY city question, "
     "START with get_city_overview(slug): it returns the city's base data, a "
@@ -51,8 +51,8 @@ _INSTRUCTIONS = (
     "get_city_resource(slug, resource=<type>), where <type> is the catalog key "
     "(e.g. 'parking', 'charging', 'demographics', 'solar'); its resource enum "
     "lists every valid key. Find valid city slugs with list_cities (or the "
-    "infranode://cities resource); browse every data type with the "
-    "infranode://catalog resource; see sources and licenses with sources. "
+    "cityscape://cities resource); browse every data type with the "
+    "cityscape://catalog resource; see sources and licenses with sources. "
     "Compare one metric across many cities in one call with compare. Every tool "
     "returns a canonical {data, meta} envelope; meta.source_status tells you whether "
     "a source delivered data (ok / no_data / not_covered / disabled / error), so a "
@@ -60,7 +60,7 @@ _INSTRUCTIONS = (
     "more data types and cities are added regularly."
 )
 
-mcp = FastMCP("infranode", instructions=_INSTRUCTIONS)
+mcp = FastMCP("cityscape", instructions=_INSTRUCTIONS)
 
 # Haelt die Namen aller ueber _register() registrierten Tools fest, damit die
 # Instructions unten die ECHTE, aktuelle Zahl tragen koennen statt eine
@@ -68,13 +68,13 @@ mcp = FastMCP("infranode", instructions=_INSTRUCTIONS)
 _registered_tool_names: list[str] = []
 
 
-# Verhaltens-Hinweise (MCP Tool Annotations): Jedes InfraNode-Tool ist ein
+# Verhaltens-Hinweise (MCP Tool Annotations): Jedes cityscape-Tool ist ein
 # read-only GET-Wrapper auf die Live-API: es schreibt keinen State, ist gefahrlos
 # wiederholbar (idempotent) und nicht destruktiv. Clients können Aufrufe so ohne
 # Rückfrage zulassen; Verzeichnis-Scanner (Glama/Smithery) bewerten die
 # Transparenz positiv. ``open_world`` unterscheidet ehrlich: Datentools ziehen
 # Live-Daten von externen Behörden-APIs (offene, veränderliche Domäne = True),
-# die Meta-Tools list_cities/sources liefern dagegen InfraNodes eigene,
+# die Meta-Tools list_cities/sources liefern dagegen CITYSCAPEs eigene,
 # abgeschlossene Abdeckungsliste (geschlossene Domäne = False).
 def _annotations(*, open_world: bool) -> ToolAnnotations:
     return ToolAnnotations(
@@ -143,7 +143,7 @@ def _graceful(fn):
 
 # Dünne Registrierung der freistehenden Tool-Funktionen (Blocker 4): der
 # Decorator wird programmatisch über jede Funktion gelegt. Die Funktion selbst
-# bleibt in infranode.mcp.tools unverändert als Coroutine aufrufbar; FastMCP
+# bleibt in cityscape.mcp.tools unverändert als Coroutine aufrufbar; FastMCP
 # generiert das Schema aus den Typannotationen und Docstrings (functools.wraps
 # im Wrapper erhält Signatur, Annotationen und Docstring, das Schema bleibt gleich).
 def _register(fn, *, open_world: bool = True) -> None:
@@ -159,7 +159,7 @@ def _register(fn, *, open_world: bool = True) -> None:
 # Tokens Tool-Liste, Cursor-80-Tool-Limit in Sichtweite). Jetzt: wenige
 # namentliche Tools (Einstieg/Meta/parametrisiert/populaer) + EIN generisches
 # get_city_resource fuer den gesamten Long-Tail. Die Datenarten-Discovery
-# uebernimmt get_city_overview + infranode://catalog (je Datenart der
+# uebernimmt get_city_overview + cityscape://catalog (je Datenart der
 # resource-Schluessel) + das resource-Enum im inputSchema des generischen Tools.
 _register(tools.get_city)
 # Owner 2026-06-24: Ein-Aufruf-Überblick (Basis + Katalog aller Datenarten +
@@ -281,24 +281,24 @@ _stamp_datatype_count()
 
 
 # MCP Resources: expose the coverage catalog as browsable resources, so clients
-# can discover what InfraNode offers (cities + sources) without a tool call.
-@mcp.resource("infranode://cities")
+# can discover what cityscape offers (cities + sources) without a tool call.
+@mcp.resource("cityscape://cities")
 async def cities_resource() -> dict:
     """All covered German cities with slug, federal state, population and coverage."""
     return await tools.list_cities()
 
 
-@mcp.resource("infranode://sources")
+@mcp.resource("cityscape://sources")
 async def sources_resource() -> dict:
-    """All InfraNode data sources with license, attribution and availability."""
+    """All cityscape data sources with license, attribution and availability."""
     return await tools.sources()
 
 
-@mcp.resource("infranode://catalog")
+@mcp.resource("cityscape://catalog")
 async def catalog_resource() -> dict:
     """The catalog of all per-city data types: label, matching tool and REST path.
 
-    Lets an agent browse the full breadth of InfraNode (every data type and the tool
+    Lets an agent browse the full breadth of cityscape (every data type and the tool
     that fetches it) without a tool call. For a live, per-city view with coverage
     status and highlights, call get_city_overview(slug).
     """
@@ -313,7 +313,7 @@ async def catalog_resource() -> dict:
             for dt in CITY_DATA_CATALOG
         ],
         "note": (
-            "InfraNode keeps adding more data types and cities. Start with "
+            "cityscape keeps adding more data types and cities. Start with "
             "get_city_overview(slug) for a live, per-city view. Where 'tool' is "
             "get_city_resource, pass the 'type' value as its resource argument."
         ),
@@ -323,7 +323,7 @@ async def catalog_resource() -> dict:
 # MCP Prompts: a few ready-made prompts that showcase common multi-tool flows.
 @mcp.prompt()
 def city_overview(slug: str) -> str:
-    """Get a complete picture of a German city and what InfraNode offers for it."""
+    """Get a complete picture of a German city and what cityscape offers for it."""
     return (
         f"Give me an overview of the German city '{slug}'. Call get_city_overview "
         "first to see its base data, every available data type (with the tool to "
@@ -337,7 +337,7 @@ def city_briefing(slug: str) -> str:
     """A concise live briefing (weather, air, transit) for a German city."""
     return (
         f"Give me a concise current briefing for the German city '{slug}'. "
-        "Use the InfraNode tools to fetch weather, air quality and live "
+        "Use the cityscape tools to fetch weather, air quality and live "
         "public-transport departures, then summarize the situation in a few "
         "bullet points. If a source has no data, say so briefly."
     )
@@ -348,7 +348,7 @@ def compare_air_quality(cities: str) -> str:
     """Compare current air quality across several German cities."""
     return (
         f"Compare the current air quality across these German cities: {cities}. "
-        "Use the InfraNode 'compare' tool with resource='air', then rank the "
+        "Use the cityscape 'compare' tool with resource='air', then rank the "
         "cities from cleanest to most polluted and note any missing data."
     )
 
@@ -385,32 +385,32 @@ def run() -> None:
     """Startet den Server im per Env gewählten Transport.
 
     stdio (Default): kein offener Port, lokaler Subprozess. streamable-http:
-    bindet einen HTTP-Port (INFRANODE_MCP_HOST/-PORT) für den öffentlichen
+    bindet einen HTTP-Port (CITYSCAPE_MCP_HOST/-PORT) für den öffentlichen
     Remote-Endpunkt. Host-Default 127.0.0.1; der Container-Service setzt
-    INFRANODE_MCP_HOST=0.0.0.0, damit Caddy ihn über das Compose-Netz erreicht.
+    CITYSCAPE_MCP_HOST=0.0.0.0, damit Caddy ihn über das Compose-Netz erreicht.
     """
-    transport = os.environ.get("INFRANODE_MCP_TRANSPORT", "stdio")
+    transport = os.environ.get("CITYSCAPE_MCP_TRANSPORT", "stdio")
     if transport == "streamable-http":
         from mcp.server.transport_security import TransportSecuritySettings
 
-        mcp.settings.host = os.environ.get("INFRANODE_MCP_HOST", "127.0.0.1")
-        mcp.settings.port = int(os.environ.get("INFRANODE_MCP_PORT", "8081"))
+        mcp.settings.host = os.environ.get("CITYSCAPE_MCP_HOST", "127.0.0.1")
+        mcp.settings.port = int(os.environ.get("CITYSCAPE_MCP_PORT", "8081"))
         # Der MCP-Transport hat einen DNS-Rebinding-Schutz, der per Default nur
         # localhost-Hosts/-Origins erlaubt (gedacht für lokal gebundene Server).
         # Hinter Caddy/Cloudflare variieren Host/Origin; für eine öffentliche,
         # keylose read-only API ist der Schutz nicht nötig und blockt sonst alle
         # Calls (HTTP 421). Default daher aus; per
-        # INFRANODE_MCP_DNS_REBINDING_PROTECTION=1 mit expliziten Allowlists
-        # (INFRANODE_MCP_ALLOWED_HOSTS/-ORIGINS, kommagetrennt) wieder scharf.
-        if os.environ.get("INFRANODE_MCP_DNS_REBINDING_PROTECTION") == "1":
+        # CITYSCAPE_MCP_DNS_REBINDING_PROTECTION=1 mit expliziten Allowlists
+        # (CITYSCAPE_MCP_ALLOWED_HOSTS/-ORIGINS, kommagetrennt) wieder scharf.
+        if os.environ.get("CITYSCAPE_MCP_DNS_REBINDING_PROTECTION") == "1":
             hosts = [
                 h.strip()
-                for h in os.environ.get("INFRANODE_MCP_ALLOWED_HOSTS", "").split(",")
+                for h in os.environ.get("CITYSCAPE_MCP_ALLOWED_HOSTS", "").split(",")
                 if h.strip()
             ]
             origins = [
                 o.strip()
-                for o in os.environ.get("INFRANODE_MCP_ALLOWED_ORIGINS", "").split(",")
+                for o in os.environ.get("CITYSCAPE_MCP_ALLOWED_ORIGINS", "").split(",")
                 if o.strip()
             ]
             mcp.settings.transport_security = TransportSecuritySettings(
