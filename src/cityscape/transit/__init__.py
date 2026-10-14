@@ -1,10 +1,10 @@
-"""Transit-Auflösung und Positionsschätzung gegen statisches DELFI-GTFS.
+"""Transit resolution and position estimation against static DELFI GTFS.
 
-Reine, testbare Bausteine der Phase 19 (kein Netz, keine Systemuhr, kein Redis):
-- ``resolver``: on-demand Auflösungsindex trip_id/route_id/stop gegen das
-  statische GTFS (memory-konstant gestreamt).
-- ``interpolation``: lineare Positionsschätzung mit injizierter Zeit.
+Pure, testable building blocks of Phase 19 (no network, no system clock, no Redis):
+- ``resolver``: on-demand resolution index trip_id/route_id/stop against
+  static GTFS (streamed with constant memory).
+- ``interpolation``: linear position estimation with injected time.
 
-Das Caching (Redis) und das Polling erfolgen im Aufrufer (Plan 19-04), nicht in
-diesen reinen Funktionen.
+Caching (Redis) and polling are handled in the caller (Plan 19-04), not in
+these pure functions.
 """

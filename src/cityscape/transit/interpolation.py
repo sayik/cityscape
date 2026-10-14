@@ -1,17 +1,17 @@
-"""Reine lineare Positionsschätzung zwischen zwei GTFS-Halten.
+"""Pure linear position estimation between two GTFS stops.
 
-Schätzt aus dem Soll-Fahrplan (sortierte Halte mit Geo + scheduled_epoch) und der
-aktuellen Verspätung die Position einer Fahrt linear zwischen dem zuletzt
-passierten und dem nächsten Halt (RESEARCH Pattern 4). Die lineare Interpolation
-auf lat/lon ist eine Näherung (folgt nicht der echten Streckenführung) und wird
-deshalb mit ``estimated=True`` ausgewiesen.
+Estimates the position of a trip linearly between the last passed stop and
+the next stop (RESEARCH Pattern 4) using the scheduled timetable (sorted stops
+with geo + scheduled_epoch) and current delay. The linear interpolation
+on lat/lon is an approximation (does not follow the actual route shape) and is
+therefore flagged with ``estimated=True``.
 
-Muster "reine Funktion mit injizierter Zeit" (analog
-``mappers/mobilithek_koeln.py``: ``retrieved_at`` keyword-only, keine Systemuhr im
-Kern): ``now_epoch`` und ``service_day_epoch`` werden injiziert. Damit ist die
-Funktion deterministisch testbar und enthält keinen nicht-reproduzierbaren
-Zustand (T-19-CLOCK). KEINE Systemuhr im Kern (kein Aufruf einer Wanduhr-Funktion
-aus ``datetime`` oder ``time``).
+Pattern "pure function with injected time" (analogous to
+``mappers/mobilithek_koeln.py``: ``retrieved_at`` keyword-only, no system clock in
+core): ``now_epoch`` and ``service_day_epoch`` are injected. This makes the
+function deterministically testable and free of non-reproducible state
+(T-19-CLOCK). NO system clock in core (no calls to wall-clock functions
+from ``datetime`` or ``time``).
 """
 
 from __future__ import annotations
@@ -20,22 +20,21 @@ from __future__ import annotations
 def estimate_position(
     stops: list[dict], *, delay_s: int, now_epoch: int
 ) -> dict | None:
-    """Interpoliert die Position einer Fahrt linear zwischen zwei Halten.
+    """Interpolates the position of a trip linearly between two stops.
 
-    ``stops`` sind nach Soll-Zeit sortierte Halte mit den Keys ``scheduled_epoch``
-    (int), ``lat`` (float), ``lon`` (float) und ``stop_id`` (str). ``delay_s``
-    verschiebt die effektive Soll-Zeit: ``adjusted = now_epoch - delay_s`` (eine
-    aktuelle Verspätung bedeutet, dass die Fahrt einer früheren Soll-Zeit
-    entspricht).
+    ``stops`` are stops sorted by scheduled time with keys ``scheduled_epoch``
+    (int), ``lat`` (float), ``lon`` (float), and ``stop_id`` (str). ``delay_s``
+    shifts the effective scheduled time: ``adjusted = now_epoch - delay_s`` (a
+    current delay means the trip corresponds to an earlier scheduled time).
 
-    Findet ``prev`` (letzter Halt mit ``scheduled_epoch <= adjusted``) und ``nxt``
-    (erster Halt danach). Ist einer von beiden ``None`` -> Rückgabe ``None``
-    (ehrlich vor Abfahrt bzw. nach Ankunft, keine Fantasie-Position). Bei
-    ``span <= 0`` -> ``frac = 0.0`` (kein ``ZeroDivisionError``).
+    Finds ``prev`` (last stop with ``scheduled_epoch <= adjusted``) and ``nxt``
+    (first stop thereafter). If either is ``None`` -> returns ``None``
+    (honestly before departure or after arrival, no fantasy position). If
+    ``span <= 0`` -> ``frac = 0.0`` (no ``ZeroDivisionError``).
 
-    Liefert ``{"lat", "lon", "estimated": True, "between": [prev_id, nxt_id]}``.
+    Returns ``{"lat", "lon", "estimated": True, "between": [prev_id, nxt_id]}``.
     """
-    adjusted = now_epoch - delay_s  # Soll-Zeit, der die Fahrt jetzt entspricht
+    adjusted = now_epoch - delay_s  # Scheduled time the trip currently corresponds to
     prev: dict | None = None
     nxt: dict | None = None
     for s in stops:
@@ -45,23 +44,23 @@ def estimate_position(
             nxt = s
             break
     if prev is None or nxt is None:
-        return None  # vor Abfahrt / nach Ankunft -> ehrlich None
+        return None  # before departure / after arrival -> honestly None
     span = nxt["scheduled_epoch"] - prev["scheduled_epoch"]
     frac = 0.0 if span <= 0 else (adjusted - prev["scheduled_epoch"]) / span
     return {
         "lat": prev["lat"] + (nxt["lat"] - prev["lat"]) * frac,
         "lon": prev["lon"] + (nxt["lon"] - prev["lon"]) * frac,
-        "estimated": True,  # Schätzung kennzeichnen (lineare Näherung)
+        "estimated": True,  # Flag estimate (linear approximation)
         "between": [prev["stop_id"], nxt["stop_id"]],
     }
 
 
 def gtfs_time_to_epoch(hms: str, *, service_day_epoch: int) -> int:
-    """Rechnet eine GTFS-Zeit ``"HH:MM:SS"`` gegen einen Betriebstag in Epoch um.
+    """Converts a GTFS time ``"HH:MM:SS"`` against a service day into epoch.
 
-    GTFS-Zeiten sind relativ zum Betriebstag und können >24:00:00 sein (z.B.
-    ``25:30:00`` = 01:30 des Folgetags). ``service_day_epoch`` (Mitternacht des
-    Betriebstags als Unix-Epoch) wird injiziert (keine Systemuhr im Kern):
+    GTFS times are relative to the service day and can be >24:00:00 (e.g.
+    ``25:30:00`` = 01:30 of the following day). ``service_day_epoch`` (midnight of
+    the service day as Unix epoch) is injected (no system clock in core):
     ``service_day_epoch + HH*3600 + MM*60 + SS``.
     """
     h, m, s = (int(part) for part in hms.split(":"))

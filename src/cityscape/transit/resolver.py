@@ -1,24 +1,24 @@
-"""On-demand Auflösungsindex trip_id/route_id/stop gegen statisches GTFS.
+"""On-demand resolution index trip_id/route_id/stop against static GTFS.
 
-Löst Live-RT-Bezüge (trip_id, route_id, Halte) gegen das statische DELFI-GTFS
-auf. Grundlage ist das memory-konstante Zip-Entry-Streaming aus
+Resolves live RT references (trip_id, route_id, stops) against static DELFI GTFS.
+Built on memory-constant zip entry streaming from
 :func:`cityscape.ingest.gtfs.stream_entry` (RESEARCH Pattern 3, T-06-03/T-19-MEM):
 
-- ``trips.txt`` ist klein -> vollständige ``{trip_id: route_id}``-Map im Speicher.
-- ``stop_times.txt`` ist mehrere GB entpackt -> NIE komplett laden. Wir streamen
-  zeilenweise und übernehmen NUR die Zeilen der angefragten ``trip_id``
-  (Memory-Pitfall 2 aus RESEARCH; weder Voll-Lesen noch Voll-Entpacken des Zip).
+- ``trips.txt`` is small -> complete ``{trip_id: route_id}`` map in memory.
+- ``stop_times.txt`` is several GB unpacked -> NEVER load completely. We stream
+  line by line and accept ONLY rows for the requested ``trip_id``
+  (Memory Pitfall 2 from RESEARCH; neither full read nor full unpack of the ZIP).
 
-Index-Strategie (RESEARCH Open Question 2, Claude's Discretion):
-- (a) MVP, hier umgesetzt: pro angefragter ``trip_id`` streamend filtern. Reine
-  Funktion ohne Cache/Redis; das Caching pro trip_id (lange TTL, da Statik sich
-  nur beim monatlichen Refresh ändert) erfolgt im Aufrufer (Plan 19-04).
-- (b) dokumentierte Folge-Option: Vorab-Index nur für die 28 Register-Städte beim
-  Statik-Refresh (stop_times EINMAL streamen, je trip_id der Register-Städte über
-  ``ingest.delfi.city_for_stop`` einen kompakten Index je Stadt ablegen ->
-  Request-Lookup O(1) ohne GB-Scan). Wird bei Bedarf in einem Refresh-Job ergänzt.
+Index strategy (RESEARCH Open Question 2, Claude's Discretion):
+- (a) MVP, implemented here: stream and filter per requested ``trip_id``. Pure
+  function without cache/Redis; caching per trip_id (long TTL since static data
+  only changes upon monthly refresh) occurs in caller (Plan 19-04).
+- (b) Documented follow-up option: pre-built index only for the 28 register cities during
+  static refresh (stream stop_times ONCE, store a compact index per city for each
+  trip_id of the register cities via ``ingest.delfi.city_for_stop`` ->
+  request lookup O(1) without GB scan). Added as needed in a refresh job.
 
-KEIN Netz, kein Redis-Zugriff in diesen reinen Funktionen.
+NO network, no Redis access in these pure functions.
 """
 
 from __future__ import annotations
@@ -31,12 +31,12 @@ from cityscape.transit.interpolation import gtfs_time_to_epoch
 
 
 def build_trip_route_index(zip_path: str | Path) -> dict[str, str]:
-    """Baut aus ``trips.txt`` eine ``{trip_id: route_id}``-Map.
+    """Builds a ``{trip_id: route_id}`` map from ``trips.txt``.
 
-    ``trips.txt`` ist klein genug für eine vollständige In-Memory-Map. Streamt
-    den Entry zeilenweise (kein Voll-Lesen, kein Voll-Entpacken) und ist
-    idempotent: ein zweiter Lauf liefert dasselbe Ergebnis (overwrite-Snapshot,
-    kein Drift).
+    ``trips.txt`` is small enough for a complete in-memory map. Streams
+    the entry line by line (no full read, no full unpack) and is
+    idempotent: a second run yields the same result (overwrite snapshot,
+    no drift).
     """
     return {
         row["trip_id"]: row["route_id"] for row in stream_entry(zip_path, "trips.txt")
@@ -44,16 +44,16 @@ def build_trip_route_index(zip_path: str | Path) -> dict[str, str]:
 
 
 def stop_times_for_trip(zip_path: str | Path, trip_id: str) -> list[dict]:
-    """Liefert die nach ``stop_sequence`` sortierten Halte EINER ``trip_id``.
+    """Returns stops of ONE ``trip_id`` sorted by ``stop_sequence``.
 
-    Streamt ``stop_times.txt`` (mehrere GB) zeilenweise und übernimmt NUR die
-    Zeilen der gesuchten ``trip_id``. KOMMENTAR-Pflicht (T-06-03/T-19-MEM):
-    ``stop_times.txt`` wird NIE komplett geladen, nur streamend gefiltert.
+    Streams ``stop_times.txt`` (several GB) line by line and accepts ONLY
+    rows of the requested ``trip_id``. COMMENT requirement (T-06-03/T-19-MEM):
+    ``stop_times.txt`` is NEVER loaded completely, only streamed and filtered.
 
-    Unbekannte ``trip_id`` -> leere Liste.
+    Unknown ``trip_id`` -> empty list.
     """
     out: list[dict] = []
-    # stop_times.txt (mehrere GB) NIE komplett laden: nur streamend filtern.
+    # NEVER load stop_times.txt (several GB) completely: only stream and filter.
     for row in stream_entry(zip_path, "stop_times.txt"):
         if row.get("trip_id") != trip_id:
             continue
@@ -69,11 +69,11 @@ def stop_times_for_trip(zip_path: str | Path, trip_id: str) -> list[dict]:
 
 
 def _stops_geo_index(zip_path: str | Path) -> dict[str, dict[str, float]]:
-    """Baut aus ``stops.txt`` eine ``{stop_id: {lat, lon}}``-Map.
+    """Builds a ``{stop_id: {lat, lon}}`` map from ``stops.txt``.
 
-    ``stops.txt`` ist klein genug für eine vollständige In-Memory-Map (anders als
-    ``stop_times.txt``). Streamt zeilenweise (kein Voll-Lesen). Zeilen ohne
-    parsebare Koordinaten werden übersprungen (ehrlich, kein Fehler).
+    ``stops.txt`` is small enough for a complete in-memory map (unlike
+    ``stop_times.txt``). Streams line by line (no full read). Rows without
+    parseable coordinates are skipped (honestly, no error).
     """
     out: dict[str, dict[str, float]] = {}
     for row in stream_entry(zip_path, "stops.txt"):
@@ -90,15 +90,15 @@ def _stops_geo_index(zip_path: str | Path) -> dict[str, dict[str, float]]:
 def stops_with_geo_for_trip(
     zip_path: str | Path, trip_id: str, *, service_day_epoch: int
 ) -> list[dict]:
-    """Liefert die Halte einer Fahrt angereichert um Geo + ``scheduled_epoch``.
+    """Returns trip stops enriched with geo + ``scheduled_epoch``.
 
-    Verbindet :func:`stop_times_for_trip` (sortierte Halte mit Soll-Zeiten) mit der
-    ``stops.txt``-Geo-Map und rechnet die GTFS-Soll-Zeit (``arrival_time``, sonst
-    ``departure_time``, "HH:MM:SS", >24h möglich) gegen den injizierten
-    ``service_day_epoch`` in einen ``scheduled_epoch`` um (reine Funktion, keine
-    Systemuhr). Halte ohne Geo ODER ohne parsebare Soll-Zeit werden übersprungen,
-    damit :func:`cityscape.transit.interpolation.estimate_position` nur
-    vollständige Halte sieht. Unbekannte ``trip_id`` -> leere Liste.
+    Combines :func:`stop_times_for_trip` (sorted stops with scheduled times) with the
+    ``stops.txt`` geo map and converts the GTFS scheduled time (``arrival_time``, otherwise
+    ``departure_time``, "HH:MM:SS", >24h possible) against the injected
+    ``service_day_epoch`` into a ``scheduled_epoch`` (pure function, no
+    system clock). Stops without geo OR without parseable scheduled time are skipped
+    so that :func:`cityscape.transit.interpolation.estimate_position` only
+    sees complete stops. Unknown ``trip_id`` -> empty list.
     """
     stops = stop_times_for_trip(zip_path, trip_id)
     if not stops:
@@ -128,12 +128,12 @@ def stops_with_geo_for_trip(
 
 
 def slug_for_trip(zip_path: str | Path, trip_id: str) -> str | None:
-    """Ordnet eine ``trip_id`` über ihren ersten Halt einer Register-Stadt zu.
+    """Maps a ``trip_id`` to a register city via its first stop.
 
-    Hilfsfunktion für den optionalen Vorab-Index je Stadt (RESEARCH Pattern 3b):
-    nutzt :func:`cityscape.ingest.delfi.city_for_stop` auf der ersten stop_id der
-    Fahrt (KEIN neuer Geo-Code). Liefert den Register-Slug oder ``None`` (Fahrt
-    außerhalb der 28 Register-Städte bzw. unbekannte trip_id).
+    Helper function for the optional pre-built index per city (RESEARCH Pattern 3b):
+    uses :func:`cityscape.ingest.delfi.city_for_stop` on the trip's first stop_id
+    (NO new geo code). Returns register slug or ``None`` (trip
+    outside the 28 register cities or unknown trip_id).
     """
     stops = stop_times_for_trip(zip_path, trip_id)
     if not stops:

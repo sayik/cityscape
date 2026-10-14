@@ -1,28 +1,28 @@
-"""Statik-GTFS-Refresh-Batch (TRANSIT-RT-08, RESEARCH Pattern 8).
+"""Static GTFS refresh batch (TRANSIT-RT-08, RESEARCH Pattern 8).
 
-Lädt das aktuelle statische DELFI/gtfs.de-GTFS herunter und ersetzt
-``data/delfi/*.zip`` idempotent (OVERWRITE wie ``ingest/delfi.py``: GTFS ist ein
-Voll-Snapshot, kein Event-Strom). Hintergrund: der gtfs.de-Basic-Statik-Feed ist
-nur 7 Tage gültig (RESEARCH Open Question 3); ohne regelmäßigen Refresh driften
-die ``trip_id`` zwischen RT-Feed und veralteter Statik auseinander
-(RESEARCH Pitfall 4) und die Auflösung schlägt fehl.
+Downloads the current static DELFI/gtfs.de GTFS and replaces
+``data/delfi/*.zip`` idempotently (OVERWRITE like ``ingest/delfi.py``: GTFS is a
+full snapshot, not an event stream). Background: the gtfs.de Basic static feed is
+valid for only 7 days (RESEARCH Open Question 3); without regular refresh, the
+``trip_id`` values between the RT feed and outdated static data drift apart
+(RESEARCH Pitfall 4) and resolution fails.
 
-Kadenz-Empfehlung: WÖCHENTLICH (an die 7-Tage-Basic-Gültigkeit gekoppelt), nicht
-monatlich. Der Batch läuft ausschließlich manuell bzw. per Timer
-(``python -m cityscape.transit.refresh <ziel.zip>``), NIE im Request-Pfad oder im
-Lifespan. Die OS-Registrierung des Timers (OPS-05-Muster, systemd) erfolgt
-außerhalb dieser Phase.
+Cadence recommendation: WEEKLY (tied to the 7-day Basic validity), not
+monthly. The batch runs exclusively manually or via timer
+(``python -m cityscape.transit.refresh <target.zip>``), NEVER in the request path or
+lifespan. OS registration of the timer (OPS-05 pattern, systemd) takes place
+outside this phase.
 
-Sicherheit:
+Security:
 
-- T-19-DLSSRF: die Download-URL (``GTFS_DE_STATIC_URL``) ist HARTKODIERT (gtfs.de-
-  Statik-Host), wird NIE aus Config/User-Input/Funktionsargument zusammengesetzt;
-  ``follow_redirects=False`` ist Pool-Default (``infra/http.py``).
-- T-19-DLZIP: der Refresh entpackt nichts, nur Download + atomarer Rename. Die ZIP
-  wird erst beim Resolver gestreamt (``transit/resolver.py``, stop_times nie
-  vollständig im Speicher).
-- Size-Cap (Memory-DoS): ein absurd großer Body wird abgelehnt, bevor er auf die
-  Disk geschrieben wird (analog ``adapters/gtfs_rt._MAX_FEED_BYTES``).
+- T-19-DLSSRF: the download URL (``GTFS_DE_STATIC_URL``) is HARDCODED (gtfs.de
+  static host), NEVER assembled from config/user-input/function argument;
+  ``follow_redirects=False`` is pool default (``infra/http.py``).
+- T-19-DLZIP: the refresh unzips nothing, only download + atomic rename. The ZIP
+  is only streamed in the resolver (``transit/resolver.py``, stop_times never
+  completely in memory).
+- Size-Cap (Memory-DoS): an absurdly large body is rejected before being written
+  to disk (analogous to ``adapters/gtfs_rt._MAX_FEED_BYTES``).
 """
 
 from __future__ import annotations
@@ -36,28 +36,28 @@ from pathlib import Path
 from cityscape.config import Settings
 from cityscape.infra.http import close_http_client, create_http_client
 
-# gtfs.de-Statik-Download HARTKODIERT (T-19-DLSSRF, wie der RT-Feed-Host in
-# adapters/gtfs_rt._GTFS_DE_FEED_URL): der Host wird NIE aus Config/User-Input/
-# Argument zusammengesetzt.
-# [OWNER-VERIFIZIEREN] Der reale gtfs.de-Statik-Download-Pfad ist im RESEARCH nicht
-# verbatim verifiziert (nur der RT-Feed realtime-free.pb). Diese URL ist der
-# bekannte gtfs.de-Statik-Bundle-Pfad und VOR dem echten Timer-Lauf gegen den
-# Owner/das gtfs.de-Downloadportal zu bestätigen; bleibt der Pfad falsch, schlägt
-# der Download (raise_for_status) hart fehl, statt still eine falsche ZIP zu setzen.
+# gtfs.de static download HARDCODED (T-19-DLSSRF, like the RT feed host in
+# adapters/gtfs_rt._GTFS_DE_FEED_URL): the host is NEVER assembled from config/user-input/
+# argument.
+# [OWNER-VERIFY] The real gtfs.de static download path is not verified verbatim
+# in RESEARCH (only the RT feed realtime-free.pb). This URL is the
+# known gtfs.de static bundle path and should be confirmed with the owner /
+# gtfs.de download portal BEFORE the real timer run; if the path is wrong,
+# the download fails hard (raise_for_status) instead of silently setting a wrong ZIP.
 GTFS_DE_STATIC_URL = "https://download.gtfs.de/germany/free/latest.zip"
 
-# Size-Cap (Memory-DoS): die statische Voll-ZIP ist mehrere hundert MB; 1 GiB lässt
-# Puffer für Wachstum, lehnt aber einen absurd grossen/manipulierten Body ab.
+# Size-Cap (Memory-DoS): the static full ZIP is several hundred MB; 1 GiB leaves
+# buffer for growth, but rejects an absurdly large/tampered body.
 _MAX_DOWNLOAD_BYTES = 1024 * 1024 * 1024  # 1 GiB
 
 
 def _write_atomic(body: bytes, dest_path: str) -> None:
-    """Schreibt ``body`` atomar nach ``dest_path`` (temp-Datei + ``os.replace``).
+    """Writes ``body`` atomically to ``dest_path`` (temp file + ``os.replace``).
 
-    Rein synchroner Disk-I/O-Schritt (im async-Pfad via ``asyncio.to_thread``
-    aufgerufen, damit der Event-Loop nicht blockiert, ruff ASYNC240). temp-Datei
-    IM Zielverzeichnis, damit der Rename atomar auf demselben Dateisystem liegt
-    (cross-device-Rename wäre nicht atomar). OVERWRITE: idempotent.
+    Pure synchronous disk I/O step (called in async path via ``asyncio.to_thread``
+    so that the event loop does not block, ruff ASYNC240). Temp file
+    IN the destination directory so the rename is atomic on the same filesystem
+    (cross-device rename would not be atomic). OVERWRITE: idempotent.
     """
     dest = Path(dest_path).resolve()
     dest_dir = dest.parent
@@ -67,23 +67,23 @@ def _write_atomic(body: bytes, dest_path: str) -> None:
     try:
         with os.fdopen(fd, "wb") as fh:
             fh.write(body)
-        os.replace(tmp_path, dest)  # atomarer OVERWRITE
+        os.replace(tmp_path, dest)  # atomic OVERWRITE
     except BaseException:
-        # bei jedem Fehler den temp-Rest entfernen (kein Müll im Zielverzeichnis)
+        # on any error remove the temp remnant (no garbage in destination directory)
         tmp_path.unlink(missing_ok=True)
         raise
 
 
 async def refresh_static_gtfs(http, *, url: str, dest_path: str) -> None:
-    """Laedt die Statik-GTFS-ZIP und ersetzt ``dest_path`` atomar (idempotent).
+    """Downloads the static GTFS ZIP and replaces ``dest_path`` atomically (idempotent).
 
-    Schreibt zunächst in eine temp-Datei IM Zielverzeichnis und benennt sie dann
-    via ``os.replace`` atomar auf ``dest_path`` um (kein Teil-Schreib-Risiko, kein
-    Reader sieht je eine halbe ZIP). OVERWRITE: ein zweiter Lauf überschreibt die
-    bestehende ZIP (GTFS ist ein Voll-Snapshot, idempotent wie ``ingest/delfi``).
-    Der Refresh entpackt nichts (T-19-DLZIP). Die ``url`` MUSS der hartkodierte
-    ``GTFS_DE_STATIC_URL`` sein (T-19-DLSSRF); der Parameter existiert nur für den
-    Test, der Aufrufer reicht die Modul-Konstante durch.
+    First writes to a temp file IN the destination directory and then renames it
+    atomically to ``dest_path`` via ``os.replace`` (no partial write risk, no
+    reader ever sees half a ZIP). OVERWRITE: a second run overwrites the
+    existing ZIP (GTFS is a full snapshot, idempotent like ``ingest/delfi``).
+    The refresh unzips nothing (T-19-DLZIP). The ``url`` MUST be the hardcoded
+    ``GTFS_DE_STATIC_URL`` (T-19-DLSSRF); the parameter exists only for
+    testing, the caller passes through the module constant.
     """
     resp = await http.get(url)
     resp.raise_for_status()
@@ -94,20 +94,20 @@ async def refresh_static_gtfs(http, *, url: str, dest_path: str) -> None:
             f"({_MAX_DOWNLOAD_BYTES})"
         )
 
-    # Disk-I/O in einen Thread auslagern (Event-Loop bleibt frei, ruff ASYNC240).
+    # Offload disk I/O to a thread (event loop remains unblocked, ruff ASYNC240).
     await asyncio.to_thread(_write_atomic, body, dest_path)
 
 
 def main(argv: list[str] | None = None) -> None:
-    """CLI-Entrypoint: ``python -m cityscape.transit.refresh <ziel.zip>``.
+    """CLI entrypoint: ``python -m cityscape.transit.refresh <target.zip>``.
 
-    Ziel-Pfad aus ``argv[1]`` ODER ``Settings().gtfs_rt_static_path``; ist
-    keiner gesetzt -> Hinweis auf stderr + ``sys.exit(2)`` (analog
-    ``ingest/delfi.main``). Das DELFI-Zip (``delfi_gtfs_path``, Tier A) ist
-    bewusst KEIN Fallback: dieser Refresh holt die gtfs.de-Statik (Tier B,
-    numerische Feed-IDs) und darf den Tier-A-Lizenzraum nicht überschreiben.
-    Sonst Download über einen eigenen kurzlebigen, gepoolten httpx-Client (im
-    ``finally`` geschlossen) und Erfolg auf stdout. Läuft NIE im Request-Pfad.
+    Target path from ``argv[1]`` OR ``Settings().gtfs_rt_static_path``; if
+    neither is set -> notice to stderr + ``sys.exit(2)`` (analogous to
+    ``ingest/delfi.main``). The DELFI ZIP (``delfi_gtfs_path``, Tier A) is
+    intentionally NOT a fallback: this refresh fetches the gtfs.de static data (Tier B,
+    numeric feed IDs) and must not overwrite the Tier A license space.
+    Otherwise downloads via dedicated short-lived, pooled httpx client (closed
+    in ``finally``) and outputs success to stdout. NEVER runs in request path.
     """
     import asyncio
 

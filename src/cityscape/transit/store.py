@@ -1,37 +1,37 @@
-"""Redis-Store für kompakte, indizierte GTFS-RT-Updates (Phase 19, Plan 04).
+"""Redis store for compact, indexed GTFS-RT updates (Phase 19, Plan 04).
 
-Schreibt NUR die kompakten, vom Adapter geparsten Trip-Update-dicts in Redis,
-NIE den rohen 68-MB-Feed (Anti-Pattern, RESEARCH Pitfall 1: ein roher Feed-Body
-in Redis sprengt den Speicher der 4-GB-Box und macht jeden Lese-Pfad teuer). Der
-Hintergrund-Poller (``transit/poller.py``) parst den Feed EINMAL je Kadenz und
-ruft ``store_updates_indexed``; der Request-Pfad (``api/v1/live.py``) liest dann
-NUR über die Lese-Helfer (kein Parse im Request, T-19-REQPARSE).
+Writes ONLY the compact trip update dicts parsed by the adapter to Redis,
+NEVER the raw 68 MB feed (anti-pattern, RESEARCH Pitfall 1: a raw feed body
+in Redis exhausts the 4 GB box memory and makes every read path expensive). The
+background poller (``transit/poller.py``) parses the feed ONCE per cadence and
+calls ``store_updates_indexed``; the request path (``api/v1/live.py``) then reads
+ONLY via the read helpers (no parse in the request, T-19-REQPARSE).
 
-Key-Layout (versioniert mit ``v1``-Präfix, analog ``infra/cache.build_cache_key``,
-T-19-CACHEPOISON: trip_id/stop_id/route_id sind vom Aufrufer validiert, nie ein
-roher User-String):
-- ``transit_rt:v1:{trip_id}``        -> orjson-serialisiertes Update-dict (SET ex)
-- ``transit_rt:idx:stop:{stop_id}``  -> Set der trip_ids, die diesen Halt bedienen
-- ``transit_rt:idx:route:{route_id}``-> Set der trip_ids dieser Linie
+Key layout (versioned with ``v1`` prefix, analogous to ``infra/cache.build_cache_key``,
+T-19-CACHEPOISON: trip_id/stop_id/route_id are validated by the caller, never a
+raw user string):
+- ``transit_rt:v1:{trip_id}``        -> orjson-serialized update dict (SET ex)
+- ``transit_rt:idx:stop:{stop_id}``  -> set of trip_ids serving this stop
+- ``transit_rt:idx:route:{route_id}``-> set of trip_ids for this line
 
-Alle Keys tragen eine TTL: ein neuer Poller-Lauf überschreibt frische Daten, und
-fällt der Poller aus, verfallen veraltete Updates automatisch (nur aktuellster
-Stand, CONTEXT LOCKED). KEIN Archiv-Write (Tier B, T-19-ARCHIVE): reine
-Live-Daten werden NIE in das Tier-A-Archiv geschrieben.
+All keys carry a TTL: a new poller run overwrites fresh data, and
+if the poller fails, outdated updates expire automatically (only most recent
+state, CONTEXT LOCKED). NO archive write (Tier B, T-19-ARCHIVE): pure
+live data is NEVER written to the Tier A archive.
 """
 
 from __future__ import annotations
 
 import orjson
 
-# Versionierte Key-Präfixe (RESEARCH Architektur-Diagramm). Ein Schema-Wechsel
-# kann v1 -> v2 ziehen, ohne Fremd-Keys flushen zu müssen.
+# Versioned key prefixes (RESEARCH architecture diagram). A schema change
+# can move v1 -> v2 without needing to flush unrelated keys.
 _TRIP_PREFIX = "transit_rt:v1:"
 _STOP_IDX_PREFIX = "transit_rt:idx:stop:"
 _ROUTE_IDX_PREFIX = "transit_rt:idx:route:"
-# Provenance des aktuell in Redis liegenden RT-Stands (DATA-34/Mobilithek-Switch):
-# welcher Feed hat die letzten Updates geliefert ("mobilithek_delfi" Primär ODER
-# "gtfs_de" Backup-Fallback). Der Read-Pfad wählt daraus die korrekte Attribution.
+# Provenance of the RT state currently in Redis (DATA-34/Mobilithek switch):
+# which feed delivered the latest updates ("mobilithek_delfi" primary OR
+# "gtfs_de" backup fallback). The read path selects the correct attribution from this.
 _SOURCE_KEY = "transit_rt:source"
 
 
@@ -50,23 +50,23 @@ def _route_idx_key(route_id: str) -> str:
 async def store_updates_indexed(
     redis, updates, *, ttl: int = 90, trip_route_index: dict | None = None
 ) -> None:
-    """Schreibt kompakte Trip-Updates indiziert in Redis (NIE den rohen Feed).
+    """Writes compact trip updates indexed into Redis (NEVER the raw feed).
 
-    Je Update: ``transit_rt:v1:{trip_id}`` als orjson-Wert (SET mit ex=ttl) plus
-    die Sekundär-Indizes ``idx:stop:{stop_id}`` (je Halt) und
-    ``idx:route:{route_id}`` (falls route_id vorhanden) als Set der betroffenen
-    trip_ids, ebenfalls mit TTL (via expire). NUR kompakte dicts; der rohe
-    Feed-Body wird hier bewusst nie gespeichert (Anti-Pattern).
+    Per update: ``transit_rt:v1:{trip_id}`` as orjson value (SET with ex=ttl) plus
+    the secondary indices ``idx:stop:{stop_id}`` (per stop) and
+    ``idx:route:{route_id}`` (if route_id present) as set of affected
+    trip_ids, also with TTL (via expire). ONLY compact dicts; the raw
+    feed body is intentionally never stored here (anti-pattern).
 
-    Audit-Fix K7 (2026-06-29): Im echten gtfs.de-Feed ist ``trip.route_id``
-    durchgehend leer, sodass der ``idx:route:``-Index nie befüllt wurde und
-    ``live_transit_route_status`` IMMER ``no_data`` lieferte. Mit
-    ``trip_route_index`` (``{trip_id: route_id}`` aus der statischen GTFS, vom
-    Poller via ``resolver.build_trip_route_index`` gebaut) wird eine fehlende
-    route_id über die ``trip_id`` aufgelöst, BEVOR indiziert wird. Die
-    aufgelöste route_id wird auch ins gespeicherte Update geschrieben, damit der
-    Read-Pfad sie sieht. Ist der Index leer/die trip_id unbekannt, bleibt es
-    ehrlich ohne Index (no_data für diesen Trip), aber ohne Crash.
+    Audit Fix K7 (2026-06-29): In the real gtfs.de feed, ``trip.route_id``
+    is consistently empty, meaning the ``idx:route:`` index was never populated and
+    ``live_transit_route_status`` ALWAYS returned ``no_data``. With
+    ``trip_route_index`` (``{trip_id: route_id}`` from static GTFS, built by the
+    poller via ``resolver.build_trip_route_index``), a missing
+    route_id is resolved via ``trip_id`` BEFORE indexing. The
+    resolved route_id is also written into the stored update so the
+    read path sees it. If the index is empty or the trip_id unknown, it
+    honestly remains without index (no_data for this trip), but without crashing.
     """
     for update in updates:
         trip_id = update.get("trip_id")
@@ -74,14 +74,14 @@ async def store_updates_indexed(
             continue
 
         route_id = update.get("route_id")
-        # Audit-Fix K7: leere route_id aus der statischen GTFS auflösen.
+        # Audit Fix K7: resolve empty route_id from static GTFS.
         if not route_id and trip_route_index:
             resolved = trip_route_index.get(trip_id)
             if resolved:
                 route_id = resolved
                 update["route_id"] = resolved
 
-        # Kompaktes dict orjson-serialisiert (NIE der rohe Feed-Body).
+        # Compact dict orjson-serialized (NEVER the raw feed body).
         await redis.set(_trip_key(trip_id), orjson.dumps(update), ex=ttl)
 
         if route_id:
@@ -99,12 +99,12 @@ async def store_updates_indexed(
 
 
 async def store_rt_source(redis, source: str, *, ttl: int = 90) -> None:
-    """Merkt die Quelle des aktuellen RT-Stands (Provenance für die Attribution)."""
+    """Records the source of current RT state (provenance for attribution)."""
     await redis.set(_SOURCE_KEY, source, ex=ttl)
 
 
 async def read_rt_source(redis) -> str | None:
-    """Liest die Provenance des aktuellen RT-Stands (oder ``None`` bei Miss)."""
+    """Reads the provenance of current RT state (or ``None`` on miss)."""
     raw = await redis.get(_SOURCE_KEY)
     if raw is None:
         return None
@@ -112,7 +112,7 @@ async def read_rt_source(redis) -> str | None:
 
 
 async def get_trip_update(redis, trip_id: str) -> dict | None:
-    """Liest das kompakte Update einer ``trip_id`` (oder ``None`` bei Miss)."""
+    """Reads the compact update of a ``trip_id`` (or ``None`` on miss)."""
     raw = await redis.get(_trip_key(trip_id))
     if raw is None:
         return None
@@ -120,12 +120,12 @@ async def get_trip_update(redis, trip_id: str) -> dict | None:
 
 
 async def trips_for_stop(redis, stop_id: str) -> list[str]:
-    """Liefert die trip_ids, die einen Halt bedienen (oder leere Liste)."""
+    """Returns trip_ids serving a stop (or empty list)."""
     members = await redis.smembers(_stop_idx_key(stop_id))
     return list(members)
 
 
 async def trips_for_route(redis, route_id: str) -> list[str]:
-    """Liefert die trip_ids einer Linie (oder leere Liste)."""
+    """Returns trip_ids of a line (or empty list)."""
     members = await redis.smembers(_route_idx_key(route_id))
     return list(members)

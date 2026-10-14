@@ -1,16 +1,16 @@
-"""Hintergrund-Poller für GTFS-RT (Phase 19, Plan 04, RESEARCH Pattern 1).
+"""Background poller for GTFS-RT (Phase 19, Plan 04, RESEARCH Pattern 1).
 
-Der Poller parst den GTFS-RT-Feed (~68 MB) EINMAL je Kadenz und legt die kompakten,
-indizierten Updates in Redis ab (``transit/store.store_updates_indexed``). Der
-Request-Pfad liest danach NUR aus Redis (kein 68-MB-Parse pro Request, kein
-CPU-Spike/OOM auf der 4-GB-Box, T-19-REQPARSE). Der Poller läuft als langlebiger
-asyncio-Task im Lifespan (``main.py`` ``_schedule``/``bg_tasks``), NIE im
-Request-Pfad.
+The poller parses the GTFS-RT feed (~68 MB) ONCE per cadence and stores the compact,
+indexed updates into Redis (``transit/store.store_updates_indexed``). The
+request path subsequently reads ONLY from Redis (no 68 MB parse per request, no
+CPU spike/OOM on the 4 GB box, T-19-REQPARSE). The poller runs as a long-lived
+asyncio task in the lifespan (``main.py`` ``_schedule``/``bg_tasks``), NEVER in the
+request path.
 
-Robustheit: eine Iteration, die mit einer Exception scheitert (Upstream down,
-Parse-Fehler), darf den Task NICHT crashen - sie wird geloggt (``log.warning``),
-und nach ``interval_s`` Sekunden läuft die nächste Iteration. ``CancelledError``
-(Shutdown im Lifespan-finally) wird durchgereicht (sauberes Beenden).
+Robustness: an iteration that fails with an exception (upstream down,
+parse error) must NOT crash the task - it is logged (``log.warning``),
+and the next iteration runs after ``interval_s`` seconds. ``CancelledError``
+(shutdown in lifespan-finally) is passed through (clean exit).
 """
 
 from __future__ import annotations
@@ -27,13 +27,13 @@ log = structlog.get_logger()
 
 
 def _gtfs_static_path_for(settings, used_source: str | None) -> str | None:
-    """Waehlt den statischen GTFS-Pfad passend zur RT-Provenance (Audit-Fix K7).
+    """Selects the static GTFS path matching the RT provenance (Audit Fix K7).
 
-    Analog ``api/v1/live.live_transit_trip``: liefert aktuell der DELFI-Feed
-    (``mobilithek_delfi``), werden die DELFI-IDs gegen ``delfi_gtfs_path``
-    aufgelöst (Fallback ``gtfs_rt_static_path``); beim gtfs.de-Backup umgekehrt.
-    So passen ID-Namensraum (trip_id) und Statik zusammen. ``None`` -> keine
-    Statik konfiguriert (route_id bleibt ehrlich unaufgelöst, kein Crash).
+    Analogous to ``api/v1/live.live_transit_trip``: if the DELFI feed currently
+    delivers (``mobilithek_delfi``), the DELFI IDs are resolved against
+    ``delfi_gtfs_path`` (fallback ``gtfs_rt_static_path``); for the gtfs.de backup, vice versa.
+    This aligns the ID namespace (trip_id) and static data. ``None`` -> no
+    static data configured (route_id remains honestly unresolved, no crash).
     """
     if used_source == "mobilithek_delfi":
         return getattr(settings, "delfi_gtfs_path", None) or getattr(
@@ -45,12 +45,12 @@ def _gtfs_static_path_for(settings, used_source: str | None) -> str | None:
 
 
 def _load_trip_route_index(cache: dict, path: str | None) -> dict | None:
-    """Baut/cached die ``{trip_id: route_id}``-Map je Statik-Pfad (Audit-Fix K7).
+    """Builds/caches the ``{trip_id: route_id}`` map per static path (Audit Fix K7).
 
-    ``trips.txt`` ist klein; der Index wird je Pfad EINMAL gebaut und im
-    ``cache`` (pro Poller-Lauf gehalten) wiederverwendet, statt ihn jeden Tick
-    (45s) neu von Platte zu streamen. Ein Lese-/Parse-Fehler ODER ein fehlender
-    Pfad -> ``None`` (ehrlich, kein Crash; route_id bleibt unaufgelöst).
+    ``trips.txt`` is small; the index is built ONCE per path and reused in
+    ``cache`` (held per poller run), rather than streaming it afresh from disk
+    every tick (45s). A read/parse error OR a missing
+    path -> ``None`` (honestly, no crash; route_id remains unresolved).
     """
     if not path:
         return None
@@ -68,13 +68,13 @@ def _load_trip_route_index(cache: dict, path: str | None) -> dict | None:
 async def _fetch_with_fallback(
     app, *, source: str, abo_id: str | None
 ) -> tuple[bytes | None, str | None]:
-    """Holt den RT-Feed und fällt von ``mobilithek_delfi`` auf ``gtfs_de`` zurück.
+    """Fetches the RT feed and falls back from ``mobilithek_delfi`` to ``gtfs_de``.
 
-    Primärquelle ``mobilithek_delfi`` (DELFI über Mobilithek-mTLS): liefert sie
-    keine Bytes (no_data/disabled) ODER scheitert sie (Upstream-Fehler), wird der
-    keylose gtfs.de-Backup-Feed gezogen ("schalte um und gtfs als backup"). Gibt
-    ``(body, used_source)`` zurück, damit der Read-Pfad die korrekte Attribution
-    (DELFI e.V. vs gtfs.de) wählen kann. Andere Quellen (gtfs_de) ohne Fallback.
+    Primary source ``mobilithek_delfi`` (DELFI via Mobilithek mTLS): if it
+    returns no bytes (no_data/disabled) OR fails (upstream error), the
+    keyless gtfs.de backup feed is pulled ("switch and gtfs as backup"). Returns
+    ``(body, used_source)`` so the read path can choose the correct attribution
+    (DELFI e.V. vs gtfs.de). Other sources (gtfs_de) have no fallback.
     """
     http = app.state.http
     mtls = getattr(app.state, "mobilithek_http", None)
@@ -83,12 +83,12 @@ async def _fetch_with_fallback(
             feed = await fetch_gtfs_rt_feed(
                 http, mtls, source="mobilithek_delfi", abo_id=abo_id
             )
-        except Exception as exc:  # noqa: BLE001 - DELFI-Fehler -> Backup, kein Crash
+        except Exception as exc:  # noqa: BLE001 - DELFI error -> backup, no crash
             log.warning("gtfs_rt_delfi_failed_fallback_gtfs_de", error=str(exc))
             feed = None
         if feed is not None:
             return feed, "mobilithek_delfi"
-        # Backup: keyloser gtfs.de-Feed (raise_for_status fängt die Außenschleife).
+        # Backup: keyless gtfs.de feed (raise_for_status caught by outer loop).
         feed = await fetch_gtfs_rt_feed(http, None, source="gtfs_de", abo_id=None)
         return feed, "gtfs_de"
 
@@ -104,30 +104,30 @@ async def gtfs_rt_poller(
     abo_id: str | None,
     settings=None,
 ) -> None:
-    """Endlosschleife: holt+parst den Feed je Kadenz und legt ihn nach Redis.
+    """Infinite loop: fetches + parses the feed each cadence and writes to Redis.
 
-    Je Iteration: ``fetch_gtfs_rt_feed`` -> bei ``None`` (no_data/disabled) wird
-    der Store übersprungen; bei ``bytes`` -> ``parse_trip_updates`` ->
-    ``store_updates_indexed``. Eine Exception in einer Iteration crasht den Task
-    NICHT (``log.warning``, weiter nach ``asyncio.sleep(interval_s)``).
-    ``CancelledError`` (Shutdown) wird durchgereicht.
+    Each iteration: ``fetch_gtfs_rt_feed`` -> on ``None`` (no_data/disabled),
+    the store is skipped; on ``bytes`` -> ``parse_trip_updates`` ->
+    ``store_updates_indexed``. An exception in an iteration does NOT crash the task
+    (``log.warning``, continues after ``asyncio.sleep(interval_s)``).
+    ``CancelledError`` (shutdown) is passed through.
 
-    Audit-Fix K7: aus ``settings`` wird je Provenance der statische GTFS-Pfad
-    bestimmt und daraus ein ``{trip_id: route_id}``-Index gebaut (pro Pfad
-    gecached), damit ``store_updates_indexed`` leere route_ids auflösen kann.
+    Audit Fix K7: from ``settings``, the static GTFS path is determined per
+    provenance and a ``{trip_id: route_id}`` index is constructed from it (cached
+    per path), so that ``store_updates_indexed`` can resolve empty route_ids.
     """
-    # Audit-Fix K7: Index-Cache je Statik-Pfad (überlebt die Ticks; trips.txt
-    # ändert sich nur beim wöchentlichen Statik-Refresh).
+    # Audit Fix K7: index cache per static path (survives ticks; trips.txt
+    # changes only during the weekly static refresh).
     index_cache: dict = {}
     while True:
         try:
-            # Multi-Worker-Guard: bei uvicorn --workers läuft dieser Poller in
-            # JEDEM Worker. Ein per-Tick Redis-Lock (SET NX EX) stellt sicher, dass
-            # pro Intervall nur EIN Worker tatsächlich pollt (kein redundanter
-            # Upstream-Fetch). TTL < interval -> läuft vor dem nächsten Tick ab;
-            # fällt der Halter aus, übernimmt nächsten Tick ein anderer Worker
-            # (selbstheilend, kein dauerhafter Leader). Redis-Fehler -> poll
-            # trotzdem (Graceful Degradation, nie Crash).
+            # Multi-worker guard: with uvicorn --workers this poller runs in
+            # EVERY worker. A per-tick Redis lock (SET NX EX) ensures that
+            # only ONE worker actually polls per interval (no redundant
+            # upstream fetch). TTL < interval -> expires before the next tick;
+            # if the holder fails, another worker takes over next tick
+            # (self-healing, no permanent leader). Redis error -> poll
+            # anyway (graceful degradation, never crash).
             should_poll = True
             try:
                 should_poll = bool(
@@ -146,8 +146,8 @@ async def gtfs_rt_poller(
                 )
                 if feed is not None:
                     updates = parse_trip_updates(feed)
-                    # Audit-Fix K7: route_id aus der zur Provenance passenden
-                    # statischen GTFS auflösen (Index pro Pfad gecached).
+                    # Audit Fix K7: resolve route_id from the static GTFS
+                    # matching the provenance (index cached per path).
                     trip_route_index = None
                     if settings is not None:
                         static_path = _gtfs_static_path_for(settings, used_source)
@@ -160,30 +160,30 @@ async def gtfs_rt_poller(
                         ttl=90,
                         trip_route_index=trip_route_index,
                     )
-                    # Provenance des Stands für die Read-Pfad-Attribution.
+                    # Provenance of the snapshot for read-path attribution.
                     await store_rt_source(
                         app.state.redis, used_source or source, ttl=90
                     )
         except asyncio.CancelledError:
-            # Shutdown (Lifespan-finally cancelt die bg_tasks): sauber beenden.
+            # Shutdown (lifespan-finally cancels bg_tasks): exit cleanly.
             raise
-        except Exception as exc:  # noqa: BLE001 - eine Iteration darf nie crashen
+        except Exception as exc:  # noqa: BLE001 - an iteration must never crash
             log.warning("gtfs_rt_poll_failed", error=str(exc), source=source)
         await asyncio.sleep(interval_s)
 
 
 def maybe_start_gtfs_rt_poller(app, settings, schedule) -> None:
-    """Startet den Poller-Task NUR bei aktivem Toggle + auflösbarer Quelle.
+    """Starts the poller task ONLY when the toggle is active + source resolvable.
 
-    Auflösbarkeit (RESEARCH Pattern 7):
-    - ``enable_gtfs_rt`` muss True sein,
-    - Quelle ``gtfs_de``: immer auflösbar (keylos),
-    - Quelle ``mobilithek_delfi``: nur mit mTLS-Client (``app.state.mobilithek_http``)
-      UND ``transit_rt_delfi_abo_id`` (Settings-Allowlist, SSRF) - sonst kein Task
-      (Graceful Degradation = disabled).
+    Resolvability (RESEARCH Pattern 7):
+    - ``enable_gtfs_rt`` must be True,
+    - Source ``gtfs_de``: always resolvable (keyless),
+    - Source ``mobilithek_delfi``: only with mTLS client (``app.state.mobilithek_http``)
+      AND ``transit_rt_delfi_abo_id`` (settings allowlist, SSRF) - otherwise no task
+      (graceful degradation = disabled).
 
-    Bei deaktiviertem Toggle (Default) wird KEIN Task erzeugt (bg_tasks
-    unverändert), der bestehende App-Start bleibt unverändert.
+    When the toggle is disabled (default), NO task is created (bg_tasks
+    unchanged), existing app startup remains unaffected.
     """
     if not getattr(settings, "enable_gtfs_rt", False):
         return
@@ -194,7 +194,7 @@ def maybe_start_gtfs_rt_poller(app, settings, schedule) -> None:
     if source == "mobilithek_delfi":
         mobilithek_http = getattr(app.state, "mobilithek_http", None)
         if mobilithek_http is None or not abo_id:
-            # Quelle nicht aufloesbar: ohne Cert/Abo kein Pull -> kein Task.
+            # Source not resolvable: without cert/subscription no pull -> no task.
             return
 
     schedule(
