@@ -1,20 +1,19 @@
-"""Strukturierte Output-Typen der cityscape-MCP-Tools (DX-05).
+"""Structured output types for the cityscape MCP tools (DX-05).
 
-Jedes Tool gibt zur Laufzeit weiterhin den rohen API-Envelope als ``dict`` 1:1
-durch (Blocker-4-Aufrufvertrag, keine Mapping-Logik hier). Die Tool-Funktionen
-sind aber mit ``-> ToolEnvelope`` annotiert, damit FastMCP daraus ein
-``outputSchema`` generiert: Verzeichnis-Scanner (Smithery/Glama) bewerten Tools
-mit Output-Schema deutlich höher, und MCP-Clients erhalten zusätzlich
-strukturierten Inhalt (``structuredContent``) statt nur Text.
+Each tool continues to pass through the raw API envelope as a ``dict`` 1:1 at
+runtime (Blocker 4 call contract, no mapping logic here). The tool functions
+are annotated with ``-> ToolEnvelope`` so that FastMCP generates an
+``outputSchema`` from them: directory scanners (Smithery/Glama) rate tools
+with an output schema significantly higher, and MCP clients additionally receive
+structured content (``structuredContent``) instead of plain text only.
 
-WICHTIG (Robustheit vor Striktheit): ``data`` ist ``Any`` (die Nutzlast variiert
-je Ressource über ~47 Payload-Typen) und ``meta`` erlaubt Zusatzfelder
-(``extra="allow"``), damit FastMCPs Rückgabe-Validierung (``model_validate`` in
-func_metadata.convert_result) NIE an einer realen Antwort scheitert. ``source_
-status`` ist bewusst ``str`` statt ``Literal``: die API kennt heute ok/disabled/
-no_data/not_covered/error/not_found/not_ingested, und ein neuer Wert darf einen
-Live-Tool-Call nicht mit einem Validierungsfehler brechen (Graceful Degradation,
-nie 5xx).
+IMPORTANT (robustness over strictness): ``data`` is ``Any`` (the payload varies
+per resource across ~47 payload types) and ``meta`` allows extra fields
+(``extra="allow"``) so that FastMCP's return-value validation (``model_validate`` in
+func_metadata.convert_result) NEVER fails on a real response. ``source_status``
+is deliberately ``str`` rather than ``Literal``: the API currently knows ok/disabled/
+no_data/not_covered/error/not_found/not_ingested, and a new value must not break a
+live tool call with a validation error (graceful degradation, never 5xx).
 """
 
 from __future__ import annotations
@@ -23,10 +22,10 @@ from typing import Any, TypedDict
 
 
 class ToolMeta(TypedDict, total=False):
-    """Envelope-Metadaten: Quelle, Status, Cache, Lizenz und Attribution.
+    """Envelope metadata: source, status, cache, license, and attribution.
 
-    Zusatzfelder (z.B. ``covered_cities``, ``radius_m`` bei partieller Abdeckung)
-    bleiben dank ``extra="allow"`` erhalten.
+    Extra fields (e.g. ``covered_cities``, ``radius_m`` on partial coverage)
+    are preserved thanks to ``extra="allow"``.
     """
 
     __pydantic_config__ = {"extra": "allow"}  # type: ignore[misc]
@@ -40,10 +39,10 @@ class ToolMeta(TypedDict, total=False):
 
 
 class ToolEnvelope(TypedDict):
-    """Kanonischer cityscape-Antwort-Envelope: normalisierte ``data`` + ``meta``.
+    """Canonical cityscape response envelope: normalized ``data`` + ``meta``.
 
-    ``data`` ist ``null`` wenn die Quelle keine Daten lieferte (siehe
-    ``meta.source_status``); sonst ein Objekt oder eine Liste je Ressource.
+    ``data`` is ``null`` if the source returned no data (see
+    ``meta.source_status``); otherwise an object or a list per resource.
     """
 
     data: Any

@@ -1,21 +1,21 @@
-"""Rate-Limiting für den öffentlichen MCP-Endpunkt (Security-Härtung 2026-06-21).
+"""Rate limiting for the public MCP endpoint (security hardening 2026-06-21).
 
-Der Remote-MCP-Server (``mcp.cityscape.dev/mcp``, streamable-http) lief bis hier
-OHNE eigene Drosselung: Caddy reicht 1:1 durch und die slowapi-Limiter der
-FastAPI-App greifen nur auf dem API-Pfad, nicht auf dem MCP-Service. Ein Client
-konnte den MCP-Endpunkt also ungebremst hämmern (jeder Tool-Call löst zudem
-einen API-Aufruf aus, der die Upstream-Last vervielfacht).
+The remote MCP server (``mcp.cityscape.dev/mcp``, streamable-http) ran until now
+WITHOUT its own throttling: Caddy proxies 1:1 and the slowapi limiters of the
+FastAPI app only apply to the API path, not to the MCP service. A client
+could therefore hammer the MCP endpoint unchecked (each tool call also triggers
+an API call, multiplying the upstream load).
 
-Diese Middleware drosselt pro echter Client-IP mit einem Moving-Window
-(``limits``-Library, bereits via slowapi vorhanden). Der Storage liegt in REDIS
-(``CITYSCAPE_REDIS_URL``), damit das Budget über mehrere MCP-Replicas GETEILT
-ist (horizontale Skalierung): liefen N Replicas mit je eigenem In-Memory-Fenster,
-ver-N-fachte sich das effektive Limit. Ist Redis nicht erreichbar (z.B. lokaler
-stdio-Betrieb ohne Redis), fällt die Middleware auf einen prozesslokalen
-In-Memory-Speicher zurück, damit der Server trotzdem startet (Schutzlimit, kein
-harter State). Die echte Client-IP kommt wie in der API zuerst aus
-``CF-Connecting-IP`` (von Cloudflare verbindlich gesetzt), dann aus
-``X-Forwarded-For[0]``, sonst dem Peer.
+This middleware throttles per real client IP using a moving window
+(``limits`` library, already available via slowapi). The storage is in REDIS
+(``CITYSCAPE_REDIS_URL``) so that the budget is SHARED across multiple MCP replicas
+(horizontal scaling): if N replicas were running, each with its own in-memory window,
+the effective limit would be multiplied by N. If Redis is unreachable (e.g. local
+stdio operation without Redis), the middleware falls back to a process-local
+in-memory storage so the server still starts (protective limit, not
+hard state). The real client IP comes, as in the API, first from
+``CF-Connecting-IP`` (authoritatively set by Cloudflare), then from
+``X-Forwarded-For[0]``, otherwise from the peer.
 """
 
 from __future__ import annotations
@@ -30,39 +30,39 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-# stdlib-only Modul, zieht bewusst NICHT den FastAPI-/Settings-Pfad (s.o. die
-# Begründung bei client_ip; gleiche Entkopplung für den Allowlist-Check).
+# stdlib-only module, intentionally does NOT pull the FastAPI/Settings path (see
+# rationale above for client_ip; same decoupling for the allowlist check).
 from cityscape.infra.allowlist import ENV_VAR, ip_allowlisted, parse_allowlist
 
 logger = logging.getLogger(__name__)
 
-# Default-Budget pro IP für den MCP-Endpunkt. Per CITYSCAPE_MCP_RATE_LIMIT
-# (limits-Format "<zahl>/<einheit>") überschreibbar. Historie Owner 2026-06-24:
-# zuerst 60 -> 240/min (Discovery-Flows get_city_overview -> mehrere gezielte
-# Tool-Calls), dann 240 -> 480/min (mehr Luft für KI-Agenten-Sitzungen). Zielgröße
-# bis Jahresende klar < 1000 Nutzer, Box mit großer Reserve -> unkritisch. Der
-# Overview-Snapshot bündelt seine Highlights serverseitig in EINEN API-Aufruf (kein
-# Vervielfachen der Upstream-Last) und ist parallel + zeitgedeckelt. Bleibt bewusst
-# ein Schutz-Limit gegen Hammering.
+# Default budget per IP for the MCP endpoint. Overridable via CITYSCAPE_MCP_RATE_LIMIT
+# (limits format "<number>/<unit>"). Owner history 2026-06-24:
+# first 60 -> 240/min (discovery flows get_city_overview -> multiple targeted
+# tool calls), then 240 -> 480/min (more headroom for AI agent sessions). Target size
+# by year-end clearly < 1000 users, server box with ample reserve -> uncritical. The
+# overview snapshot bundles its highlights server-side into ONE API call (no
+# multiplying of upstream load) and is parallelized + time-capped. Deliberately
+# remains a protective limit against hammering.
 _DEFAULT_LIMIT = "480/minute"
 
 
 def _make_storage():
-    """Redis-Storage für geteilte Budgets über Replicas; Fallback In-Memory.
+    """Redis storage for shared budgets across replicas; fallback in-memory.
 
-    storage_from_string verbindet lazy; ``check()`` pingt Redis und gibt bei
-    nicht erreichbarem Server False zurück (wirft nicht). Nur dann der
-    prozesslokale Fallback, damit ein versehentlich fehlendes Redis den
-    lokalen/stdio-MCP-Server nicht am Start hindert.
+    storage_from_string connects lazily; ``check()`` pings Redis and returns
+    False if the server is unreachable (does not raise). Only then does the
+    process-local fallback engage, so that an inadvertently missing Redis does
+    not prevent the local/stdio MCP server from starting.
     """
     url = os.environ.get("CITYSCAPE_REDIS_URL", "redis://redis:6379/0")
     try:
-        # Kurze Connect-/Read-Timeouts: ohne sie kann check() bei nicht
-        # aufloesbarem/erreichbarem Host (lokaler stdio-Betrieb ohne Redis, oder
-        # ISP-DNS-Hijack des Compose-Servicenamens "redis") bis zum OS-Default
-        # blockieren -> der MCP-Server-Start hängt. So fällt check() schnell auf
-        # False und wir nehmen den In-Memory-Fallback. memory:// ignoriert die
-        # kwargs (kein Netz), daher unschädlich.
+        # Short connect/read timeouts: without them, check() can block up to the
+        # OS default if the host cannot be resolved/reached (local stdio operation
+        # without Redis, or ISP DNS hijack of the compose service name "redis")
+        # -> the MCP server start hangs. This way, check() quickly yields False
+        # and we take the in-memory fallback. memory:// ignores kwargs (no network),
+        # hence harmless.
         storage = storage_from_string(
             url, socket_connect_timeout=0.5, socket_timeout=0.5
         )
@@ -73,7 +73,7 @@ def _make_storage():
             "(pro-Prozess, nicht replica-geteilt).",
             url,
         )
-    except Exception as exc:  # noqa: BLE001 - jeder Storage-Init-Fehler -> Fallback
+    except Exception as exc:  # noqa: BLE001 - any storage init error -> fallback
         logger.warning(
             "MCP rate-limit: Redis-Storage-Init fehlgeschlagen (%s), "
             "In-Memory-Fallback: %s",
@@ -84,12 +84,12 @@ def _make_storage():
 
 
 def client_ip(request: Request) -> str:
-    """Echte Client-IP: CF-Connecting-IP -> X-Forwarded-For[0] -> Peer.
+    """Real client IP: CF-Connecting-IP -> X-Forwarded-For[0] -> Peer.
 
-    Identische Quelle wie ``cityscape.api.v1.ratelimit.real_client_ip``; hier
-    eigenständig gehalten, damit der MCP-Server nicht den FastAPI-/slowapi-Pfad
-    importieren muss. Vertrauenswürdig nur unter der CF-only-Firewall (sonst
-    könnte ein Angreifer CF-Connecting-IP fälschen, s. DEPLOYMENT.md Abschnitt 2).
+    Identical source to ``cityscape.api.v1.ratelimit.real_client_ip``; kept
+    independent here so that the MCP server does not have to import the
+    FastAPI/slowapi path. Trustworthy only under the CF-only firewall (otherwise
+    an attacker could spoof CF-Connecting-IP, see DEPLOYMENT.md section 2).
     """
     cf = request.headers.get("cf-connecting-ip")
     if cf:
@@ -101,12 +101,12 @@ def client_ip(request: Request) -> str:
 
 
 class MCPRateLimitMiddleware:
-    """ASGI-Middleware: drosselt HTTP-Requests pro Client-IP (Moving Window).
+    """ASGI middleware: throttles HTTP requests per client IP (moving window).
 
-    Reines ASGI (nicht BaseHTTPMiddleware), damit der SSE-/Streaming-Pfad des
-    MCP-Transports unangetastet durchlaeuft: bei erlaubten Requests wird ``app``
-    direkt mit den Originalen ``receive``/``send`` aufgerufen, der Stream also nie
-    gepuffert. Nur der Ablehnungsfall (429) erzeugt eine eigene Antwort.
+    Pure ASGI (not BaseHTTPMiddleware), so that the SSE/streaming path of the
+    MCP transport passes through untouched: for allowed requests, ``app`` is
+    called directly with the original ``receive``/``send``, so the stream is never
+    buffered. Only the rejection case (429) generates a dedicated response.
     """
 
     def __init__(self, app: ASGIApp, limit: str | None = None) -> None:
@@ -115,29 +115,29 @@ class MCPRateLimitMiddleware:
         self._item = parse(
             limit or os.environ.get("CITYSCAPE_MCP_RATE_LIMIT", _DEFAULT_LIMIT)
         )
-        # Fenster in Sekunden für den Retry-After-Header.
+        # Window in seconds for the Retry-After header.
         self._retry_after = str(self._item.get_expiry())
-        # Allowlist-Bypass (Connectors-Directory-Härtung 2026-07-02): CIDRs aus
-        # der Env umgehen das per-IP-Limit komplett (Anthropic-Egress bündelt
-        # viele Endnutzer hinter wenigen IPs). Einmal beim Start geparst, wie
-        # das Limit selbst; fail-safe leer = niemand (infra/allowlist.py).
+        # Allowlist bypass (connectors directory hardening 2026-07-02): CIDRs from
+        # the env bypass the per-IP limit completely (Anthropic egress bundles
+        # many end users behind few IPs). Parsed once at startup, like the
+        # limit itself; fail-safe empty = nobody (infra/allowlist.py).
         self._allowlist = parse_allowlist(os.environ.get(ENV_VAR))
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
-            # Lifespan/WebSocket unberührt durchreichen.
+            # Pass through lifespan/WebSocket untouched.
             await self.app(scope, receive, send)
             return
 
         request = Request(scope, receive=receive)
         ip = client_ip(request)
-        # Allowlistete Infrastruktur-IPs (z.B. Anthropic-Egress) werden nicht
-        # gezählt und nie gedrosselt; alle anderen laufen unverändert ins Limit.
+        # Allowlisted infrastructure IPs (e.g. Anthropic egress) are not
+        # counted and never throttled; all others run into the limit unchanged.
         if ip_allowlisted(ip, self._allowlist):
             await self.app(scope, receive, send)
             return
-        # hit() zählt den Request und gibt False zurück, sobald das Budget
-        # erschöpft ist. Namespace "mcp" trennt die Buckets sauber.
+        # hit() counts the request and returns False once the budget is
+        # exhausted. Namespace "mcp" neatly separates the buckets.
         if not self._limiter.hit(self._item, "mcp", ip):
             response = JSONResponse(
                 {

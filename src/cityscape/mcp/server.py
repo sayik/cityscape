@@ -1,21 +1,21 @@
-"""FastMCP-Server-Instanz des cityscape-MCP-Servers (DX-05).
+"""FastMCP server instance of the cityscape MCP server (DX-05).
 
-Der Server registriert wenige namentliche Tools (Einstieg/Meta/parametrisiert)
-plus ein generisches ``get_city_resource`` fuer alle uebrigen Datenarten
-(Konsolidierung 2026-07-02, s. Kommentar am Registrierungsblock). Die eigentliche
-Tool-Logik liegt als freistehende async-Funktion in ``cityscape.mcp.tools``
-(Blocker-4-Aufrufvertrag): ``@mcp.tool()`` wird hier nur dünn über diese
-Funktionen gelegt, sodass sie direkt als Coroutine testbar bleiben und der
-Decorator dennoch das FunctionTool für die FastMCP-API registriert.
+The server registers a few named tools (entry/meta/parameterized)
+plus a generic ``get_city_resource`` for all remaining data types
+(consolidation 2026-07-02, see comment on registration block). The actual
+tool logic resides as standalone async functions in ``cityscape.mcp.tools``
+(Blocker-4 calling convention): ``@mcp.tool()`` is only thinly layered over
+these functions here, so that they remain directly testable as coroutines and
+the decorator still registers the FunctionTool for the FastMCP API.
 
-Es gibt KEINE Mapping-/Lizenz-Logik im Server: jedes Tool ruft über
-``cityscape.mcp.client.get_resource`` die Live-FastAPI und gibt deren
-normalisiertes JSON 1:1 zurück (D-07/D-08). Zwei Transporte:
-- stdio (Default): lokaler Subprozess für Claude Desktop/Code.
-- streamable-http: öffentlicher Remote-Endpunkt (z.B. mcp.cityscape.dev),
-  hinter Caddy/Cloudflare, keylos wie die API. Per CITYSCAPE_MCP_TRANSPORT
-  =streamable-http aktiviert; CITYSCAPE_MCP_API_BASE zeigt dann auf die
-  öffentliche API (https://cityscape.dev/api/v1).
+There is NO mapping/licensing logic in the server: each tool calls the
+live FastAPI via ``cityscape.mcp.client.get_resource`` and returns its
+normalized JSON 1:1 (D-07/D-08). Two transports:
+- stdio (default): local subprocess for Claude Desktop/Code.
+- streamable-http: public remote endpoint (e.g. mcp.cityscape.dev),
+  behind Caddy/Cloudflare, keyless like the API. Activated via
+  CITYSCAPE_MCP_TRANSPORT=streamable-http; CITYSCAPE_MCP_API_BASE then points to the
+  public API (https://cityscape.dev/api/v1).
 """
 
 from __future__ import annotations
@@ -30,16 +30,16 @@ from cityscape.mcp import tools
 from cityscape.mcp.client import ALLOWED_RESOURCES, UpstreamError
 from cityscape.registry.catalog import CITY_DATA_CATALOG
 
-# Server-Instructions: werden beim initialize an den Client/Agenten ausgeliefert und
-# sind der größte Discovery-Hebel. Sie sagen dem Agenten, WO er anfangen soll
-# (get_city_overview) und wie alles zusammenhängt, damit er schnell und ohne Raten
-# an alle Daten kommt (Owner-Wunsch 2026-06-24). Die Tool-Zahl wird UNTEN, nachdem
-# alle _register()-Aufrufe gelaufen sind, live nachgetragen (siehe
-# ``mcp._mcp_server.instructions = ...`` nach der letzten _register()-Zeile):
-# eine hartkodierte Zahl hier wuerde bei jedem neuen Tool sofort veralten (genau das
-# Problem, das ein veralteter Memory-Eintrag "44 Tools" ausgeloest hat, Owner-Fund
-# 2026-07-01) und ist fuer JEDEN Client bei JEDEM Connect sichtbar, nicht nur fuer
-# Claude Code mit eigenem Memory.
+# Server Instructions: delivered to the client/agent during initialize and
+# are the largest discovery leverage. They tell the agent WHERE to start
+# (get_city_overview) and how everything connects, so it can access all data
+# quickly and without guessing (Owner request 2026-06-24). The tool count is
+# filled in live BELOW after all _register() calls have run (see
+# ``mcp._mcp_server.instructions = ...`` after the last _register() line):
+# a hardcoded count here would immediately become outdated with every new tool
+# (exactly the issue triggered by an outdated memory entry "44 Tools", Owner discovery
+# 2026-07-01) and is visible to EVERY client on EVERY connect, not just to
+# Claude Code with its own memory.
 _INSTRUCTIONS = (
     "cityscape is a keyless, read-only open-data API for 84 German cities with "
     "~60 data types, exposed as {tool_count} MCP tools (count is live from this "
@@ -62,20 +62,20 @@ _INSTRUCTIONS = (
 
 mcp = FastMCP("cityscape", instructions=_INSTRUCTIONS)
 
-# Haelt die Namen aller ueber _register() registrierten Tools fest, damit die
-# Instructions unten die ECHTE, aktuelle Zahl tragen koennen statt eine
-# haendisch gepflegte, die veraltet.
+# Records the names of all tools registered via _register(), so that the
+# instructions below can carry the REAL, up-to-date count instead of a
+# manually maintained one that becomes outdated.
 _registered_tool_names: list[str] = []
 
 
-# Verhaltens-Hinweise (MCP Tool Annotations): Jedes cityscape-Tool ist ein
-# read-only GET-Wrapper auf die Live-API: es schreibt keinen State, ist gefahrlos
-# wiederholbar (idempotent) und nicht destruktiv. Clients können Aufrufe so ohne
-# Rückfrage zulassen; Verzeichnis-Scanner (Glama/Smithery) bewerten die
-# Transparenz positiv. ``open_world`` unterscheidet ehrlich: Datentools ziehen
-# Live-Daten von externen Behörden-APIs (offene, veränderliche Domäne = True),
-# die Meta-Tools list_cities/sources liefern dagegen CITYSCAPEs eigene,
-# abgeschlossene Abdeckungsliste (geschlossene Domäne = False).
+# Behavioral hints (MCP Tool Annotations): Every cityscape tool is a
+# read-only GET wrapper on the live API: it writes no state, is safely
+# repeatable (idempotent), and non-destructive. Clients can thus allow calls
+# without prompting; directory scanners (Glama/Smithery) evaluate the
+# transparency positively. ``open_world`` honestly distinguishes: data tools
+# pull live data from external authority APIs (open, mutable domain = True),
+# whereas the meta tools list_cities/sources provide CITYSCAPE's own
+# closed coverage list (closed domain = False).
 def _annotations(*, open_world: bool) -> ToolAnnotations:
     return ToolAnnotations(
         readOnlyHint=True,
@@ -85,12 +85,12 @@ def _annotations(*, open_world: bool) -> ToolAnnotations:
     )
 
 
-# Menschenlesbare Anzeige-Titel je Tool. Der Anthropic Connectors Directory
-# verlangt fuer jedes Tool einen Titel; ausserdem lesen Clients/Verzeichnisse
-# diesen Titel in der Werkzeugauswahl. Der Funktionsname (snake_case) ist der
-# stabile technische Bezeichner, der Titel ist die Anzeige. Fehlt ein Eintrag,
-# faellt _title_for() auf eine automatische Title-Case-Ableitung zurueck, damit
-# neue Tools nie ganz ohne Titel bleiben (siehe test_mcp_tool_titles).
+# Human-readable display titles per tool. The Anthropic Connectors Directory
+# requires a title for every tool; clients/directories also display
+# this title in the tool picker. The function name (snake_case) is the
+# stable technical identifier, while the title is for display. If an entry is missing,
+# _title_for() falls back to an automatic title-case derivation so that
+# new tools are never left without a title (see test_mcp_tool_titles).
 _TOOL_TITLES: dict[str, str] = {
     "get_city": "City Base Data",
     "get_city_overview": "City Overview",
@@ -108,19 +108,19 @@ _TOOL_TITLES: dict[str, str] = {
 
 
 def _title_for(name: str) -> str:
-    """Anzeige-Titel eines Tools; Fallback = Title-Case aus dem Funktionsnamen."""
+    """Display title of a tool; fallback = title-case from function name."""
     return _TOOL_TITLES.get(name) or name.replace("_", " ").title()
 
 
-# Graceful-Degradation-Wrapper: ein transienter Upstream-/Quellen-Ausfall (5xx)
-# darf einen Tool-Call NICHT hart als Fehler abbrechen. Solche Faelle werden in
-# einen ehrlichen ``source_status="error"``-Envelope gewandelt (genau das
-# Envelope-Versprechen, das die uebrigen Tools bei 200 einhalten), damit ein
-# Reviewer/Client nie einen rohen Fehler sieht, wenn z.B. Overpass kurz weg ist.
-# 4xx (unbekannter Slug, fehlender Pflichtparameter) wird WEITER geworfen: der
-# Text traegt message + hint, damit sich das Modell selbst korrigieren kann.
+# Graceful degradation wrapper: a transient upstream/source failure (5xx)
+# must NOT abort a tool call hard with an error. Such cases are converted into
+# an honest ``source_status="error"`` envelope (exactly the envelope promise
+# that the other tools fulfill with 200), so that a reviewer/client never sees
+# a raw error if, for example, Overpass is temporarily unavailable.
+# 4xx (unknown slug, missing required parameter) is re-raised: the
+# text carries message + hint so that the model can correct itself.
 def _graceful(fn):
-    """Umhuellt eine Tool-Coroutine; 5xx-UpstreamError -> graceful Envelope."""
+    """Wraps a tool coroutine; 5xx UpstreamError -> graceful envelope."""
 
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
@@ -141,13 +141,13 @@ def _graceful(fn):
     return wrapper
 
 
-# Dünne Registrierung der freistehenden Tool-Funktionen (Blocker 4): der
-# Decorator wird programmatisch über jede Funktion gelegt. Die Funktion selbst
-# bleibt in cityscape.mcp.tools unverändert als Coroutine aufrufbar; FastMCP
-# generiert das Schema aus den Typannotationen und Docstrings (functools.wraps
-# im Wrapper erhält Signatur, Annotationen und Docstring, das Schema bleibt gleich).
+# Thin registration of standalone tool functions (Blocker 4): the
+# decorator is programmatically applied over each function. The function itself
+# remains callable as a coroutine in cityscape.mcp.tools unchanged; FastMCP
+# generates the schema from type annotations and docstrings (functools.wraps
+# in the wrapper preserves signature, annotations, and docstring; the schema remains identical).
 def _register(fn, *, open_world: bool = True) -> None:
-    """Registriert ein Tool mit Titel + read-only Annotations (siehe oben)."""
+    """Registers a tool with title + read-only annotations (see above)."""
     mcp.tool(
         title=_title_for(fn.__name__),
         annotations=_annotations(open_world=open_world),
@@ -155,68 +155,68 @@ def _register(fn, *, open_world: bool = True) -> None:
     _registered_tool_names.append(fn.__name__)
 
 
-# TOOL-KONSOLIDIERUNG 2026-07-02: frueher 1 Tool pro Datenart (71 Tools, ~30k
-# Tokens Tool-Liste, Cursor-80-Tool-Limit in Sichtweite). Jetzt: wenige
-# namentliche Tools (Einstieg/Meta/parametrisiert/populaer) + EIN generisches
-# get_city_resource fuer den gesamten Long-Tail. Die Datenarten-Discovery
-# uebernimmt get_city_overview + cityscape://catalog (je Datenart der
-# resource-Schluessel) + das resource-Enum im inputSchema des generischen Tools.
+# TOOL CONSOLIDATION 2026-07-02: previously 1 tool per data type (71 tools, ~30k
+# tokens tool list, Cursor 80-tool limit in sight). Now: a few
+# named tools (entry/meta/parameterized/popular) + ONE generic
+# get_city_resource for the entire long tail. Data type discovery
+# is handled by get_city_overview + cityscape://catalog (each data type's
+# resource key) + the resource enum in the generic tool's inputSchema.
 _register(tools.get_city)
-# Owner 2026-06-24: Ein-Aufruf-Überblick (Basis + Katalog aller Datenarten +
-# Live-Highlights). Discovery-Einstieg, damit Agenten die ganze Breite je Stadt
-# sehen (nicht nur Wetter). Zieht Live-Highlights -> open_world=True.
+# Owner 2026-06-24: single-call overview (base + catalog of all data types +
+# live highlights). Discovery entry point so agents see the full breadth per city
+# (not just weather). Pulls live highlights -> open_world=True.
 _register(tools.get_city_overview)
-# Generischer Long-Tail-Zugriff: JEDE Katalog-Datenart per resource-Schluessel
-# (Enum aus client.ALLOWED_RESOURCES ohne pois). Live-Quellen dahinter ->
+# Generic long-tail access: EVERY catalog data type via resource key
+# (enum from client.ALLOWED_RESOURCES without pois). Live sources behind it ->
 # open_world=True.
 _register(tools.get_city_resource)
-# Die zwei populaersten Datenarten behalten eigene Tools (Discoverability in
-# der Werkzeugauswahl); alles Weitere laeuft ueber get_city_resource.
+# The two most popular data types retain dedicated tools (discoverability in
+# the tool picker); everything else runs via get_city_resource.
 _register(tools.air_quality)
 _register(tools.weather)
-# Parametrisierte Faehigkeiten (echte Eigenlogik, kein reiner Slug-Wrapper):
+# Parameterized capabilities (actual custom logic, not a pure slug wrapper):
 _register(tools.pois)
-# DATA-36: Per-Bahnhof-Live-Boards (jede EVA, alle Gattungen inkl. Nahverkehr).
+# DATA-36: Per-station live boards (any EVA, all categories including regional transit).
 _register(tools.station_board_departures)
 _register(tools.station_board_arrivals)
-# DATA-26: Echtzeit-Abfahrten je Haltestelle (stop_id aus resource='transit').
+# DATA-26: Real-time departures per stop (stop_id from resource='transit').
 _register(tools.transit_departures)
-# Meta-Tools: beschreiben die eigene Abdeckung -> geschlossene Domäne
+# Meta tools: describe own coverage -> closed domain
 # (open_world=False).
 _register(tools.list_cities, open_world=False)
 _register(tools.sources, open_world=False)
-# API-05/D-06: Multi-City-Compare einer Ressource (weather/air) in einer Antwort.
+# API-05/D-06: Multi-city compare of a resource (weather/air) in a single response.
 _register(tools.compare)
 
-# Live-Tool-Zahl in die Instructions nachtragen: FastMCPs ``instructions`` ist
-# eine Property ohne Setter (nur ueber den Konstruktor gesetzt), daher ueber das
-# darunterliegende ``_mcp_server`` geschrieben. ``str.replace`` statt
-# ``str.format``, weil die Instructions selbst literale ``{data, meta}``-Klammern
-# als Envelope-Beispiel enthalten, die ``.format()`` als Platzhalter fehldeuten wuerde.
+# Update live tool count in instructions: FastMCP's ``instructions`` is
+# a property without a setter (only set via constructor), hence written via the
+# underlying ``_mcp_server``. ``str.replace`` instead of
+# ``str.format`` because the instructions themselves contain literal ``{data, meta}`` braces
+# as an envelope example, which ``.format()`` would misinterpret as placeholders.
 mcp._mcp_server.instructions = _INSTRUCTIONS.replace(
     "{tool_count}", str(len(_registered_tool_names))
 )
 
 
-# Schema-Diaet (Token-Footprint 2026-07-02): Die Tool-Liste kostete ~30k Tokens,
-# davon ~55% ein 71x BYTE-IDENTISCH wiederholtes outputSchema (ToolEnvelope) samt
-# deutschem ToolMeta-Docstring und 9 Pydantic-Auto-``title``-Feldern pro Tool.
-# Dieser Pass entfernt NACH der Registrierung in-place:
-# - alle Auto-``title`` aus input- UND outputSchema (der Property-Key sagt schon
-#   alles; der ANZEIGE-Titel des Tools ist ein eigenes MCPTool-Feld und bleibt,
-#   Anthropic-Directory-Anforderung unberuehrt),
-# - ``description`` NUR im outputSchema (Klassen-Docstrings von ToolEnvelope/
-#   ToolMeta; die Parameter-Descriptions im inputSchema sind wertvoll fuer die
-#   Tool-Auswahl und BLEIBEN, test_every_tool_has_output_schema_and_param_
-#   descriptions sichert das).
-# Gemessen: ~-27% der gesamten Tool-Listen-Tokens. Die Laufzeit-Validierung
-# (fn_metadata.output_model) haengt nicht am Schema-Dict und bleibt unberuehrt.
+# Schema diet (Token footprint 2026-07-02): The tool list cost ~30k tokens,
+# of which ~55% was a 71x BYTE-IDENTICAL repeated outputSchema (ToolEnvelope) including
+# German ToolMeta docstring and 9 Pydantic auto-``title`` fields per tool.
+# This pass removes in-place AFTER registration:
+# - all auto-``title`` from input AND outputSchema (the property key already says
+#   everything; the DISPLAY title of the tool is a separate MCPTool field and remains,
+#   Anthropic directory requirement unaffected),
+# - ``description`` ONLY in outputSchema (class docstrings of ToolEnvelope/
+#   ToolMeta; parameter descriptions in inputSchema are valuable for
+#   tool selection and REMAIN, test_every_tool_has_output_schema_and_param_
+#   descriptions ensures this).
+# Measured: ~-27% of total tool list tokens. Runtime validation
+# (fn_metadata.output_model) does not depend on the schema dict and remains unaffected.
 def _slim_schema(node: object, *, strip_descriptions: bool = False) -> None:
-    """Entfernt rekursiv Auto-``title`` (und optional ``description``) in-place.
+    """Recursively removes auto-``title`` (and optionally ``description``) in-place.
 
-    Rekursion NUR in Schema-Positionen (properties-WERTE, items, $defs, anyOf,
-    ...): ein Datenfeld, das selbst "title" heisst, bleibt als Property-Key
-    erhalten, nur das Schema-Schluesselwort wird entfernt.
+    Recursion ONLY in schema positions (properties VALUES, items, $defs, anyOf,
+    ...): a data field itself named "title" is preserved as a property key;
+    only the schema keyword is removed.
     """
     if not isinstance(node, dict):
         return
@@ -246,11 +246,11 @@ def _slim_schema(node: object, *, strip_descriptions: bool = False) -> None:
 
 
 def _slim_all_tool_schemas() -> None:
-    """Wendet die Schema-Diaet auf alle registrierten Tools an (einmal, in-place).
+    """Applies the schema diet to all registered tools (once, in-place).
 
-    ``tool.parameters`` (inputSchema) und ``fn_metadata.output_schema`` sind
-    plain dicts, die FastMCPs list_tools per Referenz ausliefert; das Slimming
-    hier wirkt damit fuer jeden Client und jede Listung.
+    ``tool.parameters`` (inputSchema) and ``fn_metadata.output_schema`` are
+    plain dicts that FastMCP's list_tools returns by reference; the slimming
+    here thus applies to every client and every listing.
     """
     for tool in mcp._tool_manager._tools.values():
         _slim_schema(tool.parameters)
@@ -262,14 +262,14 @@ _slim_all_tool_schemas()
 
 
 def _stamp_datatype_count() -> None:
-    """Ersetzt den ``~60``-Platzhalter der Docstrings durch die echte Zahl.
+    """Replaces the ``~60`` placeholder in docstrings with the actual number.
 
-    Die Tool-Beschreibungen sind statische Docstrings (tools.py) und wuerden
-    bei jeder neuen Datenart driften (2026-07-03: real 65 Datenarten, Text
-    sagte "~60"). Die Zahl kommt aus der einzigen Quelle der Wahrheit
-    (``ALLOWED_RESOURCES`` minus ``overview``, das ist die Meta-Ressource
-    selbst) und wird einmalig beim Import in die Beschreibungen gestempelt;
-    neue Datenarten brauchen keinen Text-Edit mehr.
+    The tool descriptions are static docstrings (tools.py) and would
+    drift with each new data type (2026-07-03: actually 65 data types, text
+    said "~60"). The number comes from the single source of truth
+    (``ALLOWED_RESOURCES`` minus ``overview``, which is the meta-resource
+    itself) and is stamped once into descriptions at import time;
+    new data types no longer require manual text edits.
     """
     count = len(ALLOWED_RESOURCES) - 1
     for tool in mcp._tool_manager._tools.values():
@@ -365,14 +365,14 @@ def commute_check(slug: str) -> str:
 
 
 def _mcp_uvicorn_kwargs(settings) -> dict:  # noqa: ANN001 - Settings-Duck-Typing
-    """Baut das uvicorn.run-kwargs-Dict der drei MCP-Backpressure-Deckel.
+    """Builds the uvicorn.run kwargs dict for the three MCP backpressure caps.
 
-    Reine Werte-Abbildung ohne Seiteneffekt (kein uvicorn-Import noetig), damit
-    der Kwargs-Bau ohne den blockierenden ``uvicorn.run`` unit-testbar bleibt.
-    ``limit_concurrency`` ist der eigentliche Ueberlast-Deckel: jenseits davon
-    liefert uvicorn 503, statt den Event-Loop unbegrenzt zu fluten;
-    ``timeout_keep_alive``/``backlog`` entsprechen den uvicorn-Eigen-Defaults
-    (nur explizit gesetzt und dadurch konfigurierbar).
+    Pure value mapping without side effects (no uvicorn import needed), so that
+    kwargs construction remains unit-testable without blocking ``uvicorn.run``.
+    ``limit_concurrency`` is the actual overload cap: beyond this, uvicorn
+    returns 503 instead of flooding the event loop indefinitely;
+    ``timeout_keep_alive``/``backlog`` match uvicorn's own defaults
+    (just explicitly set and therefore configurable).
     """
     return {
         "limit_concurrency": settings.mcp_limit_concurrency,
@@ -382,12 +382,12 @@ def _mcp_uvicorn_kwargs(settings) -> dict:  # noqa: ANN001 - Settings-Duck-Typin
 
 
 def run() -> None:
-    """Startet den Server im per Env gewählten Transport.
+    """Starts the server in the transport selected via environment variable.
 
-    stdio (Default): kein offener Port, lokaler Subprozess. streamable-http:
-    bindet einen HTTP-Port (CITYSCAPE_MCP_HOST/-PORT) für den öffentlichen
-    Remote-Endpunkt. Host-Default 127.0.0.1; der Container-Service setzt
-    CITYSCAPE_MCP_HOST=0.0.0.0, damit Caddy ihn über das Compose-Netz erreicht.
+    stdio (default): no open port, local subprocess. streamable-http:
+    binds an HTTP port (CITYSCAPE_MCP_HOST/-PORT) for the public
+    remote endpoint. Host default 127.0.0.1; the container service sets
+    CITYSCAPE_MCP_HOST=0.0.0.0 so Caddy reaches it over the compose network.
     """
     transport = os.environ.get("CITYSCAPE_MCP_TRANSPORT", "stdio")
     if transport == "streamable-http":
@@ -395,13 +395,13 @@ def run() -> None:
 
         mcp.settings.host = os.environ.get("CITYSCAPE_MCP_HOST", "127.0.0.1")
         mcp.settings.port = int(os.environ.get("CITYSCAPE_MCP_PORT", "8081"))
-        # Der MCP-Transport hat einen DNS-Rebinding-Schutz, der per Default nur
-        # localhost-Hosts/-Origins erlaubt (gedacht für lokal gebundene Server).
-        # Hinter Caddy/Cloudflare variieren Host/Origin; für eine öffentliche,
-        # keylose read-only API ist der Schutz nicht nötig und blockt sonst alle
-        # Calls (HTTP 421). Default daher aus; per
-        # CITYSCAPE_MCP_DNS_REBINDING_PROTECTION=1 mit expliziten Allowlists
-        # (CITYSCAPE_MCP_ALLOWED_HOSTS/-ORIGINS, kommagetrennt) wieder scharf.
+        # The MCP transport includes DNS rebinding protection, which by default
+        # only allows localhost hosts/origins (intended for locally bound servers).
+        # Behind Caddy/Cloudflare, host/origin vary; for a public, keyless
+        # read-only API, the protection is unnecessary and would block all
+        # calls (HTTP 421). Default is therefore off; re-enabled via
+        # CITYSCAPE_MCP_DNS_REBINDING_PROTECTION=1 with explicit allowlists
+        # (CITYSCAPE_MCP_ALLOWED_HOSTS/-ORIGINS, comma-separated).
         if os.environ.get("CITYSCAPE_MCP_DNS_REBINDING_PROTECTION") == "1":
             hosts = [
                 h.strip()
@@ -422,13 +422,13 @@ def run() -> None:
             mcp.settings.transport_security = TransportSecuritySettings(
                 enable_dns_rebinding_protection=False,
             )
-        # Eigener uvicorn-Start statt mcp.run(transport=...), damit wir die
-        # Streamable-HTTP-App mit der IP-Rate-Limit-Middleware umhüllen können
-        # (Security-Härtung 2026-06-21): der öffentliche MCP-Endpunkt hatte
-        # sonst KEINE Drosselung. mcp.run() würde intern denselben
-        # streamable_http_app() bauen und per uvicorn starten; wir reichen nur die
-        # Middleware dazwischen. Die App-eigene Lifespan (Session-Manager) bleibt
-        # erhalten, da uvicorn sie aus der ASGI-App ausführt.
+        # Custom uvicorn launch instead of mcp.run(transport=...), so that we can
+        # wrap the streamable-http app with the IP rate-limit middleware
+        # (security hardening 2026-06-21): the public MCP endpoint otherwise had
+        # NO throttling. mcp.run() would internally build the same
+        # streamable_http_app() and start it via uvicorn; we just insert the
+        # middleware in between. The app's own lifespan (session manager) is
+        # preserved since uvicorn runs it from the ASGI app.
         import uvicorn
 
         from cityscape.config import get_settings
@@ -436,10 +436,10 @@ def run() -> None:
 
         app = mcp.streamable_http_app()
         app.add_middleware(MCPRateLimitMiddleware)
-        # Backpressure-Deckel (quick-260704-ust) ueber die reine, unit-getestete
-        # _mcp_uvicorn_kwargs-Funktion: limit_concurrency bremst den bisher
-        # backpressure-losen oeffentlichen Endpunkt (uvicorn liefert bei Ueberlast
-        # 503 statt Event-Loop-Flut). host/port/log_level bleiben unveraendert aus
+        # Backpressure caps (quick-260704-ust) via the pure, unit-tested
+        # _mcp_uvicorn_kwargs function: limit_concurrency throttles the previously
+        # backpressure-free public endpoint (uvicorn returns 503 under overload
+        # instead of flooding the event loop). host/port/log_level remain unchanged from
         # mcp.settings.
         uvicorn.run(
             app,

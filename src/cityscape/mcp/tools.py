@@ -11,14 +11,14 @@ licensing logic here (that lives solely in the live API). The SSRF/injection
 gates (T-12-MCP-SSRF, T-12-MCP-INJECT) sit in ``client.get_resource`` and run
 before every request.
 
-TOOL SURFACE (Konsolidierung 2026-07-02): frueher trug jede Datenart ein
-eigenes Tool (71 Stueck, ~30k Tokens Tool-Liste, Cursor-80-Tool-Limit in
-Sichtweite). Jetzt gibt es wenige NAMENTLICHE Tools (Einstieg, Meta,
-parametrisierte Faehigkeiten, die zwei populaersten Datenarten) plus EIN
-generisches ``get_city_resource(slug, resource)`` fuer den gesamten Long-Tail.
-Die Discovery uebernimmt ``get_city_overview``/``cityscape://catalog``: beide
-nennen je Datenart den ``resource``-Schluessel, und das ``resource``-Enum im
-inputSchema listet alle gueltigen Werte maschinenlesbar.
+TOOL SURFACE (Consolidation 2026-07-02): previously each data type had its
+own tool (71 items, ~30k tokens tool list, Cursor 80-tool limit in
+sight). Now there are few NAMED tools (entry point, meta,
+parameterized capabilities, the two most popular data types) plus ONE
+generic ``get_city_resource(slug, resource)`` for the entire long tail.
+Discovery is handled by ``get_city_overview``/``cityscape://catalog``: both
+specify the ``resource`` key for each data type, and the ``resource`` enum in
+inputSchema lists all valid values in machine-readable form.
 
 SCHEMAS: parameters carry ``Annotated[str, Field(description=...)]`` so FastMCP
 emits a per-parameter ``description`` in the inputSchema, and every tool is
@@ -53,14 +53,14 @@ _Slug = Annotated[
     ),
 ]
 
-# Alle per get_city_resource abrufbaren Datenarten = die City-Allowlist OHNE
-# ``pois`` (braucht den Pflichtparameter ``type`` und hat deshalb ein eigenes
-# Tool). ``base``/``overview``/``weather``/``air-uba`` haben zwar ebenfalls
-# namentliche Tools, bleiben hier aber absichtlich drin: so gilt fuer JEDEN
-# Katalog-Schluessel ohne Ausnahme "get_city_resource(slug, <type>) liefert
-# ihn", und das Enum spiegelt den Katalog 1:1. Als Literal annotiert, damit
-# FastMCP ein ``enum`` im inputSchema emittiert (maschinenlesbare Discovery)
-# und Pydantic ungueltige Werte schon vor dem Request abweist.
+# All data types retrievable via get_city_resource = the city allowlist WITHOUT
+# ``pois`` (requires the mandatory parameter ``type`` and therefore has its own
+# tool). Although ``base``/``overview``/``weather``/``air-uba`` also have
+# named tools, they intentionally remain here: this ensures that for EVERY
+# catalog key without exception "get_city_resource(slug, <type>) delivers
+# it", and the enum mirrors the catalog 1:1. Annotated as Literal so that
+# FastMCP emits an ``enum`` in the inputSchema (machine-readable discovery)
+# and Pydantic rejects invalid values before the request is made.
 GENERIC_RESOURCES: tuple[str, ...] = tuple(sorted(client.ALLOWED_RESOURCES - {"pois"}))
 _ResourceKey = Annotated[
     Literal[GENERIC_RESOURCES],
@@ -223,8 +223,8 @@ async def transit_departures(
     Read-only.
     """
     if not stop_id:
-        # Ohne stop_id kann die Live-Quelle keine Abfahrten liefern. Statt eines
-        # harten Fehlers eine ehrliche, selbst-korrigierende Envelope zurueckgeben.
+        # Without stop_id, the live source cannot provide departures. Instead of a
+        # hard error, return an honest, self-correcting envelope.
         return {
             "data": None,
             "meta": {
@@ -247,8 +247,8 @@ async def list_cities() -> ToolEnvelope:
     Takes no arguments. Call this first to discover valid city slugs before
     invoking any city-scoped tool. Read-only.
     """
-    # limit explizit auf MAX_LIMIT: der API-Default (50) wuerde die Liste
-    # abschneiden und das Tool-Versprechen "list ALL" brechen.
+    # limit explicitly set to MAX_LIMIT: the API default (50) would truncate
+    # the list and break the tool promise "list ALL".
     return await client.get_collection("cities", {"limit": "200"})
 
 
@@ -258,8 +258,8 @@ async def sources() -> ToolEnvelope:
     Takes no arguments. Shows which upstream sources cityscape bundles and
     whether each is currently active. Read-only.
     """
-    # limit explizit auf MAX_LIMIT (API-Default 50 schnitt bei 76 Quellen ab:
-    # eround_charging & Co. fehlten im Tool UND in cityscape://sources).
+    # limit explicitly set to MAX_LIMIT (API default 50 truncated at 76 sources:
+    # eround_charging & Co. were missing in the tool AND in cityscape://sources).
     return await client.get_collection("sources", {"limit": "200"})
 
 
