@@ -1,28 +1,28 @@
-"""IP-Allowlist für Rate-Limit-Bypass (Security-/Betriebs-Härtung 2026-07-02).
+"""IP allowlist for rate limit bypass (security/operational hardening 2026-07-02).
 
-Hintergrund: Remote-MCP-Traffic aus dem Anthropic Connectors Directory kommt
-serverseitig über WENIGE Anthropic-Egress-IPs. Ein per-IP-/Subnetz-Limit würde
-dieses legitime Aggregat drosseln, obwohl dahinter viele verschiedene Endnutzer
-stehen. Dieses Modul stellt den gemeinsamen CIDR-Check für ALLE Limiter bereit
-(MCP-Middleware, AbuseGuard-Subnetz-Limit, slowapi-IP-Limit).
+Background: Remote MCP traffic from the Anthropic Connectors Directory arrives
+server-side via FEW Anthropic egress IPs. A per-IP / subnet limit would
+throttle this legitimate aggregate, even though many different end users are
+behind it. This module provides the shared CIDR check for ALL limiters
+(MCP middleware, AbuseGuard subnet limit, slowapi IP limit).
 
-Eigenschaften:
+Properties:
 
-- NUR Limit-Bypass, KEINE Authentifizierung/Autorisierung: eine allowlistete IP
-  bekommt keinerlei zusätzliche Rechte, sie wird lediglich nicht gedrosselt.
-- ENV-konfigurierbar ohne Code-Deploy: ``CITYSCAPE_RATELIMIT_ALLOWLIST`` als
-  kommagetrennte CIDR-Liste (v4/v6 gemischt; nackte IPs zählen als /32 bzw.
-  /128). Leer (Default) = Feature aus = bisheriges Verhalten.
-- FAIL-SAFE: leere oder unparsebare Konfiguration allowlistet NIEMANDEN.
-  Ungültige Einträge werden verworfen (Warnung geloggt), gültige Reste gelten
-  weiter; eine unparsebare Client-IP ist nie allowlistet.
-- Bewusst stdlib-only (``ipaddress``): der MCP-Service importiert dieses Modul,
-  ohne den FastAPI-/Settings-Pfad zu ziehen (gleiches Prinzip wie die
-  eigenständige ``client_ip``-Kopie in ``mcp/ratelimit.py``).
+- ONLY limit bypass, NO authentication/authorization: an allowlisted IP
+  receives no additional privileges whatsoever; it simply is not throttled.
+- ENV-configurable without code deployment: ``CITYSCAPE_RATELIMIT_ALLOWLIST`` as
+  a comma-separated CIDR list (mixed v4/v6; bare IPs count as /32 or
+  /128). Empty (default) = feature off = prior behavior.
+- FAIL-SAFE: empty or unparseable configuration allowlists NOBODY.
+  Invalid entries are discarded (warning logged), valid remainder continues
+  to apply; an unparseable client IP is never allowlisted.
+- Intentionally stdlib-only (``ipaddress``): the MCP service imports this module
+  without pulling the FastAPI/Settings path (same principle as the
+  independent ``client_ip`` copy in ``mcp/ratelimit.py``).
 
-Die Client-IP stammt bei allen Aufrufern aus CF-Connecting-IP/XFF[0] und ist
-nur unter der CF-only-Firewall vertrauenswürdig (s. ratelimit.real_client_ip);
-die Allowlist erbt diese Vertrauens-Vorbedingung.
+The client IP originates from CF-Connecting-IP/XFF[0] for all callers and is
+trustworthy only under the CF-only firewall (see ratelimit.real_client_ip);
+the allowlist inherits this trust prerequisite.
 """
 
 from __future__ import annotations
@@ -34,9 +34,9 @@ from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
-# Gemeinsamer Env-Name: identisch mit dem pydantic-Settings-Feld
-# ``ratelimit_allowlist`` (Prefix CITYSCAPE_), damit EINE Variable API- und
-# MCP-Container gleichermaßen konfiguriert.
+# Shared env name: identical to the pydantic Settings field
+# ``ratelimit_allowlist`` (prefix CITYSCAPE_) so that ONE variable configures
+# API and MCP containers alike.
 ENV_VAR = "CITYSCAPE_RATELIMIT_ALLOWLIST"
 
 _Network = ipaddress.IPv4Network | ipaddress.IPv6Network
@@ -44,12 +44,12 @@ _Network = ipaddress.IPv4Network | ipaddress.IPv6Network
 
 @lru_cache(maxsize=16)
 def parse_allowlist(raw: str | None) -> tuple[_Network, ...]:
-    """Parst die kommagetrennte CIDR-Liste zu Netzwerken (fail-safe).
+    """Parses the comma-separated CIDR list into networks (fail-safe).
 
-    Ungültige Einträge werden verworfen und EINMAL pro Konfigurationswert
-    geloggt (lru_cache dedupliziert Wiederholungen); gültige Einträge derselben
-    Liste bleiben wirksam. ``None``/leer/nur-Whitespace ergibt ``()`` = niemand
-    allowlistet. ``strict=False`` erlaubt Host-Bits (z.B. "10.1.2.3/24").
+    Invalid entries are discarded and logged ONCE per configuration value
+    (lru_cache deduplicates repetitions); valid entries of the same list
+    remain effective. ``None``/empty/whitespace-only yields ``()`` = nobody
+    allowlisted. ``strict=False`` allows host bits (e.g. "10.1.2.3/24").
     """
     if not raw or not raw.strip():
         return ()
@@ -68,10 +68,10 @@ def parse_allowlist(raw: str | None) -> tuple[_Network, ...]:
 
 
 def ip_allowlisted(ip: str, networks: Sequence[_Network]) -> bool:
-    """True, wenn ``ip`` in einem der Allowlist-Netze liegt (sonst/bei Müll False).
+    """True if ``ip`` lies within one of the allowlist networks (otherwise/on garbage False).
 
-    IPv4-mapped IPv6-Adressen (``::ffff:203.0.113.5``) matchen auch reine
-    v4-CIDRs, damit ein v6-Listener dieselbe Allowlist nutzt.
+    IPv4-mapped IPv6 addresses (``::ffff:203.0.113.5``) also match pure
+    v4 CIDRs, so that a v6 listener uses the same allowlist.
     """
     if not networks:
         return False

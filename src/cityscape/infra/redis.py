@@ -1,9 +1,9 @@
-"""Redis-Connection-Lifecycle (Pitfall 6).
+"""Redis connection lifecycle (Pitfall 6).
 
-Der Pool wird lazy erstellt (kein Connect beim Boot), damit ``docker compose
-up`` nicht an einer Start-Race scheitert. Ein Ping erfolgt nur im
-/health-Handler, nicht beim Lifespan-Start. Verwendet ``redis.asyncio``
-(nicht das tote ``aioredis``).
+The pool is created lazily (no connect at boot), so that ``docker compose
+up`` does not fail due to a startup race. A ping is performed only in
+the /health handler, not during lifespan startup. Uses ``redis.asyncio``
+(not the deprecated ``aioredis``).
 """
 
 from __future__ import annotations
@@ -14,20 +14,19 @@ import redis.asyncio as aioredis
 def create_redis_pool(
     url: str, *, max_connections: int | None = None
 ) -> aioredis.Redis:
-    """Erstellt einen lazy Redis-Client mit Connection-Pool (kein Boot-Connect).
+    """Creates a lazy Redis client with connection pool (no boot connect).
 
-    ``max_connections`` deckelt (quick-260704-ust) das bisher unbegrenzte
-    Socket-Wachstum des Pools; ``from_url`` reicht den kwarg an den
-    ConnectionPool durch. Entscheidung: Standard-ConnectionPool mit grosszuegigem
-    Cap statt BlockingConnectionPool. Der Cap soll DECKELN, nicht drosseln (der
-    Normalbetrieb nutzt eine Handvoll Verbindungen, ein Treffer ist bereits eine
-    Anomalie): ein harter ConnectionError des Standard-Pools faellt sauber in die
-    bestehende Graceful-Degradation/503-Behandlung samt der bereits kurzen
-    Redis-Socket-Timeouts. Ein BlockingConnectionPool wuerde stattdessen
-    Warteschlangen von Acquire-Waitern aufbauen und damit Backpressure zurueck in
-    den Event-Loop schieben, also genau den Fehlermodus, den wir anderswo
-    vermeiden. Falls spaeter unter Normalbursts harte Fehler auftreten, mit
-    BlockingConnectionPool + kurzem Timeout nachziehen.
+    ``max_connections`` caps (quick-260704-ust) the previously unbounded
+    socket growth of the pool; ``from_url`` passes the kwarg through to the
+    ConnectionPool. Decision: standard ConnectionPool with a generous
+    cap instead of BlockingConnectionPool. The cap is intended to LIMIT, not throttle (normal
+    operation uses a handful of connections, hitting the cap is already an
+    anomaly): a hard ConnectionError from the standard pool falls cleanly into the
+    existing graceful degradation / 503 handling along with the already short
+    Redis socket timeouts. A BlockingConnectionPool would instead build up queues
+    of acquire-waiters, pushing backpressure into the event loop, precisely the
+    failure mode we avoid elsewhere. If hard errors occur later under normal
+    bursts, update with BlockingConnectionPool + short timeout.
     """
     kwargs: dict = {"encoding": "utf-8", "decode_responses": True}
     if max_connections is not None:
@@ -36,6 +35,6 @@ def create_redis_pool(
 
 
 async def close_redis_pool(client: aioredis.Redis | None) -> None:
-    """Schliesst den Redis-Client samt Pool sauber."""
+    """Closes the Redis client and its pool cleanly."""
     if client is not None:
         await client.aclose()

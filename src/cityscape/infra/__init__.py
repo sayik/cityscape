@@ -1,1 +1,1 @@
-"""Infrastruktur-Anbindungen (Redis-Pool etc.)."""
+"""Infrastructure integrations (Redis pool etc.)."""

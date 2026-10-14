@@ -1,52 +1,52 @@
-"""Erkennung von ChatGPT-GPT-Action-Traffic (OpenAI Custom GPTs).
+"""Detection of ChatGPT GPT action traffic (OpenAI Custom GPTs).
 
-Hintergrund: Das cityscape-GPT im GPT Store ruft die API über OpenAI-Egress
-auf. OpenAI sendet dabei dokumentierte Kennungs-Header mit (je Aufruf):
+Background: The cityscape GPT in the GPT Store calls the API via OpenAI egress.
+OpenAI sends documented identification headers with each request:
 
-- ``openai-gpt-id``: welches GPT den Aufruf ausgelöst hat,
-- ``openai-ephemeral-user-id``: pseudonyme, je Nutzer+GPT stabile Kennung,
-- ``openai-conversation-id``: die Unterhaltung,
+- ``openai-gpt-id``: which GPT triggered the call,
+- ``openai-ephemeral-user-id``: pseudonymous identifier, stable per user+GPT,
+- ``openai-conversation-id``: the conversation,
 
-plus den User-Agent ``ChatGPT-User`` (Cloudflare-verifizierter Bot). Diese
-Signale speisen drei Verbraucher (analog zum MCP-Kanal):
+plus the User-Agent ``ChatGPT-User`` (Cloudflare-verified bot). These
+signals feed three consumers (analogous to the MCP channel):
 
-1. ntfy-Push je Aktion (ops/firstseen.note_gpt_action),
-2. Metrik-Kanal ``gpt`` (Dashboard/Digest, main.MetricsMiddleware),
-3. eigenes Rate-Limit je GPT-Nutzer (api/v1/gpt_guard), weil ALLE
-   ChatGPT-Nutzer serverseitig über WENIGE OpenAI-Egress-IPs kommen und ein
-   per-IP-Limit sie kollektiv drosseln würde (gleiches Muster wie
-   Anthropic-Egress beim MCP-Server, s. infra/allowlist.py).
+1. ntfy push per action (ops/firstseen.note_gpt_action),
+2. metric channel ``gpt`` (dashboard/digest, main.MetricsMiddleware),
+3. dedicated rate limit per GPT user (api/v1/gpt_guard), because ALL
+   ChatGPT users arrive server-side via FEW OpenAI egress IPs and a
+   per-IP limit would throttle them collectively (same pattern as
+   Anthropic egress for the MCP server, see infra/allowlist.py).
 
-SPOOFING-EINORDNUNG: Die Header sind clientseitig fälschbar. Ein Spoofer
-gewinnt dadurch aber NICHTS: die IP-basierten Limits (slowapi + AbuseGuard)
-gelten für nicht-allowlistete IPs unverändert weiter, das GPT-Limit kommt
-nur ZUSÄTZLICH dazu. Nur die Kanal-Beschriftung (Metrik/ntfy) wäre falsch;
-die ntfy-Flut-Drossel (ops/notify) begrenzt den Schaden.
+SPOOFING CLASSIFICATION: The headers are forgeable client-side. However, a spoofer
+gains NOTHING from this: the IP-based limits (slowapi + AbuseGuard)
+continue to apply unchanged for non-allowlisted IPs; the GPT limit is merely
+ADDITIONAL. Only the channel labeling (metrics/ntfy) would be spoofed;
+the ntfy flood throttle (ops/notify) limits the impact.
 
-Stdlib-only (wie infra/allowlist.py), damit auch Nicht-FastAPI-Pfade das
-Modul ohne Settings-/slowapi-Import nutzen können.
+Stdlib-only (like infra/allowlist.py), so that non-FastAPI paths can also
+use the module without Settings/slowapi imports.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 
-# Dokumentierte OpenAI-Actions-Header (Starlette-Header sind case-insensitiv,
-# .get() erwartet Kleinschreibung).
+# Documented OpenAI Actions headers (Starlette headers are case-insensitive,
+# .get() expects lowercase).
 GPT_ID_HEADER = "openai-gpt-id"
 GPT_USER_HEADER = "openai-ephemeral-user-id"
 GPT_CONVERSATION_HEADER = "openai-conversation-id"
 
-# UA-Marker der Actions-Aufrufe ("ChatGPT-User/1.0 (+https://openai.com/bot)").
+# UA marker for Actions calls ("ChatGPT-User/1.0 (+https://openai.com/bot)").
 _UA_MARKER = "chatgpt-user"
 
 
 def is_gpt_action(headers: Mapping[str, str]) -> bool:
-    """True, wenn der Request wie ein ChatGPT-GPT-Action-Aufruf aussieht.
+    """True if the request looks like a ChatGPT GPT action call.
 
-    Erkennung über die OpenAI-Kennungs-Header ODER den ChatGPT-User-Agent;
-    beide Signale zusammen decken auch Teil-Setups ab (z.B. UA ohne Header
-    beim Actions-Import/Schema-Fetch).
+    Detected via the OpenAI identification headers OR the ChatGPT User-Agent;
+    both signals combined also cover partial setups (e.g. UA without header
+    during actions import/schema fetch).
     """
     if (
         headers.get(GPT_ID_HEADER)
@@ -58,12 +58,12 @@ def is_gpt_action(headers: Mapping[str, str]) -> bool:
 
 
 def gpt_rate_ident(headers: Mapping[str, str], client_ip: str) -> str:
-    """Zaehlschluessel für das GPT-Rate-Limit: Nutzer > Konversation > GPT > IP.
+    """Counting key for the GPT rate limit: User > Conversation > GPT > IP.
 
-    Die ephemere Nutzer-Kennung ist je Nutzer+GPT stabil und damit der
-    fairste Schluessel (jeder ChatGPT-Nutzer bekommt sein eigenes Budget).
-    Fehlt sie, fallen wir auf die Konversation, dann das GPT, zuletzt die
-    IP zurück (nie ohne Schluessel).
+    The ephemeral user identifier is stable per user+GPT and thus the
+    fairest key (each ChatGPT user gets their own budget).
+    If missing, we fall back to conversation, then GPT, and finally
+    IP (never without a key).
     """
     return (
         headers.get(GPT_USER_HEADER)

@@ -1,33 +1,33 @@
-"""Hand-gerollter Cache-Aside-Helper mit Stale-While-Revalidate + Single-Flight.
+"""Hand-rolled cache-aside helper with stale-while-revalidate + single-flight.
 
-Deckt RES-02 (Cache-Aside + per-Source-TTL: ein wiederholter Aufruf trifft den
-Redis-Cache statt erneut den Upstream) und RES-03 (Stale-While-Revalidate +
-Single-Flight gegen Cache-Stampede: N parallele Requests auf einen kalten Key
-erzeugen genau EINEN Upstream-Call) ab.
+Covers RES-02 (cache-aside + per-source TTL: repeated calls hit the
+Redis cache instead of upstream again) and RES-03 (stale-while-revalidate +
+single-flight against cache stampede: N parallel requests on a cold key
+produce exactly ONE upstream call).
 
-Redis kennt nur EINE TTL pro Key. Deshalb kodieren wir das Fresh- und das
-Stale-Fenster IM Value (``fresh_until`` / ``stale_until`` als Unix-Zeitstempel).
-GET -> Fresh: sofort liefern (HIT). Stale: sofort liefern UND genau einen
-Hintergrund-Refresh planen (STALE), abgesichert durch einen kurzen
-``SET NX EX``-Single-Flight-Lock, damit nur ein Worker refetcht. Missing/expired:
-synchron fetchen und speichern (MISS).
+Redis only knows ONE TTL per key. Therefore we encode the fresh and the
+stale windows IN the value (``fresh_until`` / ``stale_until`` as Unix timestamps).
+GET -> Fresh: serve immediately (HIT). Stale: serve immediately AND schedule
+exactly one background refresh (STALE), protected by a short
+``SET NX EX`` single-flight lock so only one worker refetches. Missing/expired:
+fetch synchronously and store (MISS).
 
-decode_responses-Auflösung (Orchestrator-Entscheidung 5): Diese Cache-Schicht
-arbeitet bytes-sicher und ist unabhängig vom ``decode_responses``-Modus des
-übergebenen Clients. Beim Lesen wird ein str-Ergebnis (decode_responses=True)
-vor ``orjson.loads`` zu bytes kodiert; beim Schreiben gehen immer
-``orjson.dumps``-bytes an Redis. So funktioniert der Helper sowohl mit dem
-bestehenden ``decode_responses=True``-Pool (app.state.redis) als auch mit einem
-``decode_responses=False``-Cache-Client, ohne einen zweiten Connection-Pool
-einzuführen (schlanker, MVP-tauglich).
+decode_responses resolution (orchestrator decision 5): This cache layer
+works bytes-safe and is independent of the ``decode_responses`` mode of the
+passed client. On read, a str result (decode_responses=True) is encoded to
+bytes before ``orjson.loads``; on write, ``orjson.dumps`` bytes are always
+sent to Redis. Thus the helper works both with the existing
+``decode_responses=True`` pool (app.state.redis) and with a
+``decode_responses=False`` cache client, without introducing a second connection
+pool (leaner, MVP-suitable).
 
-Graceful Degradation (Pitfall 2): Jeder Redis-Zugriff ist in try/except gekapselt
-(Muster aus health.py). Fällt Redis aus, degradiert der Pfad zu einem direkten
-Fetch (Cache-Miss) statt zu crashen.
+Graceful degradation (pitfall 2): Every Redis access is wrapped in try/except
+(pattern from health.py). If Redis fails, the path degrades to a direct
+fetch (cache miss) instead of crashing.
 
-Cache-Poisoning-Schutz (T-03-06): ``build_cache_key`` baut versionierte Keys nur
-aus validierten Slugs/Params via stabilem sha256-Param-Hash, nie aus rohen
-User-Strings.
+Cache poisoning protection (T-03-06): ``build_cache_key`` builds versioned keys
+only from validated slugs/params via a stable sha256 param hash, never from raw
+user strings.
 """
 
 from __future__ import annotations
@@ -44,61 +44,61 @@ import structlog
 
 log = structlog.get_logger()
 
-# Mindest-Stale-Fenster (Sekunden), damit auch bei ttl=0 (sofort stale) ein
-# Stale-While-Revalidate-Pfad existiert, statt direkt als Cache-Miss zu zählen.
+# Minimum stale window (seconds), so that even with ttl=0 (immediately stale)
+# a stale-while-revalidate path exists instead of counting directly as a cache miss.
 _DEFAULT_STALE_PAD = 60.0
 
-# Lock-Lebensdauer (Sekunden) für den Single-Flight-Lock. Fällt ein Halter aus,
-# gibt die Redis-TTL den Lock automatisch wieder frei (kein Deadlock).
+# Lock lifetime (seconds) for the single-flight lock. If a holder fails,
+# the Redis TTL releases the lock automatically (no deadlock).
 _LOCK_TTL = 10
 
-# Wartezeit-Parameter für Verlierer des Single-Flight-Locks auf einem kalten Key.
+# Wait time parameters for losers of the single-flight lock on a cold key.
 _WAIT_POLL = 0.02
 _WAIT_MAX = 5.0
 
 
 @dataclass(frozen=True)
 class EntryMeta:
-    """Metadaten eines Cache-Eintrags (Fresh-/Stale-Fenster als Unix-Zeit)."""
+    """Metadata of a cache entry (fresh/stale window as Unix time)."""
 
     fresh_until: float
     stale_until: float
 
 
 def _to_bytes(raw: bytes | str) -> bytes:
-    """Normalisiert ein Redis-Leseergebnis auf bytes (decode_responses-agnostisch)."""
+    """Normalizes a Redis read result to bytes (decode_responses-agnostic)."""
     if isinstance(raw, str):
         return raw.encode()
     return raw
 
 
-# Marker für base64-kodierte bytes-Payloads (orjson kann bytes nicht direkt
-# serialisieren; HTTP-Responses liefern aber rohe bytes via resp.content).
+# Marker for base64-encoded bytes payloads (orjson cannot directly serialize
+# bytes; but HTTP responses provide raw bytes via resp.content).
 _BYTES_TAG = "__b64__"
 
 
 def _encode_payload(payload):
-    """Macht beliebige Payloads orjson-serialisierbar (bytes -> base64-Container)."""
+    """Makes arbitrary payloads orjson-serializable (bytes -> base64 container)."""
     if isinstance(payload, bytes):
         return {_BYTES_TAG: base64.b64encode(payload).decode("ascii")}
     return payload
 
 
 def _decode_payload(payload):
-    """Kehrt ``_encode_payload`` um (base64-Container -> bytes)."""
+    """Reverses ``_encode_payload`` (base64 container -> bytes)."""
     if isinstance(payload, dict) and _BYTES_TAG in payload and len(payload) == 1:
         return base64.b64decode(payload[_BYTES_TAG])
     return payload
 
 
 def build_cache_key(source: str, *, city_slug: str, params: dict | None = None) -> str:
-    """Baut einen versionierten, kollisionssicheren Cache-Key.
+    """Builds a versioned, collision-resistant cache key.
 
-    Schema: ``source:{source}:v1:{city_slug}:{param_hash}``. Der Param-Hash ist
-    ein stabiler sha256 über die sortierten Items (orjson-serialisiert), sodass
-    Reihenfolge-Varianten denselben Key ergeben. Nur aus validierten Slugs/Params
-    bauen (T-03-06: kein roher User-String -> kein Cache-Poisoning). Versioniert
-    (``:v1:``), damit ein Phase-4-Schema-Wechsel keine Fremd-Keys flushen muss.
+    Schema: ``source:{source}:v1:{city_slug}:{param_hash}``. The param hash is
+    a stable sha256 over sorted items (orjson-serialized), so that ordering
+    variants result in the same key. Only build from validated slugs/params
+    (T-03-06: no raw user string -> no cache poisoning). Versioned
+    (``:v1:``) so that a Phase 4 schema change does not need to flush unrelated keys.
     """
     items = sorted((params or {}).items())
     digest = hashlib.sha256(orjson.dumps(items)).hexdigest()[:16]
@@ -106,7 +106,7 @@ def build_cache_key(source: str, *, city_slug: str, params: dict | None = None) 
 
 
 async def read_entry_meta(redis, key: str) -> EntryMeta | None:
-    """Liest die Fresh-/Stale-Metadaten eines Cache-Eintrags (oder None bei Miss)."""
+    """Reads the fresh/stale metadata of a cache entry (or None on miss)."""
     try:
         raw = await redis.get(key)
     except Exception:
@@ -118,14 +118,14 @@ async def read_entry_meta(redis, key: str) -> EntryMeta | None:
 
 
 async def _store(redis, key: str, payload, ttl_fresh: float, ttl_stale: float) -> None:
-    """Schreibt Payload + Fresh-/Stale-Fenster; Redis-Key-TTL = Stale-Ende."""
+    """Writes payload + fresh/stale windows; Redis key TTL = stale end."""
     now = time.time()
     value = {
         "payload": _encode_payload(payload),
         "fresh_until": now + ttl_fresh,
         "stale_until": now + ttl_stale,
     }
-    # ex muss >= 1 sein; bei winzigem ttl_stale runden wir auf 1s auf.
+    # ex must be >= 1; for tiny ttl_stale we round up to 1s.
     ex = max(1, int(round(ttl_stale)))
     await redis.set(key, orjson.dumps(value), ex=ex)
 
@@ -137,17 +137,17 @@ async def _refresh_and_store(
     ttl_stale: float,
     fetch: Callable[[], Awaitable],
 ) -> None:
-    """Single-Flight-Refresh-Coroutine: fetcht neu und speichert (Lock via ex aus)."""
+    """Single-flight refresh coroutine: refetches and stores (lock expires via ex)."""
     payload = await fetch()
     try:
         await _store(redis, key, payload, ttl_fresh, ttl_stale)
     except Exception as exc:
-        # Redis-Schreibfehler beim Hintergrund-Refresh degradiert ignorieren.
+        # Degraded ignore of Redis write errors during background refresh.
         log.debug("cache_refresh_store_failed", key=key, error=str(exc))
 
 
 def _default_schedule(coro: Awaitable) -> None:
-    """Plant eine Refresh-Coroutine als losgelösten Task (Referenz gegen GC)."""
+    """Schedules a refresh coroutine as a detached task (reference prevents GC)."""
     task = asyncio.ensure_future(coro)
     _default_schedule._tasks.add(task)  # type: ignore[attr-defined]
     task.add_done_callback(_default_schedule._tasks.discard)  # type: ignore[attr-defined]
@@ -165,34 +165,34 @@ async def cache_get_or_set(
     ttl_stale: float | None = None,
     schedule: Callable[[Awaitable], None] | None = None,
 ):
-    """Cache-Aside + Stale-While-Revalidate + Single-Flight um ``fetch``.
+    """Cache-aside + stale-while-revalidate + single-flight around ``fetch``.
 
     Args:
-        redis: redis.asyncio-kompatibler Client (decode_responses egal).
-        key: vorab gebauter Cache-Key (siehe ``build_cache_key``).
-        ttl: Fresh-Fenster in Sekunden. Innerhalb davon: HIT.
-        fetch: parameterlose async-Funktion, die die frische Payload liefert.
-        ttl_stale: Stale-Fenster in Sekunden (Default: ttl + Mindest-Pad).
-        schedule: plant die Hintergrund-Refresh-Coroutine (Default: asyncio-Task).
+        redis: redis.asyncio-compatible client (decode_responses agnostic).
+        key: pre-built cache key (see ``build_cache_key``).
+        ttl: Fresh window in seconds. Within this: HIT.
+        fetch: parameterless async function returning the fresh payload.
+        ttl_stale: Stale window in seconds (default: ttl + minimum pad).
+        schedule: schedules the background refresh coroutine (default: asyncio task).
 
     Returns:
-        ``(payload, status)`` mit status in {"HIT", "STALE", "MISS"}.
+        ``(payload, status)`` with status in {"HIT", "STALE", "MISS"}.
 
-    Pfade:
-        - Fresh (now < fresh_until): sofort liefern -> HIT.
-        - Stale (fresh_until <= now < stale_until): sofort stale liefern +
-          genau einen Refresh planen (SET NX EX Single-Flight-Lock) -> STALE.
-        - Miss/expired: synchron fetchen + speichern -> MISS. Bei N parallelen
-          kalten Requests gewinnt genau einer den Lock und fetcht; die übrigen
-          warten kurz auf den frischen Eintrag (genau 1 Upstream-Call).
-        - Redis down: try/except -> direkter Fetch, kein Crash (MISS).
+    Paths:
+        - Fresh (now < fresh_until): serve immediately -> HIT.
+        - Stale (fresh_until <= now < stale_until): serve stale immediately +
+          schedule exactly one refresh (SET NX EX single-flight lock) -> STALE.
+        - Miss/expired: synchronously fetch + store -> MISS. For N parallel
+          cold requests, exactly one wins the lock and fetches; the rest
+          wait briefly for the fresh entry (exactly 1 upstream call).
+        - Redis down: try/except -> direct fetch, no crash (MISS).
     """
     if ttl_stale is None:
         ttl_stale = ttl + _DEFAULT_STALE_PAD
     if schedule is None:
         schedule = _default_schedule
 
-    # 1. Cache lesen (Graceful Degradation: Redis-Fehler -> Cache-Miss-Pfad).
+    # 1. Read cache (graceful degradation: Redis error -> cache miss path).
     raw = None
     redis_ok = True
     try:
@@ -206,7 +206,7 @@ async def cache_get_or_set(
         if now < v["fresh_until"]:
             return _decode_payload(v["payload"]), "HIT"
         if now < v["stale_until"]:
-            # Single-Flight: nur EIN Worker bekommt den Lock und refetcht.
+            # Single-flight: only ONE worker acquires the lock and refetches.
             try:
                 got_lock = await redis.set(f"lock:{key}", b"1", nx=True, ex=_LOCK_TTL)
             except Exception:
@@ -215,8 +215,8 @@ async def cache_get_or_set(
                 schedule(_refresh_and_store(redis, key, ttl, ttl_stale, fetch))
             return _decode_payload(v["payload"]), "STALE"
 
-    # 2. Miss/expired. Single-Flight auch für den kalten Pfad, damit N parallele
-    #    Requests genau einen Upstream-Call erzeugen.
+    # 2. Miss/expired. Single-flight also for the cold path, so that N parallel
+    #    requests produce exactly one upstream call.
     if redis_ok:
         try:
             got_lock = await redis.set(f"lock:{key}", b"1", nx=True, ex=_LOCK_TTL)
@@ -224,7 +224,7 @@ async def cache_get_or_set(
             got_lock = False
 
         if not got_lock:
-            # Verlierer: kurz auf den frischen Eintrag des Gewinners warten.
+            # Losers: wait briefly for the winner's fresh entry.
             waited = 0.0
             while waited < _WAIT_MAX:
                 await asyncio.sleep(_WAIT_POLL)
@@ -239,13 +239,13 @@ async def cache_get_or_set(
                     now = time.time()
                     status = "HIT" if now < v["fresh_until"] else "STALE"
                     return _decode_payload(v["payload"]), status
-            # Timeout/Redis-Fehler beim Warten -> selbst fetchen (kein Hang).
+            # Timeout/Redis error while waiting -> fetch ourselves (no hang).
 
-    # 3. Synchron fetchen + speichern (Lock-Halter oder degradierter Pfad).
+    # 3. Synchronously fetch + store (lock holder or degraded path).
     payload = await fetch()
     try:
         await _store(redis, key, payload, ttl, ttl_stale)
     except Exception as exc:
-        # Redis-Schreibfehler ignorieren (Graceful Degradation, Pitfall 2).
+        # Ignore Redis write errors (graceful degradation, pitfall 2).
         log.debug("cache_store_failed", key=key, error=str(exc))
     return payload, "MISS"

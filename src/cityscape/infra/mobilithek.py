@@ -1,25 +1,25 @@
-"""Mobilithek-mTLS-Pull-Client (LIVE-04, Phase 20).
+"""Mobilithek mTLS pull client (LIVE-04, Phase 20).
 
-Das einzige genuin neue Infra-Modul der Phase: ein dedizierter
-``httpx.AsyncClient``, der ein Client-Zertifikat NUR an ``mobilithek.info``
-trägt (T-20-MTLS). httpx/ssl können ``.p12`` nicht direkt lesen, daher
-konvertiert ``cryptography`` (pyca) das p12 beim Start zu PEM und baut daraus
-einen ``ssl.SSLContext``.
+The only genuinely new infra module of this phase: a dedicated
+``httpx.AsyncClient`` that sends a client certificate ONLY to ``mobilithek.info``
+(T-20-MTLS). httpx/ssl cannot directly read ``.p12``, therefore
+``cryptography`` (pyca) converts the p12 to PEM on startup and constructs
+an ``ssl.SSLContext`` from it.
 
-Sicherheits-Invarianten:
-- **PEM nie dauerhaft auf Disk** (T-20-PEM, Security V12): das entschlüsselte
-  Schlüsselmaterial wird in eine kurzlebige tmpfs-Datei (``/dev/shm`` falls
-  vorhanden) mit Modus 0600 geschrieben, von ``ssl.load_cert_chain`` gelesen und
-  im ``finally`` SOFORT via ``os.unlink`` gelöscht.
-- **gzip PFLICHT** (Pitfall 1): der Broker antwortet ohne
-  ``Accept-Encoding: gzip`` mit leerem HTTP 400 (verifiziert 2026-06-12).
-- **SSRF-Invariante** (T-20-SSRF): Host hartkodiert ``mobilithek.info:8443``,
-  ``follow_redirects=False``, ``aboId`` NUR aus der Settings-Allowlist.
-- **422 = no_data** (T-20-422): ein aktives Abo ohne Datenpaket liefert HTTP
-  422; das wird als ``no_data`` behandelt (kein ``raise``, kein Breaker-Trip,
-  kein Retry-Sturm). Nur 5xx/Netzfehler schlagen durch.
-- **Passwort als SecretStr** (T-20-SECLOG): nie geloggt, nie im Cache-Key, nie
-  in der Pull-URL.
+Security invariants:
+- **PEM never permanently on disk** (T-20-PEM, Security V12): the decrypted
+  key material is written to a short-lived tmpfs file (``/dev/shm`` if
+  available) with 0600 permissions, read by ``ssl.load_cert_chain``, and
+  IMMEDIATELY deleted in ``finally`` via ``os.unlink``.
+- **gzip MANDATORY** (Pitfall 1): the broker responds without
+  ``Accept-Encoding: gzip`` with an empty HTTP 400 (verified 2026-06-12).
+- **SSRF invariant** (T-20-SSRF): host hardcoded to ``mobilithek.info:8443``,
+  ``follow_redirects=False``, ``aboId`` ONLY from the settings allowlist.
+- **422 = no_data** (T-20-422): an active subscription without data package returns HTTP
+  422; this is treated as ``no_data`` (no ``raise``, no breaker trip,
+  no retry storm). Only 5xx/network errors pass through.
+- **Password as SecretStr** (T-20-SECLOG): never logged, never in cache key, never
+  in the pull URL.
 """
 
 from __future__ import annotations
@@ -34,37 +34,37 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 
 from cityscape.infra.http import USER_AGENT
 
-#: PFLICHT-Header-Wert (Pitfall 1): ohne ``Accept-Encoding: gzip`` antwortet der
-#: Broker mit leerem HTTP 400. Als Konstante exportiert (Test-Vertrag).
+#: MANDATORY header value (Pitfall 1): without ``Accept-Encoding: gzip`` the
+#: broker responds with an empty HTTP 400. Exported as constant (test contract).
 GZIP_HEADER = "gzip"
 
-#: Mobilithek-Broker-Host HARTKODIERT (T-20-SSRF): nie aus Config/User-Input.
+#: Mobilithek broker host HARDCODED (T-20-SSRF): never from config/user input.
 _MOBILITHEK_BASE = "https://mobilithek.info:8443/mobilithek/api/v1.0"
 
-#: tmpfs-Verzeichnis für das kurzlebige PEM (T-20-PEM): ``/dev/shm`` hält das
-#: entschlüsselte Schlüsselmaterial im RAM, nie auf der persistenten Disk.
+#: tmpfs directory for the short-lived PEM (T-20-PEM): ``/dev/shm`` keeps the
+#: decrypted key material in RAM, never on persistent disk.
 _TMPFS_DIR = "/dev/shm" if os.path.isdir("/dev/shm") else None  # noqa: S108
 
 
 def build_pull_url(abo_id: str, *, style: str = "path") -> str:
-    """Baut die Mobilithek-Pull-URL für ein Abo (Host hartkodiert, SSRF).
+    """Builds the Mobilithek pull URL for a subscription (hardcoded host, SSRF).
 
-    ``abo_id`` MUSS aus der Settings-Allowlist (``*_abo_id``) stammen, NIE aus
-    User-Input (T-20-SSRF). Das Cert-Passwort taucht NIE in der URL auf
-    (T-20-SECLOG). Der Host bleibt in JEDER Variante hartkodiert
-    (``_MOBILITHEK_BASE``), die SSRF-Invariante gilt unverändert.
+    ``abo_id`` MUST originate from the settings allowlist (``*_abo_id``), NEVER from
+    user input (T-20-SSRF). The cert password NEVER appears in the URL
+    (T-20-SECLOG). The host remains hardcoded in EVERY variant
+    (``_MOBILITHEK_BASE``), the SSRF invariant applies unchanged.
 
-    Drei verifizierte Zugriffspunkt-Muster (Mobilithek-Portal/Service Desk):
-    - ``style="path"`` (Default, die V2-Stadt-Abos): mit
+    Three verified access point patterns (Mobilithek portal/Service Desk):
+    - ``style="path"`` (default, the V2 city subscriptions): with
       ``/subscription/{aboId}/clientPullService?subscriptionID={aboId}``.
-    - ``style="query"`` (das eRound-AFIR-Abo, LIVE-11): OHNE das
-      ``/{aboId}/clientPullService``-Pfadsegment, nur
+    - ``style="query"`` (the eRound AFIR subscription, LIVE-11): WITHOUT the
+      ``/{aboId}/clientPullService`` path segment, only
       ``/subscription?subscriptionID={aboId}``.
-    - ``style="container"`` (Legacy-Datenmodell, Techn. SST-Beschreibung
-      Kap. 7.3.2.2.1; vom Mobilithek-Service-Desk 2026-06-15 für das
-      DELFI-GTFS-RT-Abo bestätigt): ``/container/subscription?subscriptionID=
-      {aboId}``. Der modernere ``path``-Zugriff (Kap. 6.2.1) gibt für dieses
-      Legacy-Abo einen 4xx-Fehler.
+    - ``style="container"`` (legacy data model, technical interface description
+      ch. 7.3.2.2.1; confirmed by Mobilithek Service Desk on 2026-06-15 for the
+      DELFI GTFS-RT subscription): ``/container/subscription?subscriptionID=
+      {aboId}``. The more modern ``path`` access (ch. 6.2.1) returns a 4xx error
+      for this legacy subscription.
     """
     if style == "container":
         return f"{_MOBILITHEK_BASE}/container/subscription?subscriptionID={abo_id}"
@@ -77,14 +77,14 @@ def build_pull_url(abo_id: str, *, style: str = "path") -> str:
 
 
 def build_mtls_context(p12_path: str, password: str) -> ssl.SSLContext:
-    """Baut einen ``ssl.SSLContext`` aus einer ``.p12``-Datei (mTLS, T-20-PEM).
+    """Builds an ``ssl.SSLContext`` from a ``.p12`` file (mTLS, T-20-PEM).
 
-    Liest die p12-Bytes, entschlüsselt Key + Cert (+ Chain) via
-    ``cryptography`` (pyca), serialisiert sie als PEM in eine kurzlebige
-    tmpfs-Datei (Modus 0600), lädt diese in den Context und LÖSCHT sie sofort
-    im ``finally`` (entschlüsseltes Schlüsselmaterial nie dauerhaft auf Disk,
-    Security V12 / Pitfall 2). ``password`` ist der entschlüsselte SecretStr-
-    Wert; er wird nie geloggt.
+    Reads the p12 bytes, decrypts key + cert (+ chain) via
+    ``cryptography`` (pyca), serializes them as PEM into a short-lived
+    tmpfs file (0600 permissions), loads this into the context and DELETES it immediately
+    in ``finally`` (decrypted key material never permanently on disk,
+    Security V12 / Pitfall 2). ``password`` is the decrypted SecretStr
+    value; it is never logged.
     """
     with open(p12_path, "rb") as fh:
         p12_bytes = fh.read()
@@ -103,8 +103,8 @@ def build_mtls_context(p12_path: str, password: str) -> ssl.SSLContext:
         pem += ca.public_bytes(serialization.Encoding.PEM)
 
     ctx = ssl.create_default_context()
-    # Datei mit restriktivem Modus (0600) auf tmpfs (RAM) erzeugen; delete=False,
-    # damit wir Pfad an load_cert_chain geben können, dann im finally unlink.
+    # Create file with restrictive permissions (0600) on tmpfs (RAM); delete=False
+    # so we can pass the path to load_cert_chain, then unlink in finally.
     tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
         mode="wb", delete=False, dir=_TMPFS_DIR, suffix=".pem"
     )
@@ -115,18 +115,18 @@ def build_mtls_context(p12_path: str, password: str) -> ssl.SSLContext:
         tmp.close()
         ctx.load_cert_chain(certfile=tmp.name)
     finally:
-        # Entschlüsseltes PEM SOFORT löschen (T-20-PEM / Security V12).
+        # Delete decrypted PEM IMMEDIATELY (T-20-PEM / Security V12).
         os.unlink(tmp.name)
     return ctx
 
 
 def create_mobilithek_client(settings) -> httpx.AsyncClient:
-    """Baut den dedizierten mTLS-Client NUR für Mobilithek (T-20-MTLS).
+    """Builds the dedicated mTLS client ONLY for Mobilithek (T-20-MTLS).
 
-    Analog ``infra/http.create_http_client``, ABER mit ``verify=SSLContext``
-    (Client-Cert) und PFLICHT-Header ``Accept-Encoding: gzip``. Ein EIGENER
-    Client, NICHT der geteilte ``app.state.http`` (das Cert darf nie an fremde
-    Hosts gehen). ``follow_redirects=False`` hält die SSRF-Invariante.
+    Analogous to ``infra/http.create_http_client``, BUT with ``verify=SSLContext``
+    (client cert) and MANDATORY header ``Accept-Encoding: gzip``. A DEDICATED
+    client, NOT the shared ``app.state.http`` (the cert must never be sent to third-party
+    hosts). ``follow_redirects=False`` maintains the SSRF invariant.
     """
     ctx = build_mtls_context(
         settings.mobilithek_cert_path,
@@ -136,29 +136,29 @@ def create_mobilithek_client(settings) -> httpx.AsyncClient:
         verify=ctx,
         headers={
             "User-Agent": USER_AGENT,
-            "Accept-Encoding": GZIP_HEADER,  # PFLICHT (Pitfall 1)
+            "Accept-Encoding": GZIP_HEADER,  # MANDATORY (Pitfall 1)
         },
-        # Konservativer Default; Mobilithek kann minutenfrisch sein, aber nicht
-        # ewig hängen dürfen.
+        # Conservative default; Mobilithek can be minute-fresh, but must not
+        # hang indefinitely.
         timeout=httpx.Timeout(connect=2.0, read=10.0, write=5.0, pool=1.0),
-        follow_redirects=False,  # SSRF-Invariante (T-20-SSRF)
+        follow_redirects=False,  # SSRF invariant (T-20-SSRF)
     )
 
 
 async def close_mobilithek_client(client: httpx.AsyncClient | None) -> None:
-    """Schliesst den Mobilithek-Client samt Pool sauber (no-op bei None)."""
+    """Closes the Mobilithek client and its pool cleanly (no-op on None)."""
     if client is not None:
         await client.aclose()
 
 
 async def pull_subscription(client: httpx.AsyncClient, url: str) -> dict:
-    """Pullt ein Mobilithek-Abo: 422 = no_data, sonst raise_for_status (T-20-422).
+    """Pulls a Mobilithek subscription: 422 = no_data, otherwise raise_for_status (T-20-422).
 
-    ``url`` MUSS via ``build_pull_url`` aus einer Allowlist-``abo_id`` gebaut
-    sein (Host hartkodiert, SSRF). HTTP 422 (Abo aktiv, kein Datenpaket) liefert
-    ``{"status": "no_data", "body": None}`` OHNE ``raise`` (kein Breaker-Trip,
-    kein Retry-Sturm). 200 liefert ``{"status": "ok", "body": <bytes>}``; 5xx/
-    sonstige Fehler schlagen via ``raise_for_status`` durch.
+    ``url`` MUST be built via ``build_pull_url`` from an allowlist ``abo_id``
+    (hardcoded host, SSRF). HTTP 422 (active subscription, no data package) returns
+    ``{"status": "no_data", "body": None}`` WITHOUT ``raise`` (no breaker trip,
+    no retry storm). 200 returns ``{"status": "ok", "body": <bytes>}``; 5xx/
+    other errors pass through via ``raise_for_status``.
     """
     resp = await client.get(url)
     if resp.status_code == 422:
