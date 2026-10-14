@@ -1,8 +1,8 @@
-"""App-Factory + Middleware-Wiring + Lifespan (Pattern 1, FND-03/04/05).
+"""App factory + middleware wiring + lifespan (Pattern 1, FND-03/04/05).
 
-``create_app()`` verdrahtet Config, Logging, Correlation-ID-Middleware,
-CORS-Whitelist (nie '*'), zentrales Error-Mapping und den versionierten
-/api/v1-Router. Der Lifespan oeffnet/schliesst den Redis-Pool (lazy).
+``create_app()`` wires config, logging, correlation ID middleware,
+CORS whitelist (never '*'), centralized error mapping, and the versioned
+/api/v1 router. The lifespan opens/closes the Redis pool (lazy).
 """
 
 from __future__ import annotations
@@ -410,7 +410,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 
 def create_app() -> FastAPI:
-    """Baut und verdrahtet die FastAPI-App (testbare Factory)."""
+    """Builds and wires the FastAPI app (testable factory)."""
     settings = get_settings()
     configure_logging(settings.log_level)
 

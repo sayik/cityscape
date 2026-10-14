@@ -21,10 +21,10 @@ Translated with DeepL.com (free version)
 # Linting (ruff: E, F, I, UP, B, ASYNC, S)
 uv run ruff check .
 
-# Format-check (ruff format im Check-Modus)
+# Format-check (ruff format in check mode)
 uv run ruff format --check .
 
-# Tests (pytest, async-Modus aktiv)
+# Tests (pytest, async mode active)
 uv run pytest -q
 ```
 

@@ -1,12 +1,13 @@
-"""Live-Ladesäulen-Belegung je Stadt (eRound AFIR, DATA-42).
+"""Live EV charging station occupancy by city (eRound AFIR, DATA-42).
 
-Drei Bausteine nach dem Muster von ``transit/`` (Poller schreibt Redis, der
-Request-Pfad liest NUR Redis, T-19-REQPARSE analog):
+Three modules modeled after ``transit/`` (Poller writes to Redis, the
+request path reads ONLY from Redis, T-19-REQPARSE similarly):
 
-- ``geomap``: reine Geo-Map-Logik (stat-Vollbestand -> refill_point_id ->
-  Stadt-Slug + Koordinaten) plus der gecachte Datei-Loader für den Request-Pfad.
-- ``store``: Redis-Store der akkumulierten Belegungs-Deltas (TTL = Staleness).
-- ``poller``: langlebiger asyncio-Task, der das dynamische eRound-Abo je Kadenz
-  pullt und die Deltas akkumuliert (der Feed ist eine Drain-Queue: jeder Pull
-  liefert nur die Änderungen seit dem letzten Pull, NIE den Vollzustand).
+- ``geomap``: pure geo-map logic (full stat inventory -> refill_point_id ->
+  city slug + coordinates) plus the cached file loader for the request path.
+- ``store``: Redis store for the accumulated occupancy deltas (TTL = staleness).
+- ``poller``: long-running asyncio task that pulls the dynamic eRound subscription at each interval
+  and accumulates the deltas (the feed is a drain queue: each pull
+  delivers only the changes since the last pull, NEVER the full state).
+
 """

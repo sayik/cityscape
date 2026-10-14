@@ -101,5 +101,5 @@ markers = [
     # non-blocking contract-live workflow (.github/workflows/contract-live.yml),
     # NEVER in the main CI (where `pytest -m “not live”` is used), so that upstream failures
     # do not mark PRs as red.
-    "live: trifft echte Upstream-APIs (nur im contract-live-Workflow)",
+    "live: hits real upstream APIs (only in the contract-live workflow)",
 ]

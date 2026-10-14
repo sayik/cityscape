@@ -1,23 +1,23 @@
-"""eRound-Geo-Map: refill_point_id -> Stadt-Slug + Koordinaten (DATA-42, Stufe 1).
+"""eRound geo map: refill_point_id -> city slug + coordinates (DATA-42, Stage 1).
 
-Der dynamische eRound-Belegungs-Feed trägt NUR ``refill_point_id`` + ``status``
-(kein Geo). Die Stadt-Zuordnung liefert der statische Vollbestand
-(``aegiEnergyInfrastructureTablePublication``, ~94 MB JSON, Koordinaten je
-STATION unter ``locationReference.locAreaLocation.coordinatesForDisplay``,
-live verifiziert 2026-07-03: 4921 Sites / 7401 Stationen / 14937 Ladepunkte).
+The dynamic eRound occupancy feed carries ONLY ``refill_point_id`` + ``status``
+(no geo). City assignment is provided by the static full inventory
+(``aegiEnergyInfrastructureTablePublication``, ~94 MB JSON, coordinates per
+STATION under ``locationReference.locAreaLocation.coordinatesForDisplay``,
+live verified 2026-07-03: 4921 sites / 7401 stations / 14937 charging points).
 
-Zwei Rollen:
-- ``build_geo_map(doc)``: reine Transformation des geparsten stat-Dokuments in
-  die Map ``{slug: {refill_point_id: [lat, lon]}}`` (naechste Registry-Stadt im
-  bevölkerungsskalierten Umkreis, Formel-Muster BORIS/denkmal). Rein und ohne
-  IO, damit der private Ingest (``ingest.eround_geo``) und der Seed-Generator
-  exakt dieselbe Zuordnung rechnen.
-- ``load_city_points(path)``: gecachter Datei-Loader für den Request-Pfad.
-  Quelle der Wahrheit ist die Datei im persistenten Daten-Volume (vom täglichen
-  Ingest geschrieben); fehlt sie, fällt der Loader auf den committeten Seed
-  (``data/seeds/eround_geo_map.json``) zurück. BEWUSST eine Datei statt Redis:
-  der Redis-Store ist nicht persistent (allkeys-lru, kein RDB/AOF) und könnte
-  die Map still evicten; die Datei überlebt Neustarts.
+Two roles:
+- ``build_geo_map(doc)``: pure transformation of the parsed stat document into
+  the map ``{slug: {refill_point_id: [lat, lon]}}`` (nearest registry city within
+  population-scaled radius, formula pattern BORIS/denkmal). Pure and without
+  IO, so that the private ingest (``ingest.eround_geo``) and seed generator
+  compute the exact same assignment.
+- ``load_city_points(path)``: cached file loader for the request path.
+  Source of truth is the file in the persistent data volume (written by daily
+  ingest); if missing, the loader falls back to the committed seed
+  (``data/seeds/eround_geo_map.json``). DELIBERATELY a file instead of Redis:
+  the Redis store is not persistent (allkeys-lru, no RDB/AOF) and could
+  silently evict the map; the file survives restarts.
 """
 
 from __future__ import annotations
@@ -33,29 +33,29 @@ from cityscape.infra.seeds import seeds_dir
 
 log = structlog.get_logger()
 
-# Fallback-Seed im Repo (Erst-Vollbestand vom 2026-07-03, CC0). Der Ingest
-# schreibt die frischere Kopie in das Daten-Volume (settings.eround_geo_map_path).
+# Fallback seed in the repo (initial full inventory from 2026-07-03, CC0). Ingest
+# writes the fresher copy into the data volume (settings.eround_geo_map_path).
 _SEED_NAME = "eround_geo_map.json"
 
-# Loader-Cache je (aufgeloester Pfad): (mtime, cities-dict). Die Map ändert sich
-# höchstens einmal täglich (Ingest); ein mtime-Check pro Request reicht.
+# Loader cache per (resolved path): (mtime, cities-dict). The map changes
+# at most once daily (ingest); an mtime check per request is sufficient.
 _CACHE: dict[str, tuple[float, dict]] = {}
 
 
 def _city_radius_deg(population: int | None) -> float:
-    """Stadt-Umkreis (Grad) aus der Einwohnerzahl (Formel-Muster BORIS/denkmal).
+    """City radius (degrees) from population (formula pattern BORIS/denkmal).
 
-    Größere Städte = größeres Stadtgebiet -> größerer Umkreis, geklammert auf
-    [0.06, 0.30] Grad. Bewusst grob (Stadtkern-Umkreis, kein amtlicher
-    Grenzschnitt): ein Ladepunkt knapp außerhalb der Gemeindegrenze einer
-    Großstadt gehört funktional zum Stadt-Lade-Netz.
+    Larger cities = larger city area -> larger radius, clamped to
+    [0.06, 0.30] degrees. Deliberately coarse (city core radius, not official
+    boundary clipping): a charging point just outside the municipal border of a
+    major city functionally belongs to the city charging network.
     """
     pop = population or 0
     return min(0.30, max(0.06, 0.05 + pop / 16_000_000))
 
 
 def _coerce_list(value) -> list:
-    """DATEX-II-Feld zu Liste normalisieren (dict ODER Liste ODER None)."""
+    """Normalizes DATEX II field to a list (dict OR list OR None)."""
     if value is None:
         return []
     if isinstance(value, list):
@@ -64,12 +64,12 @@ def _coerce_list(value) -> list:
 
 
 def nearest_city_slug(lat: float, lon: float, cities) -> str | None:
-    """Naechste Stadt, deren Umkreis den Punkt enthält (normierte Grad-Distanz).
+    """Nearest city whose radius contains the point (normalized degree distance).
 
-    ``cities`` ist eine Sequenz ``(slug, lat, lon, radius_deg)``. Die
-    Längen-Differenz wird mit ``cos(lat)`` gestaucht, damit die Distanz am Boden
-    näherungsweise isotrop ist (Muster ``denkmal._bbox_param``). Kein Treffer ->
-    ``None`` (Punkt liegt außerhalb aller Register-Städte, z.B. ländlich).
+    ``cities`` is a sequence of ``(slug, lat, lon, radius_deg)``. The
+    longitude difference is compressed with ``cos(lat)`` so ground distance
+    is approximately isotropic (pattern ``denkmal._bbox_param``). No match ->
+    ``None`` (point lies outside all registry cities, e.g. rural).
     """
     best: str | None = None
     best_d: float | None = None
@@ -83,7 +83,7 @@ def nearest_city_slug(lat: float, lon: float, cities) -> str | None:
 
 
 def _registry_cities() -> list[tuple[str, float, float, float]]:
-    """Alle 84 Register-Städte als (slug, lat, lon, radius_deg)-Tupel."""
+    """All 84 registry cities as (slug, lat, lon, radius_deg) tuples."""
     from cityscape.registry import CITY_REGISTRY
 
     return [
@@ -93,14 +93,14 @@ def _registry_cities() -> list[tuple[str, float, float, float]]:
 
 
 def build_geo_map(doc: dict) -> dict:
-    """Baut die Geo-Map aus dem geparsten stat-Vollbestand (rein, kein IO).
+    """Builds the geo map from parsed static full inventory (pure, no IO).
 
-    Navigiert ``payload[].aegiEnergyInfrastructureTablePublication`` ->
+    Navigates ``payload[].aegiEnergyInfrastructureTablePublication`` ->
     ``energyInfrastructureTable[]`` -> ``energyInfrastructureSite[]`` ->
-    ``energyInfrastructureStation[]`` (Koordinaten) -> ``refillPoint[].
-    aegiElectricChargingPoint.idG``. Stationen ohne Koordinaten oder außerhalb
-    aller Stadt-Umkreise fallen ehrlich raus (der dynamische Status dieser
-    Punkte ist keiner Stadt zuordenbar). Rückgabe:
+    ``energyInfrastructureStation[]`` (coordinates) -> ``refillPoint[].
+    aegiElectricChargingPoint.idG``. Stations without coordinates or outside
+    all city radii are honestly omitted (the dynamic status of these
+    points cannot be assigned to any city). Returns:
     ``{"publication_time": ..., "cities": {slug: {rp_id: [lat, lon]}}}``.
     """
     container = doc.get("messageContainer")
@@ -158,11 +158,11 @@ def build_geo_map(doc: dict) -> dict:
 
 
 def load_city_points(path: str) -> dict[str, dict[str, list[float]]]:
-    """Laedt die Geo-Map fuer den Request-Pfad (Volume-Datei, sonst Seed).
+    """Loads the geo map for the request path (volume file, otherwise seed).
 
-    mtime-gecacht je Pfad (die Map ändert sich höchstens täglich). Eine
-    unlesbare/kaputte Datei -> leere Map + Warning (die Route liefert dann
-    ehrlich ``no_data``, kein 500). Rückgabe ist NUR das ``cities``-dict.
+    mtime-cached per path (the map changes at most daily). An
+    unreadable/corrupt file -> empty map + warning (the route then
+    honestly returns ``no_data``, no 500). Return value is ONLY the ``cities`` dict.
     """
     candidate = Path(path)
     if not candidate.is_file():
