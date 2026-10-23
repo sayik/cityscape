@@ -1,19 +1,19 @@
-"""Rate-Limit für ChatGPT-GPT-Action-Traffic (Muster: mcp/ratelimit.py).
+"""Rate limit for ChatGPT GPT Action traffic (pattern: mcp/ratelimit.py).
 
-Warum ein EIGENES Limit: ALLE Nutzer des cityscape-GPTs kommen serverseitig
-über WENIGE OpenAI-Egress-IPs (openai.com/chatgpt-actions.json). Damit ein
-einzelner Power-Nutzer nicht das gemeinsame IP-Budget aller ChatGPT-Nutzer
-leert, stehen die OpenAI-Ranges auf der CITYSCAPE_RATELIMIT_ALLOWLIST
-(Bypass von slowapi-IP-Limit + AbuseGuard, gleiches Muster wie
-Anthropic-Egress beim MCP-Server). Dieses Modul ist der BACKSTOP dazu: ein
-Moving-Window-Limit je GPT-NUTZER (ephemere OpenAI-Nutzer-Kennung, Fallback
-Konversation/GPT/IP) mit demselben Default wie der MCP-Endpunkt (480/min,
-CITYSCAPE_LIMIT_GPT). Storage in Redis (über Worker geteilt), Fallback
-In-Memory wie beim MCP-Limiter.
+Why a SEPARATE limit: ALL users of the cityscape GPT arrive server-side
+via FEW OpenAI egress IPs (openai.com/chatgpt-actions.json). To prevent a
+single power user from exhausting the shared IP budget of all ChatGPT users,
+the OpenAI ranges are on CITYSCAPE_RATELIMIT_ALLOWLIST
+(bypassing slowapi IP limit + AbuseGuard, same pattern as
+Anthropic egress for the MCP server). This module acts as the BACKSTOP to that: a
+moving-window limit per GPT USER (ephemeral OpenAI user identifier, fallback
+conversation/GPT/IP) with the same default as the MCP endpoint (480/min,
+CITYSCAPE_LIMIT_GPT). Storage in Redis (shared across workers), fallback
+in-memory as in the MCP limiter.
 
-Spoofing: Die OpenAI-Header sind fälschbar, aber ein Spoofer ohne
-allowlistete IP unterliegt weiterhin dem normalen IP-Limit; dieses Limit
-kommt nur ZUSÄTZLICH dazu (kein Bypass-Vektor, s. infra/gpt_actions.py).
+Spoofing: The OpenAI headers can be spoofed, but a spoofer without
+an allowlisted IP remains subject to the regular IP limit; this limit
+is only applied IN ADDITION (no bypass vector, see infra/gpt_actions.py).
 """
 
 from __future__ import annotations
@@ -35,12 +35,12 @@ logger = logging.getLogger(__name__)
 
 
 def _make_storage(settings: Settings):
-    """Redis-Storage (über Worker geteilt); Fallback In-Memory, s. mcp/ratelimit."""
+    """Redis storage (shared across workers); fallback in-memory, see mcp/ratelimit."""
     uri = settings.limit_storage_uri or settings.redis_url
     try:
-        # Kurze Timeouts: check() darf bei nicht erreichbarem Redis nicht bis zum
-        # OS-Default blockieren (lokaler Start ohne Redis), sonst hängt der
-        # App-Start statt auf In-Memory zu fallen. memory:// ignoriert die kwargs.
+        # Short timeouts: check() must not block up to OS default when Redis
+        # is unreachable (local start without Redis), otherwise app startup
+        # hangs instead of falling back to in-memory. memory:// ignores kwargs.
         storage = storage_from_string(
             uri, socket_connect_timeout=0.5, socket_timeout=0.5
         )
@@ -51,7 +51,7 @@ def _make_storage(settings: Settings):
             "(pro-Prozess, nicht worker-geteilt).",
             uri,
         )
-    except Exception as exc:  # noqa: BLE001 - jeder Storage-Init-Fehler -> Fallback
+    except Exception as exc:  # noqa: BLE001 - any storage init error -> fallback
         logger.warning(
             "GPT-Guard: Redis-Storage-Init fehlgeschlagen (%s): %s", uri, exc
         )
@@ -59,9 +59,9 @@ def _make_storage(settings: Settings):
 
 
 class GPTActionLimitMiddleware(BaseHTTPMiddleware):
-    """Moving-Window-Limit je GPT-Nutzer; feuert NUR bei GPT-Action-Requests."""
+    """Moving-window limit per GPT user; fires ONLY on GPT action requests."""
 
-    def __init__(self, app, limit: str | None = None) -> None:  # noqa: ANN001 - Starlette-App
+    def __init__(self, app, limit: str | None = None) -> None:  # noqa: ANN001 - Starlette app
         super().__init__(app)
         s = Settings()
         effective = limit if limit is not None else s.limit_gpt
@@ -74,7 +74,7 @@ class GPTActionLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        # Nur echte Datenrouten drosseln; Health/Docs/Admin bleiben unberührt.
+        # Throttle only real data routes; health/docs/admin remain untouched.
         if (
             self._limiter is None
             or not request.url.path.startswith("/api/v1/")
@@ -84,7 +84,7 @@ class GPTActionLimitMiddleware(BaseHTTPMiddleware):
 
         ident = gpt_rate_ident(request.headers, real_client_ip(request))
         if not self._limiter.hit(self._item, "gpt", ident):
-            # Lokaler Import wie im AbuseGuard (vermeidet Zyklen beim Modul-Load).
+            # Local import as in AbuseGuard (avoids cycles during module loading).
             from cityscape.api.errors import _envelope
 
             response = _envelope(

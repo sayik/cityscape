@@ -1,15 +1,15 @@
-"""Statischer Katalog aller Stadt-Datenarten (Discovery-Schicht für /overview).
+"""Static catalog of all city data types (discovery layer for /overview).
 
-Owner-Wunsch (2026-06-24): MCP-Agenten und Endnutzer sollen auf einen Blick sehen,
-wie VIELE Datenarten es pro Stadt gibt, nicht nur das meistgenutzte Wetter. Dieser
-Katalog ist die EINZIGE Quelle der Datenart-Labels + zugehöriger MCP-Tool-Namen
-für den ``GET /cities/{slug}/overview``-Endpunkt.
+Owner request (2026-06-24): MCP agents and end users should see at a glance
+HOW MANY data types exist per city, not only the most frequently used weather. This
+catalog is the ONLY source for data type labels + associated MCP tool names
+for the ``GET /cities/{slug}/overview`` endpoint.
 
-Reine statische Metadaten (keine Upstream-Calls). Die Verfügbarkeit je Stadt wird
-zur Laufzeit günstig aus ``registry.coverage`` abgeleitet. Eine Assertion im Test
-``tests/integration/test_city_overview.py`` hält die Schlüssel deckungsgleich mit
-der MCP-Allowlist (``mcp.client.ALLOWED_RESOURCES``), damit der Katalog beim
-Hinzufügen einer neuen Datenart nicht still zurückfällt.
+Pure static metadata (no upstream calls). Availability per city is
+derived cheaply at runtime from ``registry.coverage``. An assertion in test
+``tests/integration/test_city_overview.py`` keeps the keys identical with
+the MCP allowlist (``mcp.client.ALLOWED_RESOURCES``), so the catalog does not
+silently fall behind when adding a new data type.
 """
 
 from __future__ import annotations
@@ -18,11 +18,11 @@ from typing import NamedTuple
 
 
 class DataType(NamedTuple):
-    """Eine Stadt-Datenart für den Overview-Katalog.
+    """A city data type for the overview catalog.
 
-    ``key`` ist das letzte Pfadsegment (``/cities/{slug}/<key>``) und zugleich der
-    Coverage-Schlüssel (``registry.coverage.is_covered``). ``tool`` ist der Name
-    des zugehörigen MCP-Tools, damit ein Agent direkt weiterspringen kann.
+    ``key`` is the last path segment (``/cities/{slug}/<key>``) and also the
+    coverage key (``registry.coverage.is_covered``). ``tool`` is the name
+    of the associated MCP tool, so an agent can jump directly.
     """
 
     key: str
@@ -31,17 +31,17 @@ class DataType(NamedTuple):
     label_en: str
 
 
-# Genau die City-Sub-Ressourcen aus ``mcp.client.ALLOWED_RESOURCES`` (Test hält
-# die Mengen deckungsgleich). Labels mit echten Umlauten (deutsche Schreibweise).
+# Exactly the city sub-resources from ``mcp.client.ALLOWED_RESOURCES`` (test keeps
+# sets identical). Labels with real umlauts (German spelling).
 CITY_DATA_CATALOG: tuple[DataType, ...] = (
     DataType("base", "get_city", "Basisdaten", "Base data"),
     DataType("weather", "weather", "Wetter", "Weather"),
     DataType(
         "weather-warnings", "weather_warnings", "Wetterwarnungen", "Weather warnings"
     ),
-    # Quick-260705-ufv: BBK NINA Bevoelkerungsschutz-Warnungen je Stadt (keylos,
-    # ARS-basiert, Voll-Abdeckung). Kein Eintrag in _NAMED_TOOLS -> laeuft ueber
-    # get_city_resource. Label mit korrektem Umlaut, key/tool ASCII.
+    # Quick-260705-ufv: BBK NINA civil protection warnings per city (keyless,
+    # ARS-based, full coverage). No entry in _NAMED_TOOLS -> runs via
+    # get_city_resource. Label with correct umlaut, key/tool ASCII.
     DataType(
         "civil-protection-warnings",
         "civil_protection_warnings",
@@ -95,8 +95,8 @@ CITY_DATA_CATALOG: tuple[DataType, ...] = (
     ),
     DataType("webcams", "webcams", "Verkehrs-Webcams", "Traffic webcams"),
     DataType("charging", "charging", "Ladesäulen", "EV charging stations"),
-    # DATA-42: eRound-Live-Ladebelegung je Stadt (AFIR DATEX-II V3, CC0). Join
-    # aus Geo-Map (statischer Vollbestand) + akkumulierten Belegungs-Deltas.
+    # DATA-42: eRound live charging occupancy per city (AFIR DATEX-II V3, CC0). Join
+    # from geo-map (static full database) + accumulated occupancy deltas.
     DataType(
         "charging-status",
         "charging_status",
@@ -155,11 +155,11 @@ CITY_DATA_CATALOG: tuple[DataType, ...] = (
         "Gewerbe-An- & Abmeldungen",
         "Business registrations",
     ),
-    # DATA-37: Regionalstatistik.de beantragte Insolvenzen je Kreis (52411-02
-    # Unternehmen + 52411-03 übrige Schuldner), Tier A. key/tool ASCII.
+    # DATA-37: Regionalstatistik.de filed insolvencies per county (52411-02
+    # enterprises + 52411-03 other debtors), Tier A. key/tool ASCII.
     DataType("insolvencies", "insolvencies", "Insolvenzen", "Insolvencies"),
     DataType("events", "events", "Veranstaltungen", "Public events"),
-    # DATA-OSM (Tier 1): dedizierte OSM-Overpass-Datenarten (ODbL, Tier B).
+    # DATA-OSM (Tier 1): dedicated OSM Overpass data types (ODbL, Tier B).
     DataType("playgrounds", "playgrounds", "Spielplätze", "Playgrounds"),
     DataType(
         "drinking-water",
@@ -188,46 +188,46 @@ CITY_DATA_CATALOG: tuple[DataType, ...] = (
         "Government offices",
     ),
     DataType("education", "education", "Bildungseinrichtungen", "Education facilities"),
-    # DATA-OSM-Tier-2: Denkmallisten je Bundesland (Land-WFS, coverage-gated).
+    # DATA-OSM-Tier-2: monument lists per state (state WFS, coverage-gated).
     DataType("heritage", "heritage", "Denkmäler", "Heritage monuments"),
-    # DATA-OSM-Tier-2: Baumkataster je Stadt (kommunaler WFS, coverage-gated).
+    # DATA-OSM-Tier-2: tree cadastre per city (municipal WFS, coverage-gated).
     DataType("tree-cadastre", "tree_cadastre", "Baumkataster", "Tree cadastre"),
-    # DATA-OSM-Tier-2: Einwohnerdichte aus dem Zensus-2022-100m-Gitter (alle Städte).
+    # DATA-OSM-Tier-2: population density from Census 2022 100m grid (all cities).
     DataType(
         "population-density",
         "population_density",
         "Einwohnerdichte",
         "Population density",
     ),
-    # TENDER-01/05: öffentliche Auftragsvergabe (oeffentlichevergabe.de, CC0 = Tier A).
-    # key/tool ASCII (Pfadsegment + MCP-Tool), Label mit korrektem Umlaut.
+    # TENDER-01/05: public procurement (oeffentlichevergabe.de, CC0 = Tier A).
+    # key/tool ASCII (path segment + MCP tool), label with correct umlaut.
     DataType(
         "public-tenders",
         "public_tenders",
         "Öffentliche Auftragsvergabe",
         "Public procurement",
     ),
-    # DATA-40: kommunale Radzähl-Open-Data je Stadt (Dauerzählstellen, Tier A,
-    # Teilabdeckung muenchen/leipzig/hamburg/berlin/stuttgart). key/tool ASCII,
-    # Label mit korrektem Umlaut. NICHT das sharing-Tool (GBFS-Leihfahrzeuge).
+    # DATA-40: municipal bicycle counting open data per city (permanent counters, Tier A,
+    # partial coverage muenchen/leipzig/hamburg/berlin/stuttgart). key/tool ASCII,
+    # label with correct umlaut. NOT the sharing tool (GBFS rental vehicles).
     DataType(
         "bike-counts",
         "bike_counts",
         "Radzählstellen",
         "Bike counters",
     ),
-    # DATA-41: Fernwärme-/Wärmenetz-Versorgung je Stadt (kommunale Wärmeplanung,
-    # föderiert je Stadt-WFS, Tier A, Teilabdeckung berlin/hamburg). key/tool ASCII,
-    # Label mit korrektem Umlaut.
+    # DATA-41: district heating networks per city (municipal heat planning,
+    # federated per city WFS, Tier A, partial coverage berlin/hamburg). key/tool ASCII,
+    # label with correct umlaut.
     DataType(
         "district-heating",
         "district_heating",
         "Fernwärme & Wärmenetze",
         "District heating networks",
     ),
-    # Quick-260705-jgt: Behoerden-Wartezeiten je Stadt (live, keylos, Tier A,
-    # Teilabdeckung nur koeln). key/tool ASCII (Pfadsegment), Label mit korrektem
-    # Umlaut. Kein Eintrag in _NAMED_TOOLS -> laeuft ueber get_city_resource.
+    # Quick-260705-jgt: office wait times per city (live, keyless, Tier A,
+    # partial coverage koeln only). key/tool ASCII (path segment), label with correct
+    # umlaut. No entry in _NAMED_TOOLS -> runs via get_city_resource.
     DataType(
         "office-wait-times",
         "office_wait_times",
@@ -236,15 +236,15 @@ CITY_DATA_CATALOG: tuple[DataType, ...] = (
     ),
 )
 
-# MCP-TOOL-KONSOLIDIERUNG 2026-07-02: Der Long-Tail läuft über EIN generisches
-# Tool ``get_city_resource(slug, resource=<key>)``; nur wenige Datenarten
-# behalten ein namentliches Tool. Statt alle Einträge oben umzuschreiben (und
-# jeden künftigen Eintrag daran zu erinnern), wird die Tool-Zuordnung hier
-# ABGELEITET: die historischen ``tool``-Werte in den Literalen oben sind damit
-# nur noch Dokumentation; maßgeblich ist diese Ableitung. Neue Datenarten
-# zeigen automatisch auf get_city_resource. Der Overview-/Katalog-Konsument
-# übergibt bei get_city_resource den ``type``-Schlüssel als resource-Argument
-# (Hinweis steht in der cityscape://catalog-Note und den Server-Instructions).
+# MCP TOOL CONSOLIDATION 2026-07-02: The long-tail runs via ONE generic
+# tool ``get_city_resource(slug, resource=<key>)``; only few data types
+# retain a named tool. Instead of rewriting all entries above (and
+# reminding each future entry), tool mapping is DERIVED here:
+# historical ``tool`` values in literals above are thus
+# documentation only; this derivation is authoritative. New data types
+# point automatically to get_city_resource. The overview/catalog consumer
+# passes the ``type`` key as resource argument to get_city_resource
+# (note in cityscape://catalog note and server instructions).
 _NAMED_TOOLS: dict[str, str] = {
     "base": "get_city",
     "overview": "get_city_overview",

@@ -1,18 +1,18 @@
-"""Stadt-Routen über das Register + Wikidata-Stammdaten-Slice.
+"""City routes via the registry + Wikidata master data slice.
 
-Macht den 404-Pfad end-to-end sichtbar: ``GET /cities/{slug}`` ruft
-``get_city`` auf; ein unbekannter Slug wirft ``NotFoundError``, das der zentrale
-Exception-Handler auf den 404-Envelope mit Hint mappt (KEINE eigene
-HTTPException/try-except hier).
+Makes the 404 path visible end-to-end: ``GET /cities/{slug}`` calls
+``get_city``; an unknown slug raises ``NotFoundError``, which the central
+exception handler maps to the 404 envelope with hint (NO custom
+HTTPException/try-except here).
 
-``GET /cities/{slug}/base`` (DATA-01/06, API-01, GOV-01, DX-06) verdrahtet
-die vertikale Wikidata-Slice end-to-end: Register-Lookup -> ResilientSourceClient-
-Fassade (Cache/SWR/Single-Flight/Breaker) mit dem keylosen Adapter als ``fetch_fn``
--> Register-Geo-Fallback (verhindert GeoPoint-ValidationError bei fehlendem P625)
--> Mapper -> kanonischer Daten-Envelope mit Attribution.
-Graceful Degradation: deaktivierte Quelle liefert 200 mit ``source_status``
-``disabled`` (DATA-06, nie 5xx); toter Upstream ohne Cache liefert 503 mit
-selbst-korrigierendem Hint, der ``GET /api/v1/health`` nennt (DX-06).
+``GET /cities/{slug}/base`` (DATA-01/06, API-01, GOV-01, DX-06) wires
+the vertical Wikidata slice end-to-end: Registry lookup -> ResilientSourceClient
+facade (Cache/SWR/Single-Flight/Breaker) with the keyless adapter as ``fetch_fn``
+-> Registry geo fallback (prevents GeoPoint ValidationError when P625 is missing)
+-> Mapper -> canonical data envelope with attribution.
+Graceful degradation: disabled source returns 200 with ``source_status``
+``disabled`` (DATA-06, never 5xx); dead upstream without cache returns 503 with
+self-correcting hint referencing ``GET /api/v1/health`` (DX-06).
 """
 
 from __future__ import annotations
@@ -214,13 +214,13 @@ router = APIRouter()
 
 
 def _not_covered(endpoint: str) -> dict:
-    """Baut die ehrliche ``not_covered``-Antwort eines teilabgedeckten Endpunkts.
+    """Builds the honest ``not_covered`` response of a partially covered endpoint.
 
-    Owner-Entscheidung 2026-06-13: eine nicht-abgedeckte Stadt liefert KEIN leeres
-    ``ok`` (verschleiert die fehlende Abdeckung) und KEIN 404 (das ist "Stadt
-    unbekannt"), sondern 200 mit ``source_status="not_covered"``, ``data: null``
-    und der Liste der abgedeckten Städte (``meta.covered_cities``), klar
-    unterscheidbar von ``no_data`` (abgedeckt, aktuell aber keine Daten).
+    Owner decision 2026-06-13: an uncovered city returns NO empty
+    ``ok`` (obscures the lack of coverage) and NO 404 (that is "city
+    unknown"), but 200 with ``source_status="not_covered"``, ``data: null``
+    and the list of covered cities (``meta.covered_cities``), clearly
+    distinguishable from ``no_data`` (covered, but currently no data).
     """
     return {
         "data": None,
@@ -233,33 +233,33 @@ def _not_covered(endpoint: str) -> dict:
 
 
 def _mark_deprecated(response: Response, successor: str) -> None:
-    """Markiert einen Altpfad als deprecated (LIVE-03, Phase 20).
+    """Marks a legacy path as deprecated (LIVE-03, Phase 20).
 
-    Setzt den ``Deprecation``-Header (RFC 8594, Wert ``"true"``) und einen
-    ``Link``-Header auf den /live-Nachfolger (``rel="successor-version"``). Eine
-    Quelle der Wahrheit (REST-Regel 6): die Logik/der Envelope der Altpfade bleibt
-    UNVERÄNDERT (kein Breaking Change), es kommen nur die beiden Hinweis-Header
-    hinzu. Wird ausschließlich von den Bestands-Live-Handlern aufgerufen; die
-    /live-Alias-Wrapper übergeben eine Wegwerf-Response, sodass der Header dort
-    NICHT landet (der /live-Pfad ist der Nachfolger, nicht der deprecated Altpfad).
+    Sets the ``Deprecation`` header (RFC 8594, value ``"true"``) and a
+    ``Link`` header pointing to the /live successor (``rel="successor-version"``). Single
+    source of truth (REST rule 6): the logic/envelope of legacy paths remains
+    UNCHANGED (no breaking change), only the two hint headers are
+    added. Called exclusively by legacy live handlers; the
+    /live alias wrappers pass a throwaway response so the header does
+    NOT land there (the /live path is the successor, not the deprecated legacy path).
     """
     response.headers["Deprecation"] = "true"
     response.headers["Link"] = f'<{successor}>; rel="successor-version"'
 
 
-# Connector-Registry der /road-events-Route (DATA-15): Stadt-Slug -> (source,
-# fetch_fn, mapper). Modul-Konstante, damit 09-06 nur ADDITIV weitere Einträge
-# ergänzt, ohne die Route-Logik zu ändern (Erweiterungsmechanismus, verbindlich).
-# Kein Eintrag für einen Slug -> ehrliches 200 source_status="no_data" (keine
-# Quelle für diese Stadt). Der Toggle wird generisch via
-# getattr(Settings(), f"enable_{source}") geprüft (Toggle-Name == source).
+# Connector registry of the /road-events route (DATA-15): city slug -> (source,
+# fetch_fn, mapper). Module constant so that 09-06 only ADDITIVELY adds further entries
+# without changing route logic (extension mechanism, mandatory).
+# No entry for a slug -> honest 200 source_status="no_data" (no
+# source for this city). The toggle is checked generically via
+# getattr(Settings(), f"enable_{source}") (toggle name == source).
 #
-# Decision B-1 (verbindlich): MobiData BW ist der landesweite Baden-Württemberg-
-# DATEX-II-Feed und wird auf die registrierte BW-Landeshauptstadt slug="stuttgart"
-# verdrahtet (BBox-gefiltert auf Stuttgart), NICHT auf Karlsruhe (Karlsruhe ist
-# keine der 28 Register-Städte; "z.B. Karlsruhe" im Success-Criterion ist nur das
-# Quell-Beispiel, der DATEX-II-Parser-Pfad ist quell-, nicht stadt-gebunden).
-# Genau diese 5 Slugs sind registriert und get_city-gültig.
+# Decision B-1 (mandatory): MobiData BW is the state-wide Baden-Württemberg
+# DATEX-II feed and is wired to the registered BW state capital slug="stuttgart"
+# (BBox-filtered to Stuttgart), NOT to Karlsruhe (Karlsruhe is
+# not one of the 28 register cities; "e.g. Karlsruhe" in the success criterion is just the
+# source example, the DATEX-II parser path is source-bound, not city-bound).
+# Exactly these 5 slugs are registered and valid for get_city.
 CONNECTOR_MAP: dict[str, tuple] = {
     "berlin": ("berlin_viz", fetch_berlin_road_events, map_berlin_road_events),
     "koeln": ("koeln_verkehr", fetch_koeln_road_events, map_koeln_road_events),
@@ -283,10 +283,10 @@ CONNECTOR_MAP: dict[str, tuple] = {
         fetch_dortmund_road_events,
         map_dortmund_road_events,
     ),
-    # SPERRINFOSYS Sachsen (LISt GmbH, DL-DE/BY 2.0): EINE sachsenweite Quelle
-    # für Dresden UND Leipzig; der VKZ-Filter im Adapter trennt die Städte.
-    # Der Cache-Key ist stadt-scharf (build_cache_key mit city_slug), daher
-    # existiert je Stadt ein eigener Cache-Eintrag trotz gemeinsamer Quelle.
+    # SPERRINFOSYS Saxony (LISt GmbH, DL-DE/BY 2.0): ONE state-wide source
+    # for Dresden AND Leipzig; the VKZ filter in the adapter separates the cities.
+    # The cache key is city-specific (build_cache_key with city_slug), therefore
+    # an independent cache entry exists per city despite a shared source.
     "dresden": (
         "sperrinfosys",
         fetch_sperrinfosys_road_events,
@@ -297,31 +297,31 @@ CONNECTOR_MAP: dict[str, tuple] = {
         fetch_sperrinfosys_road_events,
         map_sperrinfosys_road_events,
     ),
-    # DATA-31: Bremen kommt NICHT keylos, sondern über den Mobilithek-mTLS-Pull
-    # (VMZ Bremen, DATEX II Situation). fetch_fn=None signalisiert dem
-    # city_road_events-Handler den mTLS-Sonderpfad (_bremen_road_events); der
-    # generische keylose Pfad wird für Bremen NICHT betreten. Eintrag hält die
-    # Coverage-Karte (PARTIAL_COVERAGE["road-events"]) drift-synchron.
+    # DATA-31: Bremen does NOT come keyless, but via the Mobilithek mTLS pull
+    # (VMZ Bremen, DATEX II Situation). fetch_fn=None signals the
+    # city_road_events handler the special mTLS path (_bremen_road_events); the
+    # generic keyless path is NOT entered for Bremen. Entry keeps the
+    # coverage map (PARTIAL_COVERAGE["road-events"]) drift-synchronized.
     "bremen": ("bremen_baustellen", None, map_bremen_road_events),
 }
 
-# Drift-Schutz (verbindlich): die road-events-Abdeckung in der öffentlichen
-# Coverage-Karte MUSS exakt den CONNECTOR_MAP-Städten entsprechen. Wird hier ein
-# Connector ergaenzt/entfernt, ohne registry/coverage.py nachzuziehen, bricht der
-# Import (und damit jeder Test/Boot) sofort - kein stiller Coverage-Drift. Bewusst
-# ein echtes raise (kein assert): greift auch unter `python -O`.
+# Drift protection (mandatory): road-events coverage in the public
+# coverage map MUST match the CONNECTOR_MAP cities exactly. If a
+# connector is added/removed here without updating registry/coverage.py,
+# import (and thus every test/boot) fails immediately - no silent coverage drift. Deliberately
+# a real raise (no assert): also takes effect under `python -O`.
 if set(CONNECTOR_MAP) != set(PARTIAL_COVERAGE["road-events"]):
     raise RuntimeError(
         "CONNECTOR_MAP und PARTIAL_COVERAGE['road-events'] sind divergiert: "
         f"{set(CONNECTOR_MAP) ^ set(PARTIAL_COVERAGE['road-events'])}"
     )
 
-# GBFS-Sharing-Registry (DATA-33): Stadt-Slug -> kuratierte Nextbike-GBFS-System-
-# IDs (NIE User-Input -> kein SSRF). Mehrere Städte können sich ein regionales
-# System teilen (z.B. VRNnextbike "nextbike_vn" für Mannheim/Heidelberg/Ludwigs-
-# hafen); der BBox-Filter im Adapter trennt sie wieder. Pro System prüft der
-# Adapter die GBFS-``license_id`` fail-closed gegen die Tier-A-Allowlist
-# (GOV-02/04). Kein Eintrag für einen Slug -> ehrliches not_covered.
+# GBFS sharing registry (DATA-33): City slug -> curated Nextbike GBFS system
+# IDs (NEVER user input -> no SSRF). Multiple cities can share a regional
+# system (e.g. VRNnextbike "nextbike_vn" for Mannheim/Heidelberg/Ludwigshafen);
+# the BBox filter in the adapter separates them again. Per system the
+# adapter checks the GBFS ``license_id`` fail-closed against the Tier-A allowlist
+# (GOV-02/04). No entry for a slug -> honest not_covered.
 GBFS_SYSTEMS: dict[str, tuple[str, ...]] = {
     "berlin": ("nextbike_bn",),
     "muenchen": ("nextbike_ml",),
@@ -350,37 +350,37 @@ GBFS_SYSTEMS: dict[str, tuple[str, ...]] = {
     "leverkusen": ("nextbike_dw",),
 }
 
-# Drift-Schutz (verbindlich, wie CONNECTOR_MAP): die sharing-Abdeckung in der
-# öffentlichen Coverage-Karte MUSS exakt den GBFS_SYSTEMS-Städten entsprechen.
-# Echtes raise (kein assert): greift auch unter `python -O`.
+# Drift protection (mandatory, like CONNECTOR_MAP): sharing coverage in the
+# public coverage map MUST match the GBFS_SYSTEMS cities exactly.
+# Real raise (no assert): also takes effect under `python -O`.
 if set(GBFS_SYSTEMS) != set(PARTIAL_COVERAGE["sharing"]):
     raise RuntimeError(
         "GBFS_SYSTEMS und PARTIAL_COVERAGE['sharing'] sind divergiert: "
         f"{set(GBFS_SYSTEMS) ^ set(PARTIAL_COVERAGE['sharing'])}"
     )
 
-# DB-Timetables-Registry (DATA-34): Stadt-Slug -> kuratierte Bahnhofs-EVA-Nummern
-# (NIE User-Input -> kein SSRF). Metropolen führen NICHT nur den Hbf, sondern alle
-# großen Fernverkehrs-Bahnhöfe (Owner-Wunsch: Hamburg Dammtor/Harburg/Altona,
-# Berlin Suedkreuz/Gesundbrunnen/Spandau/Ostbf, FFM Sued/Flughafen-Fernbf, München
-# Ost/Pasing, Köln Messe-Deutz, Dresden Neustadt, ...). Berlin Hbf hat zwei Ebenen
-# mit eigenen EVAs. Der Adapter aggregiert + dedupliziert über alle EVAs und führt
-# je Abfahrt/Ankunft den Bahnhofsnamen (``station``). Alle EVAs gegen die
-# DB-Timetables-API live verifiziert. Diese Map ist eine BEVORZUGTE/verifizierte
-# Override-Liste für die großen Knoten; Städte OHNE Eintrag werden zur Laufzeit
-# aus dem StaDa-Katalog abgeleitet (_resolve_city_station_evas) -> volle Abdeckung
-# über alle 84 Städte, kein not_covered mehr.
+# DB Timetables registry (DATA-34): City slug -> curated station EVA numbers
+# (NEVER user input -> no SSRF). Metropolises include NOT only the main station, but all
+# major long-distance stations (owner request: Hamburg Dammtor/Harburg/Altona,
+# Berlin Suedkreuz/Gesundbrunnen/Spandau/Ostbf, Frankfurt South/Airport long-distance station, Munich
+# East/Pasing, Cologne Messe-Deutz, Dresden Neustadt, ...). Berlin Hbf has two levels
+# with their own EVAs. The adapter aggregates + deduplicates across all EVAs and includes
+# the station name (``station``) for each departure/arrival. All EVAs live verified against the
+# DB Timetables API. This map is a PREFERRED/verified
+# override list for major hubs; cities WITHOUT an entry are derived at runtime
+# from the StaDa catalog (_resolve_city_station_evas) -> full coverage
+# across all 84 cities, no more not_covered.
 STATION_EVAS: dict[str, tuple[str, ...]] = {
-    # Berlin: Hbf (Nord-Süd 8098160 + Ost-West 8089021) + Südkreuz + Gesundbrunnen
+    # Berlin: Hbf (North-South 8098160 + East-West 8089021) + Südkreuz + Gesundbrunnen
     # + Spandau + Ostbahnhof.
     "berlin": ("8098160", "8089021", "8011113", "8011102", "8010404", "8010255"),
     # Hamburg: Hbf + Dammtor + Harburg + Altona.
     "hamburg": ("8002549", "8002548", "8000147", "8002553"),
-    # Muenchen: Hbf + Ost + Pasing.
+    # Munich: Hbf + Ost + Pasing.
     "muenchen": ("8000261", "8000262", "8004158"),
-    # Koeln: Hbf + Messe/Deutz.
+    # Cologne: Hbf + Messe/Deutz.
     "koeln": ("8000207", "8003368"),
-    # Frankfurt: Hbf + Süd + Flughafen Fernbahnhof.
+    # Frankfurt: Hbf + South + Airport long-distance station.
     "frankfurt-am-main": ("8000105", "8002041", "8070003"),
     "stuttgart": ("8000096",),
     "duesseldorf": ("8000085",),
@@ -401,22 +401,22 @@ STATION_EVAS: dict[str, tuple[str, ...]] = {
     "augsburg": ("8000013",),
 }
 
-# Obergrenze der je Stadt aggregierten EVAs (gegen zu viele Upstream-Calls): die
-# wichtigsten Bahnhöfe reichen für die Stadt-Tafel.
+# Upper limit of aggregated EVAs per city (against too many upstream calls): the
+# most important stations suffice for the city board.
 _MAX_CITY_STATION_EVAS = 6
 
 
 async def _resolve_city_station_evas(
     request: Request, *, slug: str, ags: str | None, client_id: str, api_key: str
 ) -> tuple[str, ...]:
-    """Liefert die Haupt-Bahnhof-EVAs einer Stadt für die Stadt-Tafel.
+    """Returns the main station EVAs of a city for the city departure/arrival board.
 
-    Bevorzugt die verifizierte ``STATION_EVAS``-Override-Liste; für alle anderen
-    Städte werden die EVAs zur Laufzeit aus dem StaDa-Katalog abgeleitet
-    (Stationen der Stadt via ``municipalityCode == ags``, nach Kategorie sortiert,
-    die wichtigsten genommen, ALLE Ebenen-EVAs übernommen, da die /plan-Tafel bei
-    Großbahnhöfen teils an einer Ebenen-EVA hängt). So sind alle 84 Städte
-    abgedeckt. SSRF: nur numerische EVAs aus StaDa, kein roher User-Input.
+    Prefers the verified ``STATION_EVAS`` override list; for all other
+    cities, the EVAs are derived at runtime from the StaDa catalog
+    (stations of the city via ``municipalityCode == ags``, sorted by category,
+    most important taken, ALL level EVAs adopted, as the /plan board for
+    large stations partly depends on a level EVA). Thus all 84 cities
+    are covered. SSRF: only numeric EVAs from StaDa, no raw user input.
     """
     override = STATION_EVAS.get(slug)
     if override:
@@ -446,22 +446,22 @@ async def _resolve_city_station_evas(
     return tuple(evas[:_MAX_CITY_STATION_EVAS])
 
 
-# [ASSUMED] EVAS-23111-Tabellen-Code des Krankenhausverzeichnisses (RESEARCH
-# A4). None-faehig: der Live-Abgleich ist Manual-Only nach Deploy (Owner). Der
-# genesis-Adapter liest die Antwort defensiv (None-Fallback je Feld).
+# [ASSUMED] EVAS 23111 table code of the hospital registry (RESEARCH
+# A4). None-capable: live verification is manual-only after deploy (owner). The
+# genesis adapter reads the response defensively (None fallback per field).
 #
-# Host (base_url): Der RED-Test-Vertrag aus Plan 08-01 mockt
-# regionalstatistik.de (das Krankenhausverzeichnis EVAS 23111 liegt auf der
-# Regionalstatistik-GENESIS-Instanz, gleiche wie die Demografie). Der Plan-
-# Hinweis auf www-genesis.destatis.de (Pitfall 2) traf für 23111 NICHT zu; die
-# Route nutzt daher den genesis-Adapter-Default-Host (Finding B-3 aufgelöst auf
-# den Test-Vertrag, beide Hosts liegen ohnehin in der SSRF-Allowlist).
-_HOSPITAL_TABLE = "23111-01-01-4"  # [ASSUMED], Live-Abgleich Manual-Only.
+# Host (base_url): The RED test contract from Plan 08-01 mocks
+# regionalstatistik.de (hospital directory EVAS 23111 is located on the
+# Regionalstatistik GENESIS instance, same as demographics). The plan
+# note referencing www-genesis.destatis.de (Pitfall 2) did NOT apply to 23111; the
+# route therefore uses the genesis adapter default host (Finding B-3 resolved to
+# the test contract, both hosts are in the SSRF allowlist anyway).
+_HOSPITAL_TABLE = "23111-01-01-4"  # [ASSUMED], live verification manual-only.
 
 
 @router.get("/cities")
 async def cities() -> dict:
-    """Listet alle 28 registrierten Städte (kanonische Register-Einträge)."""
+    """Lists all registered cities (canonical registry entries)."""
     return {
         "data": [city.model_dump() for city in list_cities()],
         "meta": {"correlation_id": correlation_id.get()},
@@ -470,7 +470,7 @@ async def cities() -> dict:
 
 @router.get("/cities/{slug}")
 async def city(slug: str) -> dict:
-    """Liefert eine Stadt; unbekannter Slug löst den 404-Envelope aus."""
+    """Returns a city; unknown slug triggers the 404 envelope."""
     entry = get_city(slug)
     return {
         "data": entry.model_dump(),
@@ -480,19 +480,19 @@ async def city(slug: str) -> dict:
 
 @router.get("/cities/{slug}/base")
 async def city_base(slug: str, request: Request) -> dict:
-    """Liefert normalisierte Wikidata-Stammdaten im kanonischen Envelope.
+    """Returns normalized Wikidata master data in the canonical envelope.
 
-    Ablauf (DATA-01/06, API-01, GOV-01): Register-Lookup (unbekannter
-    Slug -> 404 mit Hint über den zentralen Handler), Quellen-Toggle-Prüfung
-    (deaktiviert -> 200 ``source_status=disabled``, nie 5xx), resilienter Fetch
-    über die Fassade, Register-Geo-Fallback bei fehlendem P625, Mapping,
-    dann der Daten-Envelope mit Attribution.
+    Flow (DATA-01/06, API-01, GOV-01): Registry lookup (unknown
+    slug -> 404 with hint via central handler), source toggle check
+    (disabled -> 200 ``source_status=disabled``, never 5xx), resilient fetch
+    via facade, registry geo fallback when P625 is missing, mapping,
+    then the data envelope with attribution.
     """
     entry = get_city(slug)
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
-    # per-Test gesetzte Env-Override greift; der Lifespan cached das Singleton
-    # bereits vor dem Test-Body). DATA-06: deaktiviert -> 200 disabled, nie 5xx.
+    # Read source toggle freshly (Settings() instead of app.state.settings so that the
+    # per-test set env override takes effect; lifespan caches the singleton
+    # already before the test body). DATA-06: disabled -> 200 disabled, never 5xx.
     if not Settings().enable_wikidata:
         return {
             "data": None,
@@ -512,8 +512,8 @@ async def city_base(slug: str, request: Request) -> dict:
 
     raw, status = await client.fetch("wikidata", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. Owner-Entscheidung 2: 503 mit Hint.
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. Owner decision 2: 503 with hint.
     if raw is None:
         raise UpstreamError(
             "Quelle 'wikidata' voruebergehend nicht erreichbar, kein gecachter "
@@ -521,9 +521,9 @@ async def city_base(slug: str, request: Request) -> dict:
             hint="Erneut versuchen oder GET /api/v1/health fuer Quellen-Status.",
         )
 
-    # Register-Geo-Fallback (verhindert GeoPoint-ValidationError -> 500): das
-    # Register trägt für alle Städte geprüfte Koordinaten; fehlt P625 in
-    # Wikidata, übernimmt der Register-Geo.
+    # Registry geo fallback (prevents GeoPoint ValidationError -> 500): the
+    # registry carries verified coordinates for all cities; if P625 is missing in
+    # Wikidata, the registry geo takes over.
     if raw.get("lat") is None or raw.get("lon") is None:
         raw["lat"] = entry.geo.lat
         raw["lon"] = entry.geo.lon
@@ -545,19 +545,19 @@ async def city_base(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/weather")
 async def city_weather(slug: str, request: Request) -> dict:
-    """Liefert normalisierte DWD-Wetterdaten im kanonischen Envelope (DATA-03).
+    """Returns normalized DWD weather data in the canonical envelope (DATA-03).
 
-    Ablauf (DATA-03/06, API-01, GOV-03): Register-Lookup (unbekannter
-    Slug -> 404 mit Hint über den zentralen Handler), Quellen-Toggle-Prüfung
-    (deaktiviert -> 200 ``source_status=disabled``, nie 5xx), resilienter Fetch
-    über die Fassade gegen die keylose Bright-Sky-API (lat/lon aus dem
-    Register-Geo), Mapping mit modified-Attribution, dann der Daten-Envelope mit
-    Attribution.
+    Flow (DATA-03/06, API-01, GOV-03): Registry lookup (unknown
+    slug -> 404 with hint via central handler), source toggle check
+    (disabled -> 200 ``source_status=disabled``, never 5xx), resilient fetch
+    via facade against the keyless Bright Sky API (lat/lon from the
+    registry geo), mapping with modified attribution, then the data envelope with
+    attribution.
     """
     entry = get_city(slug)
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
-    # per-Test gesetzte Env-Override greift). DATA-06: deaktiviert -> 200 disabled.
+    # Read source toggle freshly (Settings() instead of app.state.settings so that the
+    # per-test set env override takes effect). DATA-06: disabled -> 200 disabled.
     if not Settings().enable_dwd:
         return {
             "data": None,
@@ -580,8 +580,8 @@ async def city_weather(slug: str, request: Request) -> dict:
 
     raw, status = await client.fetch("dwd", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. 503 mit selbst-korrigierendem Hint (DX-06).
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. 503 with self-correcting hint (DX-06).
     if raw is None:
         raise UpstreamError(
             "Quelle 'dwd' voruebergehend nicht erreichbar, kein gecachter "
@@ -604,41 +604,40 @@ async def city_weather(slug: str, request: Request) -> dict:
     }
 
 
-# --- City-Overview (Owner 2026-06-24): EIN Aufruf zeigt die ganze Breite ----------
-# Stufe 1 = statischer Katalog ALLER Datenarten je Stadt (aus CITY_DATA_CATALOG +
-# Coverage, kein Upstream-Call). Stufe 2 = schlanker Live-Highlight-Snapshot
-# (Wetter + Luft + Bahn-Abfahrten am Hauptbahnhof), parallel und zeitgedeckelt,
-# damit eine langsame/leere Quelle den Overview nie blockiert. Nicht-abgedeckte
-# Datenarten werden nicht verschwiegen,
-# sondern vorwärts gewandt dargestellt (wo gibt es sie schon + Roadmap), weil
-# cityscape laufend mehr Daten und Städte bekommt (Owner-Botschaft).
+# --- City-Overview (Owner 2026-06-24): ONE call reveals the full scope ----------
+# Stage 1 = static catalog of ALL data types per city (from CITY_DATA_CATALOG +
+# coverage, no upstream call). Stage 2 = lean live highlight snapshot
+# (weather + air + train departures at main station), concurrent and bounded by time,
+# so that a slow/empty source never blocks the overview. Uncovered
+# data types are not concealed,
+# but presented in a forward-looking manner (where they already exist + roadmap), because
+# cityscape continuously gains more data and cities (owner message).
 
-# Highlight-Quellen des Snapshots: (source, fetch_fn, mapper, toggle), gleiche Form
-# wie compare.RESOURCE_MAP. Bewusst keylos + flächendeckend (alle 84) -> liefern
-# fast immer einen Wert. Additiv erweiterbar (weitere Highlights folgen).
+# Highlight sources of the snapshot: (source, fetch_fn, mapper, toggle), same format
+# as compare.RESOURCE_MAP. Deliberately keyless + nationwide (all 84) -> almost always
+# provide a value. Additively extensible (further highlights will follow).
 _SNAPSHOT_SOURCES: dict[str, tuple] = {
     "weather": ("dwd", fetch_weather, map_weather, "enable_dwd"),
     "air": ("uba", fetch_air_uba, map_air_uba, "enable_uba"),
 }
 
-# Zeitdeckel für den GESAMTEN Snapshot-Fan-out. Gecachte Werte kommen sofort; eine
-# langsame Quelle darf den Overview nie über diese Schranke hinaus aufhalten.
+# Time budget for the ENTIRE snapshot fan-out. Cached values arrive immediately; a
+# slow source must never hold up the overview beyond this boundary.
 _SNAPSHOT_BUDGET_SECONDS = 3.0
 
-# Eine Botschaft, überall gleich: cityscape wächst. Steht im Overview-Envelope
-# (und gespiegelt in docs-site/README/Registries).
+# One message, identical everywhere: cityscape is growing. Present in the overview envelope
+# (and mirrored in docs-site/README/Registries).
 OVERVIEW_GROWTH_NOTE = (
     "cityscape wächst laufend: weitere Datenarten und Städte kommen regelmäßig dazu."
 )
 
 
 async def _snapshot_one(entry, request: Request, name: str) -> tuple[str, dict]:
-    """Holt EINE Highlight-Quelle für den Overview-Snapshot; degradiert graceful.
+    """Fetches ONE highlight source for the overview snapshot; degrades gracefully.
 
-    Wirft NIE: Toggle aus -> ``disabled``, toter Upstream ohne Cache -> ``error``,
-    leere Antwort -> ``no_data``, Mapper-Defekt -> ``error``, sonst ``ok`` (D-06-
-    Muster wie compare._one). So verdirbt eine haengende/leere Quelle den Overview
-    nicht.
+    NEVER raises: toggle off -> ``disabled``, dead upstream without cache -> ``error``,
+    empty response -> ``no_data``, mapper failure -> ``error``, otherwise ``ok`` (D-06
+    pattern like compare._one). That way a hanging/empty source doesn't ruin the overview.
     """
     source, fetch_adapter, mapper, toggle = _SNAPSHOT_SOURCES[name]
     if not getattr(Settings(), toggle):
@@ -657,7 +656,7 @@ async def _snapshot_one(entry, request: Request, name: str) -> tuple[str, dict]:
 
     try:
         raw, status = await client.fetch(source, cache_key, fetch_fn)
-    except Exception:  # noqa: BLE001 - Snapshot degradiert still (Overview hängt nie)
+    except Exception:  # noqa: BLE001 - Snapshot degrades quietly (overview never hangs)
         return name, {"data": None, "source_status": "error"}
     if raw is None:
         return name, {"data": None, "source_status": "error"}
@@ -667,7 +666,7 @@ async def _snapshot_one(entry, request: Request, name: str) -> tuple[str, dict]:
         record = mapper(
             raw, retrieved_at=datetime.now(UTC), ags=entry.ags, wikidata_qid=entry.qid
         )
-    except Exception:  # noqa: BLE001 - defekter Datensatz einer Quelle -> error
+    except Exception:  # noqa: BLE001 - defective record from a source -> error
         return name, {"data": None, "source_status": "error"}
     return name, {
         "data": record.model_dump(mode="json"),
@@ -677,14 +676,14 @@ async def _snapshot_one(entry, request: Request, name: str) -> tuple[str, dict]:
 
 
 async def _snapshot_departures(entry, request: Request) -> tuple[str, dict]:
-    """Holt die Live-Abfahrtstafel des Stadt-Hauptbahnhofs für den Overview-Snapshot.
+    """Fetches the live departure board of the city's main station for the overview snapshot.
 
-    Eigener Helfer (andere Signatur als die lat/lon-Quellen): braucht DB-Timetables-
-    Credentials + EVA-Auflösung. Degradiert graceful wie ``_snapshot_one``: fehlende
-    Credentials/Toggle -> ``disabled``, keine EVAs/leer -> ``no_data``, toter
-    Upstream/Defekt -> ``error``, sonst ``ok``. Wirft NIE in den Fan-out (der
-    Overview hängt nie); die EVA-Auflösung kann auf kaltem Cache langsam sein,
-    der Zeitdeckel der Route fängt das ab.
+    Dedicated helper (different signature than lat/lon sources): needs DB Timetables
+    credentials + EVA resolution. Degrades gracefully like ``_snapshot_one``: missing
+    credentials/toggle -> ``disabled``, no EVAs/empty -> ``no_data``, dead
+    upstream/defect -> ``error``, otherwise ``ok``. NEVER throws into fan-out (the
+    overview never hangs); EVA resolution can be slow on cold cache,
+    the route's time budget catches that.
     """
     name = "departures"
     settings = Settings()
@@ -726,7 +725,7 @@ async def _snapshot_departures(entry, request: Request) -> tuple[str, dict]:
             )
 
         raw, status = await client.fetch("db_timetables", cache_key, fetch_fn)
-    except Exception:  # noqa: BLE001 - Snapshot degradiert still (Overview hängt nie)
+    except Exception:  # noqa: BLE001 - Snapshot degrades quietly (overview never hangs)
         return name, {"data": None, "source_status": "error"}
     if raw is None:
         return name, {"data": None, "source_status": "error"}
@@ -736,7 +735,8 @@ async def _snapshot_departures(entry, request: Request) -> tuple[str, dict]:
         record = map_station_departures(
             raw, retrieved_at=datetime.now(UTC), ags=entry.ags, wikidata_qid=entry.qid
         )
-    except Exception:  # noqa: BLE001 - defekter Datensatz -> error statt 5xx
+    except Exception:  # noqa: BLE001 - defective record -> error instead of 5xx
+        return name, {"data": None, "source_status": "error"}
         return name, {"data": None, "source_status": "error"}
     return name, {
         "data": record.model_dump(mode="json"),
@@ -747,21 +747,21 @@ async def _snapshot_departures(entry, request: Request) -> tuple[str, dict]:
 
 @router.get("/cities/{slug}/overview")
 async def city_overview(slug: str, request: Request) -> dict:
-    """Ein-Aufruf-Ueberblick: Basis + Katalog ALLER Datenarten + Live-Highlights.
+    """Single-call overview: Base + catalog of ALL data types + live highlights.
 
-    Einstiegspunkt für jede Stadt-Frage. Liefert (1) die Basisdaten der Stadt,
-    (2) einen Katalog aller verfügbaren Datenarten mit Abdeckungsstatus und dem
-    passenden MCP-Tool je Datenart (Discovery: zeigt die ganze Breite, nicht nur
-    Wetter) und (3) einen kleinen Live-Highlight-Snapshot (Wetter, Luft,
-    Bahn-Abfahrten am Hauptbahnhof), parallel + zeitgedeckelt. Eine
-    nicht-abgedeckte Datenart wird ehrlich, aber vorwärts
-    gewandt dargestellt (abgedeckte Städte + Roadmap). Unbekannter Slug -> 404
-    (zentraler Handler). Read-only; der Snapshot wirft nie 5xx.
+    Entry point for any city question. Returns (1) the city's base data,
+    (2) a catalog of all available data types with coverage status and the
+    matching MCP tool per data type (discovery: shows the full breadth, not just
+    weather), and (3) a compact live highlight snapshot (weather, air,
+    train departures at the main station), concurrent + time-budgeted. An
+    uncovered data type is presented honestly, but in a forward-looking
+    manner (covered cities + roadmap). Unknown slug -> 404
+    (central handler). Read-only; the snapshot never raises 5xx.
     """
     entry = get_city(slug)
 
-    # Stufe 1: Katalog (statisch, kein Upstream). Verfügbarkeit günstig aus der
-    # Coverage-Karte; nicht-abgedeckte Datenarten tragen Pivot + Roadmap-Hinweis.
+    # Stage 1: Catalog (static, no upstream). Availability cheaply from the
+    # coverage map; uncovered data types include pivot + roadmap note.
     catalog: list[dict] = []
     available = 0
     for dt in CITY_DATA_CATALOG:
@@ -785,22 +785,22 @@ async def city_overview(slug: str, request: Request) -> dict:
             )
         catalog.append(item)
 
-    # Stufe 2: Live-Highlights parallel + zeitgedeckelt (hängt nie). Bei
-    # Budget-Überschreitung liefern noch offene Highlights ehrlich "error".
-    # Budget per CITYSCAPE_OVERVIEW_SNAPSHOT_BUDGET überschreibbar (Default 3s);
-    # bei Überschreitung liefern noch offene Highlights ehrlich "error", der
-    # Overview antwortet trotzdem sofort (hängt nie).
+    # Stage 2: Live highlights concurrent + time-budgeted (never hangs). On
+    # budget overrun, still-pending highlights honestly return "error".
+    # Budget overridable via CITYSCAPE_OVERVIEW_SNAPSHOT_BUDGET (default 3s);
+    # on overrun, still-pending highlights honestly return "error", the
+    # overview still responds immediately (never hangs).
     budget = float(
         os.environ.get("CITYSCAPE_OVERVIEW_SNAPSHOT_BUDGET", _SNAPSHOT_BUDGET_SECONDS)
     )
 
     async def _bounded(name: str, coro) -> tuple[str, dict]:
-        # PER-QUELLE gedeckelt (nicht global): eine langsame/haengende Quelle wird
-        # NUR selbst zu "error" und reißt die schnellen, gecachten Highlights nicht
-        # mit. wait_for cancelt die Coroutine bei Budget-Überschreitung.
+        # Bounded PER-SOURCE (not globally): a slow/hanging source
+        # ONLY becomes "error" itself and does not pull down fast, cached highlights
+        # with it. wait_for cancels the coroutine on budget overrun.
         try:
             return await asyncio.wait_for(coro, budget)
-        except Exception:  # noqa: BLE001 - Timeout/Fehler -> nur diese Quelle "error"
+        except Exception:  # noqa: BLE001 - Timeout/error -> only this source "error"
             return name, {"data": None, "source_status": "error"}
 
     tasks = [
@@ -811,9 +811,9 @@ async def city_overview(slug: str, request: Request) -> dict:
     highlights: dict[str, dict] = dict(await asyncio.gather(*tasks))
 
     cities_total = len(list_cities())
-    # headline: macht die Breite fuer Nutzer/Agenten sofort greifbar (Owner-Wunsch:
-    # "verstehen, dass sie viele Daten bekommen koennen"). Der volle data_types-
-    # Katalog oben listet JEDE Datenart mit ihrem Tool; die headline fasst zusammen.
+    # headline: makes the breadth immediately tangible for users/agents (owner request:
+    # "understand that they can get lots of data"). The full data_types
+    # catalog above lists EVERY data type with its tool; headline summarizes.
     headline = (
         f"cityscape covers {len(catalog)} data types for German cities. "
         f"{available} are available for {entry.slug} right now, each with the tool "
@@ -842,23 +842,23 @@ async def city_overview(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/solar")
 async def city_solar(slug: str, request: Request) -> dict:
-    """Liefert Solar-Einstrahlung + normierten PV-Ertrag im Envelope (DATA-38).
+    """Returns solar irradiance + normalized PV yield in the envelope (DATA-38).
 
-    Ablauf (DATA-38/06, API-01, GOV-03): Register-Lookup (unbekannter Slug -> 404
-    mit Hint über den zentralen Handler), Quellen-Toggle-Prüfung (deaktiviert ->
-    200 ``source_status=disabled``, nie 5xx), resilienter Fetch über die Fassade
-    gegen die keylose PVGIS-Rechen-API (lat/lon aus dem Register-Geo), Mapping mit
-    modified-Attribution, dann der Daten-Envelope.
+    Flow (DATA-38/06, API-01, GOV-03): Registry lookup (unknown slug -> 404
+    with hint via central handler), source toggle check (disabled ->
+    200 ``source_status=disabled``, never 5xx), resilient fetch via facade
+    against the keyless PVGIS calculation API (lat/lon from registry geo), mapping with
+    modified attribution, then the data envelope.
 
-    PVGIS rechnet jede Koordinate in Europa -> alle Register-Städte sind ohne
-    Stadt-Allowlist abgedeckt. Die Werte sind ein klimatologisches Mehrjahresmittel
-    (kein Tageswert), normiert auf 1 kWp bei optimalem Neigungswinkel; der
-    Bezugszeitraum steht im Payload (``period_start``/``period_end``).
+    PVGIS calculates any coordinate in Europe -> all registered cities are covered
+    without city allowlist. Values are a climatological multi-year average
+    (not a daily value), normalized to 1 kWp at optimal tilt angle; the
+    reference period is in the payload (``period_start``/``period_end``).
     """
     entry = get_city(slug)
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
-    # per-Test gesetzte Env-Override greift). DATA-06: deaktiviert -> 200 disabled.
+    # Read source toggle freshly (Settings() instead of app.state.settings so that the
+    # per-test set env override takes effect). DATA-06: disabled -> 200 disabled.
     if not Settings().enable_solar:
         return {
             "data": None,
@@ -881,8 +881,8 @@ async def city_solar(slug: str, request: Request) -> dict:
 
     raw, status = await client.fetch("solar", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. 503 mit selbst-korrigierendem Hint (DX-06).
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. 503 with self-correcting hint (DX-06).
     if raw is None:
         raise UpstreamError(
             "Quelle 'solar' voruebergehend nicht erreichbar, kein gecachter "
@@ -907,28 +907,28 @@ async def city_solar(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/solar-roofs")
 async def city_solar_roofs(slug: str) -> dict:
-    """Liefert das Dach-Solarkataster je Stadt im kanonischen Envelope (DATA-39).
+    """Returns the rooftop solar cadastre per city in the canonical envelope (DATA-39).
 
-    Dach-PV-Potenzial (installierbar, kWp + Jahresertrag MWh) plus Bestand
-    (installiert) je Stadt aus dem amtlichen Gemeinde-Aggregat (NRW-Pilot,
-    Solarkataster NRW, MaStR/LANUK/Geobasis NRW, DL-DE/Zero 2.0 = Tier A). Anders
-    als /solar (PVGIS-Einstrahlung/Ertrag je kWp) trägt diese Route die Mengen
-    je Stadt. Teilabgedeckt (NRW), föderiert je Bundesland wie /land-values.
+    Rooftop PV potential (installable, kWp + annual yield MWh) plus existing
+    (installed) per city from official municipal aggregates (NRW pilot,
+    Solarkataster NRW, MaStR/LANUK/Geobasis NRW, DL-DE/Zero 2.0 = Tier A). Unlike
+    /solar (PVGIS irradiance/yield per kWp), this route provides quantities
+    per city. Partially covered (NRW), federated per state like /land-values.
 
-    KRITISCH (kein Upstream im Request-Pfad, T-08-DEP): liest AUSSCHLIESSLICH aus
-    dem committeten Seed ``data/seeds/solar_cadastre_nrw.json`` via stdlib json,
-    KEIN ``resilient_client``, KEINE Fremd-API.
+    CRITICAL (no upstream in request path, T-08-DEP): reads EXCLUSIVELY from
+    the committed seed ``data/seeds/solar_cadastre_nrw.json`` via stdlib json,
+    NO ``resilient_client``, NO third-party API.
 
-    Vier ``source_status``-Werte:
-    - ``disabled``: ``enable_solar_cadastre`` per Env-Toggle aus -> data None
-    - ``not_covered``: Stadt außerhalb der abgedeckten Bundesländer (mit
-      covered_cities) -> data None, KEIN 5xx
-    - ``no_data``: abgedeckte Stadt, aber kein Seed-Eintrag -> data None
-    - ``ok``: Seed-Eintrag vorhanden -> SolarRoofsPayload mit Attribution
+    Four ``source_status`` values:
+    - ``disabled``: ``enable_solar_cadastre`` via env toggle off -> data None
+    - ``not_covered``: city outside covered states (with
+      covered_cities) -> data None, NO 5xx
+    - ``no_data``: covered city, but no seed entry -> data None
+    - ``ok``: seed entry present -> SolarRoofsPayload with attribution
     """
     entry = get_city(slug)
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings). DATA-06.
+    # Read source toggle freshly (Settings() instead of app.state.settings). DATA-06.
     if not Settings().enable_solar_cadastre:
         return {
             "data": None,
@@ -938,7 +938,7 @@ async def city_solar_roofs(slug: str) -> dict:
             },
         }
 
-    # Teilabdeckung: Stadt außerhalb NRW -> 200 not_covered mit covered_cities.
+    # Partial coverage: city outside NRW -> 200 not_covered with covered_cities.
     if not is_covered("solar-roofs", entry.slug):
         return _not_covered("solar-roofs")
 
@@ -970,36 +970,36 @@ async def city_solar_roofs(slug: str) -> dict:
 
 @router.get("/cities/{slug}/charging")
 async def city_charging(slug: str, request: Request) -> dict:
-    """Liefert E-Ladesäulen-Standorte im kanonischen Envelope (DATA-09).
+    """Returns EV charging station locations in the canonical envelope (DATA-09).
 
-    Ablauf (DATA-09/06, API-01, GOV-02/03): Register-Lookup (unbekannter
-    Slug -> 404 mit Hint über den zentralen Handler), Quellen-Toggle-Prüfung
-    (deaktiviert -> 200 ``source_status=disabled``, nie 5xx), dann ein read-only
-    Read über ``read_records`` aus dem vorverarbeiteten Datensatz;
-    zurückgegeben wird der jüngste Snapshot (max ``retrieved_at``).
+    Flow (DATA-09/06, API-01, GOV-02/03): Registry lookup (unknown
+    slug -> 404 with hint via central handler), source toggle check
+    (disabled -> 200 ``source_status=disabled``, never 5xx), then a read-only
+    read via ``read_records`` from the preprocessed dataset;
+    the most recent snapshot is returned (max ``retrieved_at``).
 
-    KRITISCH (kein Bulk-Upstream im Request-Pfad): Die BNetzA liefert das
-    Ladesäulenregister seit dem Aus des ArcGIS-FeatureServers (HTTP 499) nur
-    noch als ~47-MB-CSV-Bulk-Download. Diese Route liest AUSSCHLIESSLICH aus dem
-    vorverarbeiteten Datensatz, NIE die CSV, und ruft KEINEN
-    ``resilient_client`` auf. Der Datensatz wird offline aktualisiert.
+    CRITICAL (no bulk upstream in request path): BNetzA only provides
+    the charging station register since the discontinuation of ArcGIS FeatureServer (HTTP 499)
+    as ~47 MB CSV bulk download. This route reads EXCLUSIVELY from the
+    preprocessed dataset, NEVER the CSV, and calls NO
+    ``resilient_client``. The dataset is updated offline.
 
-    Nur Stammdaten, KEINE Belegung (Locked Decision). Drei ``source_status``-
-    Werte (analog /energy):
-    - ``disabled``: ``enable_bnetza`` per Env-Toggle aus -> data None
-    - ``not_ingested``: Quelle aktiv, aber kein Snapshot ->
-      ``read_records`` liefert [] -> data None, KEIN 5xx
-    - ``ok``: jüngster Snapshot -> CanonicalRecord mit Attribution + license_id
+    Only master data, NO occupancy (Locked Decision). Three ``source_status``
+    values (analogous to /energy):
+    - ``disabled``: ``enable_bnetza`` via env toggle off -> data None
+    - ``not_ingested``: source active, but no snapshot ->
+      ``read_records`` returns [] -> data None, NO 5xx
+    - ``ok``: latest snapshot -> CanonicalRecord with attribution + license_id
 
-    Die ``stations``-Liste ist über ``limit`` (Default 50, max 200) + ``offset``
-    paginierbar; ``meta.pagination`` weist total/returned/truncated ehrlich aus
-    (keine stille Kappung); Offset-Overflow -> leere Seite 200. ``payload.count``
-    bleibt der volle Snapshot-Gesamtbestand (Aggregat != Seitenlänge).
+    The ``stations`` list is pageable via ``limit`` (default 50, max 200) + ``offset``;
+    ``meta.pagination`` reports total/returned/truncated honestly
+    (no silent truncation); offset overflow -> empty page 200. ``payload.count``
+    remains the full snapshot total count (aggregate != page length).
     """
     entry = get_city(slug)
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
-    # per-Test gesetzte Env-Override greift). DATA-06: deaktiviert -> 200 disabled.
+    # Read source toggle freshly (Settings() instead of app.state.settings so that the
+    # per-test set env override takes effect). DATA-06: disabled -> 200 disabled.
     if not Settings().enable_bnetza:
         return {
             "data": None,
@@ -1009,8 +1009,8 @@ async def city_charging(slug: str, request: Request) -> dict:
             },
         }
 
-    # Read-only aus dem vorverarbeiteten bnetza-Datensatz (NIE die CSV im
-    # Request-Pfad). Fehlender Datensatz -> [] -> not_ingested, kein 5xx.
+    # Read-only from preprocessed bnetza dataset (NEVER the CSV in the
+    # request path). Missing dataset -> [] -> not_ingested, no 5xx.
     records = read_records(source="bnetza", tier="A", city_slug=entry.slug)
     if not records:
         return {
@@ -1021,7 +1021,7 @@ async def city_charging(slug: str, request: Request) -> dict:
             },
         }
 
-    # Jüngster Snapshot: daher hier max(retrieved_at).
+    # Latest snapshot: therefore max(retrieved_at) here.
     record = max(records, key=lambda r: r.retrieved_at)
 
     data = record.model_dump(mode="json")
@@ -1029,8 +1029,8 @@ async def city_charging(slug: str, request: Request) -> dict:
         "correlation_id": correlation_id.get(),
         "source_status": "ok",
     }
-    # Listen-Paginierung (DATA-09): stations-Liste begrenzen; count bleibt das
-    # volle Snapshot-Aggregat (delivered_count_field=None).
+    # List pagination (DATA-09): limit stations list; count remains the
+    # full snapshot aggregate (delivered_count_field=None).
     p = parse_page_params(request)
     paginate_envelope(data, meta, p, list_key="stations")
     return {"data": data, "meta": meta}
@@ -1038,25 +1038,25 @@ async def city_charging(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/district-heating")
 async def city_district_heating(slug: str) -> dict:
-    """Liefert die Fernwärme-/Wärmenetz-Versorgung je Stadt im Envelope (DATA-41).
+    """Returns district heating / thermal grid supply per city in the envelope (DATA-41).
 
-    Aggregat aus den amtlichen Wärmenetz-Geodaten der kommunalen Wärmeplanung,
-    föderiert je Stadt-WFS (wie /solar-roofs, je Ursprung lizenzverifiziert):
-    Berlin (Energienetze, DL-DE/Zero 2.0) + Hamburg (Gebiete mit Wärmenetz,
-    DL-DE/BY 2.0), beide Tier A. Trägt je Stadt die Netzbetreiber, die Zahl der
-    Versorgungs-/Netzflächen und, je nach Quelle, die versorgte Fläche (Berlin)
-    bzw. Hausanschlüsse + Trassenlänge (Hamburg).
+    Aggregate from official district heating geodata of municipal heating planning,
+    federated per city WFS (like /solar-roofs, license-verified per origin):
+    Berlin (Energienetze, DL-DE/Zero 2.0) + Hamburg (areas with district heating,
+    DL-DE/BY 2.0), both Tier A. Provides per city the network operators, the number of
+    supply/network areas, and depending on source, served area (Berlin)
+    or building connections + pipeline length (Hamburg).
 
-    KRITISCH (kein WFS im Request-Pfad, T-08-DEP): liest AUSSCHLIESSLICH read-only
-    den jüngsten Snapshot aus ``tier_a/district_heating/`` (Batch-Ingest
-    ``python -m cityscape.ingest.district_heating``), NIE den WFS, KEIN
+    CRITICAL (no WFS in request path, T-08-DEP): reads EXCLUSIVELY read-only
+    the latest snapshot from ``tier_a/district_heating/`` (batch ingest
+    ``python -m cityscape.ingest.district_heating``), NEVER WFS, NO
     ``resilient_client``.
 
-    Vier ``source_status``-Werte (analog /solar-roofs):
-    - ``disabled``: ``enable_district_heating`` per Env-Toggle aus -> data None
-    - ``not_covered``: Stadt außerhalb der abgedeckten Städte (mit covered_cities)
-    - ``not_ingested``: abgedeckte Stadt, aber kein Snapshot -> data None, KEIN 5xx
-    - ``ok``: jüngster Snapshot -> DistrictHeatingPayload mit Attribution
+    Four ``source_status`` values (analogous to /solar-roofs):
+    - ``disabled``: ``enable_district_heating`` via env toggle off -> data None
+    - ``not_covered``: city outside covered cities (with covered_cities)
+    - ``not_ingested``: covered city, but no snapshot -> data None, NO 5xx
+    - ``ok``: latest snapshot -> DistrictHeatingPayload with attribution
     """
     entry = get_city(slug)
 
@@ -1094,25 +1094,25 @@ async def city_district_heating(slug: str) -> dict:
 
 @router.get("/cities/{slug}/air", deprecated=True)
 async def city_air(slug: str, request: Request, response: Response) -> dict:
-    """Liefert normalisierte UBA-Luftqualität im kanonischen Envelope (DATA-10).
+    """Returns normalized UBA air quality in the canonical envelope (DATA-10).
 
-    Ablauf (DATA-10/06, API-01, GOV-02/03): Register-Lookup (unbekannter Slug ->
-    404 mit Hint über den zentralen Handler), Quellen-Toggle-Prüfung
-    (deaktiviert -> 200 ``source_status=disabled``, nie 5xx), resilienter Fetch
-    über die Fassade gegen die keylose UBA-Air-Data-API (lat/lon aus dem
-    Register-Geo), Mapping mit DL-DE/BY-2.0-Attribution, dann der Daten-Envelope.
+    Flow (DATA-10/06, API-01, GOV-02/03): Registry lookup (unknown slug ->
+    404 with hint via central handler), source toggle check
+    (disabled -> 200 ``source_status=disabled``, never 5xx), resilient fetch
+    via facade against the keyless UBA Air Data API (lat/lon from
+    registry geo), mapping with DL-DE/BY-2.0 attribution, then the data envelope.
 
-    KRITISCH (Pitfall 2 / Lizenz-Klassifikation GOV-02): UBA ist der Tier-A-
-    Luftpfad (offene Lizenz, 84/84 flächendeckend). Diese Route liefert direkt
-    UBA (keine Quellen-Verzweigung, kein Fallback-Zweig) und persistiert Tier A.
-    Der Deprecation-Pointer zeigt auf den Altpfad-Nachfolger
-    ``/api/v1/live/{slug}/air`` (NICHT /air-uba).
+    CRITICAL (Pitfall 2 / License classification GOV-02): UBA is the Tier-A
+    air path (open license, 84/84 nationwide). This route returns directly
+    UBA (no source branching, no fallback branch) and persists Tier A.
+    The deprecation pointer points to the legacy path successor
+    ``/api/v1/live/{slug}/air`` (NOT /air-uba).
     """
     entry = get_city(slug)
-    # LIVE-03: Altpfad ist deprecated -> /live-Nachfolger (kein Breaking Change).
+    # LIVE-03: Legacy path is deprecated -> /live successor (no breaking change).
     _mark_deprecated(response, "/api/v1/live/{slug}/air")
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
+    # Read source toggle freshly (Settings() instead of app.state.settings, damit der
     # per-Test gesetzte Env-Override greift). DATA-06: deaktiviert -> 200 disabled.
     if not Settings().enable_uba:
         return {
@@ -1136,8 +1136,8 @@ async def city_air(slug: str, request: Request, response: Response) -> dict:
 
     raw, status = await client.fetch("uba", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. 503 mit selbst-korrigierendem Hint (DX-06).
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. 503 with self-correcting hint (DX-06).
     if raw is None:
         raise UpstreamError(
             "Quelle 'uba' voruebergehend nicht erreichbar, kein gecachter "
@@ -1162,25 +1162,25 @@ async def city_air(slug: str, request: Request, response: Response) -> dict:
 
 @router.get("/cities/{slug}/air-uba", deprecated=True)
 async def city_air_uba(slug: str, request: Request, response: Response) -> dict:
-    """Liefert UBA-Luftqualität im kanonischen Envelope (DATA-10).
+    """Returns UBA air quality in the canonical envelope (DATA-10).
 
-    Ablauf (DATA-10/06, API-01, GOV-02/03): Register-Lookup (unbekannter
-    Slug -> 404 mit Hint über den zentralen Handler), Quellen-Toggle-Prüfung
-    (deaktiviert -> 200 ``source_status=disabled``, nie 5xx), resilienter Fetch
-    über die Fassade gegen die keylose UBA-Air-Data-API (2-Step Station-Geo-
-    Nähe + Messwerte, lat/lon aus dem Register-Geo), Mapping mit DL-DE/BY-2.0-
-    Attribution, dann der Daten-Envelope mit Attribution.
+    Flow (DATA-10/06, API-01, GOV-02/03): Registry lookup (unknown
+    slug -> 404 with hint via central handler), source toggle check
+    (disabled -> 200 ``source_status=disabled``, never 5xx), resilient fetch
+    via facade against the keyless UBA Air Data API (2-step station geo proximity
+    + measurements, lat/lon from registry geo), mapping with DL-DE/BY-2.0
+    attribution, then the data envelope with attribution.
 
-    KRITISCH (Pitfall 2 / Lizenz-Klassifikation GOV-02): UBA ist der Tier-A-
-    Luftpfad (offene Lizenz). Diese Route ``/air-uba`` persistiert Tier A; der
-    ältere Pfad ``/air`` (oben) liefert dieselbe UBA-Quelle live ohne Persistenz.
-    Graceful Degradation: toter Upstream ohne Cache -> 503 mit Hint (DX-06).
+    CRITICAL (Pitfall 2 / License classification GOV-02): UBA is the Tier-A
+    air path (open license). This route ``/air-uba`` persists Tier A; the
+    older path ``/air`` (above) provides the same UBA source live without persistence.
+    Graceful degradation: dead upstream without cache -> 503 with hint (DX-06).
     """
     entry = get_city(slug)
-    # LIVE-03: Altpfad ist deprecated -> /live-Nachfolger (kein Breaking Change).
+    # LIVE-03: Legacy path is deprecated -> /live successor (no breaking change).
     _mark_deprecated(response, "/api/v1/live/{slug}/air-uba")
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
+    # Read source toggle freshly (Settings() instead of app.state.settings, damit der
     # per-Test gesetzte Env-Override greift). DATA-06: deaktiviert -> 200 disabled.
     if not Settings().enable_uba:
         return {
@@ -1204,8 +1204,8 @@ async def city_air_uba(slug: str, request: Request, response: Response) -> dict:
 
     raw, status = await client.fetch("uba", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. 503 mit selbst-korrigierendem Hint (DX-06).
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. 503 with self-correcting hint (DX-06).
     if raw is None:
         raise UpstreamError(
             "Quelle 'uba' voruebergehend nicht erreichbar, kein gecachter "
@@ -1230,28 +1230,28 @@ async def city_air_uba(slug: str, request: Request, response: Response) -> dict:
 
 @router.get("/cities/{slug}/water-level", deprecated=True)
 async def city_water_level(slug: str, request: Request, response: Response) -> dict:
-    """Liefert PEGELONLINE-Pegelstände im kanonischen Envelope (DATA-11).
+    """Returns PEGELONLINE water levels in the canonical envelope (DATA-11).
 
-    Ablauf (DATA-11/06, API-01, GOV-02/03): Register-Lookup (unbekannter
-    Slug -> 404 mit Hint über den zentralen Handler), Quellen-Toggle-Prüfung
-    (deaktiviert -> 200 ``source_status=disabled``, nie 5xx), resilienter Fetch
-    über die Fassade gegen die keylose PEGELONLINE-API (2-Step Station-Geo-Nähe
-    + Wasserstand, lat/lon aus dem Register-Geo), Mapping mit DL-DE/Zero-2.0-
-    Attribution, dann der Daten-Envelope mit Attribution.
+    Flow (DATA-11/06, API-01, GOV-02/03): Registry lookup (unknown
+    slug -> 404 with hint via central handler), source toggle check
+    (disabled -> 200 ``source_status=disabled``, never 5xx), resilient fetch
+    via facade against the keyless PEGELONLINE API (2-step station geo proximity
+    + water level, lat/lon from registry geo), mapping with DL-DE/Zero-2.0
+    attribution, then the data envelope with attribution.
 
-    KRITISCH (DATA-11, Pitfall 3 / Teilabdeckung): PEGELONLINE deckt nur Städte
-    an Bundeswasserstraßen ab. Findet der Adapter keine nahe Station
-    (``raw["station"] is None``, z.B. Binnenstadt), liefert die Route ehrlich
-    ``source_status="no_data"`` (200) OHNE Mapper (KEIN 5xx). Graceful
-    Degradation: toter Upstream ohne Cache -> 503 mit selbst-korrigierendem Hint
+    CRITICAL (DATA-11, Pitfall 3 / partial coverage): PEGELONLINE only covers cities
+    on federal waterways. If the adapter finds no nearby station
+    (``raw["station"] is None``, e.g. inland city), the route honestly returns
+    ``source_status="no_data"`` (200) WITHOUT mapper (NO 5xx). Graceful
+    degradation: dead upstream without cache -> 503 with self-correcting hint
     (DX-06).
     """
     entry = get_city(slug)
-    # LIVE-03: Altpfad ist deprecated -> /live-Nachfolger (kein Breaking Change).
+    # LIVE-03: Legacy path is deprecated -> /live successor (no breaking change).
     _mark_deprecated(response, "/api/v1/live/{slug}/water-level")
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
-    # per-Test gesetzte Env-Override greift). DATA-06: deaktiviert -> 200 disabled.
+    # Read source toggle freshly (Settings() instead of app.state.settings so that the
+    # per-test set env override takes effect). DATA-06: disabled -> 200 disabled.
     if not Settings().enable_pegelonline:
         return {
             "data": None,
@@ -1274,8 +1274,8 @@ async def city_water_level(slug: str, request: Request, response: Response) -> d
 
     raw, status = await client.fetch("pegelonline", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. 503 mit selbst-korrigierendem Hint (DX-06).
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. 503 with self-correcting hint (DX-06).
     if raw is None:
         raise UpstreamError(
             "Quelle 'pegelonline' voruebergehend nicht erreichbar, kein "
@@ -1283,8 +1283,8 @@ async def city_water_level(slug: str, request: Request, response: Response) -> d
             hint="Erneut versuchen oder GET /api/v1/health fuer Quellen-Status.",
         )
 
-    # KRITISCH (DATA-11, Pitfall 3): keine nahe Station (Binnenstadt) -> ehrliches
-    # no_data (200) OHNE Mapper. KEIN 5xx; die Teilabdeckung wird ehrlich ausgewiesen.
+    # CRITICAL (DATA-11, Pitfall 3): no nearby station (inland city) -> honest
+    # no_data (200) WITHOUT mapper. NO 5xx; partial coverage is reported honestly.
     if raw.get("station") is None:
         return {
             "data": None,
@@ -1297,7 +1297,7 @@ async def city_water_level(slug: str, request: Request, response: Response) -> d
     record = map_water_level(
         raw, retrieved_at=datetime.now(UTC), ags=entry.ags, wikidata_qid=entry.qid
     )
-    # Nur bei vorhandener Station.
+    # Only if station is present.
     await append_record(record, source="pegelonline")
 
     return {
@@ -1312,35 +1312,35 @@ async def city_water_level(slug: str, request: Request, response: Response) -> d
 
 @router.get("/cities/{slug}/flood", deprecated=True)
 async def city_flood(slug: str, request: Request, response: Response) -> dict:
-    """Liefert LHP-Hochwasser-Warnstufen im kanonischen Envelope (DATA-12).
+    """Returns LHP flood warning levels in the canonical envelope (DATA-12).
 
-    Ablauf (DATA-12/06, API-01, GOV-02/03): Register-Lookup (unbekannter
-    Slug -> 404 mit Hint über den zentralen Handler), Quellen-Toggle-Prüfung
-    (deaktiviert -> 200 ``source_status=disabled``, nie 5xx), resilienter Fetch
-    über die Fassade gegen die keylose LHP-API (``POST get_infospegel.php`` je
-    kuratiertem Pegel der Stadt), Mapping mit der PFLICHT-Stand-Attribution
-    (CC-BY 4.0), dann der Daten-Envelope mit Attribution.
+    Flow (DATA-12/06, API-01, GOV-02/03): Registry lookup (unknown
+    slug -> 404 with hint via central handler), source toggle check
+    (disabled -> 200 ``source_status=disabled``, never 5xx), resilient fetch
+    via facade against the keyless LHP API (``POST get_infospegel.php`` per
+    curated gauge of the city), mapping with mandatory timestamp attribution
+    (CC-BY 4.0), then the data envelope with attribution.
 
-    KRITISCH (Pitfall 6, GOV-03): Die ``data.attribution.text`` trägt PFLICHT den
-    Wortlaut ``"Datenquelle: www.hochwasserzentralen.de, Stand: <stand>"``.
+    CRITICAL (Pitfall 6, GOV-03): ``data.attribution.text`` MANDATORILY carries the
+    wording ``"Datenquelle: www.hochwasserzentralen.de, Stand: <stand>"``.
 
-    KRITISCH (DATA-12, Event-Layer): Keine aktive Warnung (leere ``warnings``) ist
-    KEIN Fehler -> Happy-Path 200 mit leerem Event. Graceful Degradation: toter
-    Upstream ohne Cache -> 503 mit selbst-korrigierendem Hint (DX-06).
+    CRITICAL (DATA-12, Event-Layer): No active warning (empty ``warnings``) is
+    NOT an error -> happy path 200 with empty event. Graceful degradation: dead
+    upstream without cache -> 503 with self-correcting hint (DX-06).
     """
     entry = get_city(slug)
     # LIVE-03: Altpfad ist deprecated -> /live-Nachfolger (kein Breaking Change).
     _mark_deprecated(response, "/api/v1/live/{slug}/flood")
 
-    # Coverage-Guard (Owner 2026-06-13): LHP-Hochwasser deckt nur kuratierte Städte
-    # mit Pegel ab (_CITY_PEGEL). Eine nicht-abgedeckte Stadt liefert ehrlich
-    # not_covered (200) + covered_cities, statt eines leeren "ok" (das wie "keine
-    # Warnung" aussähe). Vor dem Toggle: die fehlende Abdeckung ist strukturell.
+    # Coverage guard (owner 2026-06-13): LHP flood only covers curated cities
+    # with water level gauges (_CITY_PEGEL). An uncovered city honestly returns
+    # not_covered (200) + covered_cities, instead of an empty "ok" (which would
+    # look like "no warning"). Before toggle: missing coverage is structural.
     if not is_covered("flood", entry.slug):
         return _not_covered("flood")
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
-    # per-Test gesetzte Env-Override greift). DATA-06: deaktiviert -> 200 disabled.
+    # Read source toggle freshly (Settings() instead of app.state.settings so that the
+    # per-test set env override takes effect). DATA-06: disabled -> 200 disabled.
     if not Settings().enable_lhp:
         return {
             "data": None,
@@ -1358,8 +1358,8 @@ async def city_flood(slug: str, request: Request, response: Response) -> dict:
 
     raw, status = await client.fetch("lhp", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. 503 mit selbst-korrigierendem Hint (DX-06).
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. 503 with self-correcting hint (DX-06).
     if raw is None:
         raise UpstreamError(
             "Quelle 'lhp' voruebergehend nicht erreichbar, kein gecachter "
@@ -1370,7 +1370,7 @@ async def city_flood(slug: str, request: Request, response: Response) -> dict:
     record = map_flood(
         raw, retrieved_at=datetime.now(UTC), ags=entry.ags, wikidata_qid=entry.qid
     )
-    # Leere warnings sind KEIN Fehler.
+    # Empty warnings are NOT an error.
     await append_record(record, source="lhp")
 
     return {
@@ -1385,34 +1385,34 @@ async def city_flood(slug: str, request: Request, response: Response) -> dict:
 
 @router.get("/cities/{slug}/demographics")
 async def city_demographics(slug: str, request: Request) -> dict:
-    """Liefert GENESIS-Demografie im kanonischen Envelope (DATA-17).
+    """Returns GENESIS demographics in the canonical envelope (DATA-17).
 
-    Ablauf (DATA-17/06, API-01, GOV-02/03): Register-Lookup (unbekannter
-    Slug -> 404 mit Hint über den zentralen Handler), account-gated Toggle-/Key-
-    Guard (Quelle aus ODER kein Credential -> 200 ``source_status=disabled``, nie
-    5xx, analog city_air Key-Guard), resilienter Fetch über die Fassade gegen die
-    keyabhängige GENESIS-POST-API (Regionalstatistik, AGS aus dem Register-Geo),
-    Mapping mit DL-DE/BY-2.0-Attribution, dann der Daten-Envelope mit Attribution.
+    Flow (DATA-17/06, API-01, GOV-02/03): Registry lookup (unknown
+    slug -> 404 with hint via central handler), account-gated toggle/key
+    guard (source off OR no credentials -> 200 ``source_status=disabled``, never
+    5xx, analogous to city_air key guard), resilient fetch via facade against the
+    key-dependent GENESIS POST API (Regionalstatistik, AGS from registry geo),
+    mapping with DL-DE/BY-2.0 attribution, then data envelope with attribution.
 
-    KRITISCH (T-08-CRED): Die Credentials gelangen nur in den POST-Body des
-    Adapters, NIE in den Cache-Key (der trägt nur den Slug) oder die Response.
-    Graceful Degradation: toter Upstream ohne Cache -> 503 mit selbst-
-    korrigierendem Hint (DX-06).
+    CRITICAL (T-08-CRED): Credentials only enter the POST body of the
+    adapter, NEVER the cache key (which only contains the slug) or the response.
+    Graceful degradation: dead upstream without cache -> 503 with self-
+    correcting hint (DX-06).
     """
     entry = get_city(slug)
 
-    # Account-gated Toggle-/Key-Guard frisch lesen (Settings() statt
-    # app.state.settings, damit der per-Test gesetzte Env-Override greift).
-    # DATA-06: Quelle aus ODER kein Credential -> 200 disabled, nie 5xx.
+    # Read account-gated toggle/key guard freshly (Settings() instead of
+    # app.state.settings so that the per-test set env override takes effect).
+    # DATA-06: source off OR no credentials -> 200 disabled, never 5xx.
     settings = Settings()
     if (
         not settings.enable_genesis
         or settings.genesis_username is None
         or settings.genesis_password is None
     ):
-        # GENESIS aus: Minimal-Fallback auf die Register-Einwohnerzahl (Wikidata,
-        # CC0, Tier A) statt leerem disabled, sofern vorhanden. meta.fallback
-        # macht die Herkunft transparent; sortenrein (kein GENESIS-Payload).
+        # GENESIS off: minimal fallback to registry population figure (Wikidata,
+        # CC0, Tier A) instead of empty disabled, if present. meta.fallback
+        # makes origin transparent; unmixed (no GENESIS payload).
         if entry.population is not None:
             fb = map_population_demographics(
                 slug=entry.slug,
@@ -1438,7 +1438,7 @@ async def city_demographics(slug: str, request: Request) -> dict:
         }
 
     client = request.app.state.resilient_client
-    # Cache-Key trägt NUR den Slug (T-08-CRED): nie Credentials.
+    # Cache key ONLY carries the slug (T-08-CRED): never credentials.
     key = build_cache_key("genesis", city_slug=entry.slug)
 
     genesis_user = settings.genesis_username
@@ -1455,8 +1455,8 @@ async def city_demographics(slug: str, request: Request) -> dict:
 
     raw, status = await client.fetch("genesis", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. 503 mit selbst-korrigierendem Hint (DX-06).
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. 503 with self-correcting hint (DX-06).
     if raw is None:
         raise UpstreamError(
             "Quelle 'genesis' voruebergehend nicht erreichbar, kein gecachter "
@@ -1481,25 +1481,25 @@ async def city_demographics(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/pollen-uv")
 async def city_pollen_uv(slug: str, request: Request) -> dict:
-    """Liefert DWD-Pollenflug + UV-Index je Großregion (DATA-14).
+    """Returns DWD pollen count + UV index per broad region (DATA-14).
 
-    Ablauf (DATA-14/06, API-01, GOV-02/03): Register-Lookup (unbekannter
-    Slug -> 404 mit Hint über den zentralen Handler), Quellen-Toggle-Prüfung
-    (deaktiviert -> 200 ``source_status=disabled``, nie 5xx), resilienter Fetch
-    über die Fassade gegen die keylosen DWD-Open-Data-Dienste (zwei GET,
-    s31fg.json Pollen + uvi.json UV, KEIN lat/lon: Region-Map im Adapter),
-    Mapping mit der GeoNutzV-Attribution (``modified=True``, Pitfall 5), dann der
-    Daten-Envelope.
+    Flow (DATA-14/06, API-01, GOV-02/03): Registry lookup (unknown
+    slug -> 404 with hint via central handler), source toggle check
+    (disabled -> 200 ``source_status=disabled``, never 5xx), resilient fetch
+    via facade against keyless DWD open data services (two GET requests,
+    s31fg.json pollen + uvi.json UV, NO lat/lon: region map in adapter),
+    mapping with GeoNutzV attribution (``modified=True``, Pitfall 5), then the
+    data envelope.
 
-    KRITISCH (Pitfall 4, Ehrlichkeit): Die Daten sind GROSSREGION-genau, NICHT
-    stadtgenau. ``data.payload.region_name``/``region_id`` weisen die Großregion
-    ehrlich aus. Graceful Degradation: toter Upstream ohne Cache -> 503 mit
-    selbst-korrigierendem Hint (DX-06).
+    CRITICAL (Pitfall 4, honesty): Data is ACCURATE TO BROAD REGION, NOT
+    city-specific. ``data.payload.region_name``/``region_id`` report the broad region
+    honestly. Graceful degradation: dead upstream without cache -> 503 with
+    self-correcting hint (DX-06).
     """
     entry = get_city(slug)
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
-    # per-Test gesetzte Env-Override greift). DATA-06: deaktiviert -> 200 disabled.
+    # Read source toggle freshly (Settings() instead of app.state.settings so that the
+    # per-test set env override takes effect). DATA-06: disabled -> 200 disabled.
     if not Settings().enable_dwd_pollen:
         return {
             "data": None,
@@ -1513,13 +1513,13 @@ async def city_pollen_uv(slug: str, request: Request) -> dict:
     key = build_cache_key("dwd_pollen", city_slug=entry.slug)
 
     async def fetch_fn():
-        # KEIN lat/lon: die Stadt-zu-Großregion-Map liegt im Adapter (Pitfall 4).
+        # NO lat/lon: city-to-broad-region map is in the adapter (Pitfall 4).
         return await fetch_pollen_uv(request.app.state.http, slug=entry.slug)
 
     raw, status = await client.fetch("dwd_pollen", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. 503 mit selbst-korrigierendem Hint (DX-06).
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. 503 with self-correcting hint (DX-06).
     if raw is None:
         raise UpstreamError(
             "Quelle 'dwd_pollen' voruebergehend nicht erreichbar, kein "
@@ -1544,19 +1544,19 @@ async def city_pollen_uv(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/fire-danger")
 async def city_fire_danger(slug: str, request: Request) -> dict:
-    """Liefert den DWD-Waldbrand-/Graslandfeuerindex der naechsten Station.
+    """Returns the DWD forest fire / grassland fire index for the nearest station.
 
-    Ablauf (API-01, GOV-02/03): Register-Lookup (unbekannter Slug -> 404 mit Hint),
-    Quellen-Toggle-Pruefung (deaktiviert -> 200 ``source_status=disabled``, nie
-    5xx), resilienter Fetch ueber die Fassade gegen den keylosen DWD-Daten-
-    FeatureServer (Waldbrandgefahrenindex + best-effort Graslandfeuerindex),
-    Mapping mit der GeoNutzV-Attribution (``modified=True``, Pitfall 5), dann der
-    Daten-Envelope.
+    Flow (API-01, GOV-02/03): Registry lookup (unknown slug -> 404 with hint),
+    source toggle check (disabled -> 200 ``source_status=disabled``, never
+    5xx), resilient fetch via facade against the keyless DWD data
+    FeatureServer (forest fire danger index + best-effort grassland fire index),
+    mapping with GeoNutzV attribution (``modified=True``, Pitfall 5), then data
+    envelope.
 
-    KRITISCH (Pitfall 4, Ehrlichkeit): Der Index ist STATIONS-genau, NICHT
-    stadtgenau. ``data.payload.station_name``/``distance_km`` weisen die naechste
-    DWD-Station ehrlich aus. Graceful Degradation: toter Upstream ohne Cache ->
-    503 mit selbst-korrigierendem Hint (DX-06).
+    CRITICAL (Pitfall 4, honesty): The index is ACCURATE TO STATION, NOT
+    city-specific. ``data.payload.station_name``/``distance_km`` report the nearest
+    DWD station honestly. Graceful degradation: dead upstream without cache ->
+    503 with self-correcting hint (DX-06).
     """
     entry = get_city(slug)
 
@@ -1607,18 +1607,18 @@ async def city_fire_danger(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/bathing-water")
 async def city_bathing_water(slug: str, request: Request) -> dict:
-    """Liefert die Badegewaesserqualitaet im Umkreis einer Stadt (EEA, Tier A).
+    """Returns bathing water quality in the vicinity of a city (EEA, Tier A).
 
-    Ablauf (API-01, GOV-02/03): Register-Lookup (unbekannter Slug -> 404 mit Hint),
-    Quellen-Toggle-Pruefung (deaktiviert -> 200 ``source_status=disabled``, nie
-    5xx), resilienter Fetch ueber die Fassade gegen den keylosen EEA-DiscoMap-Dienst
-    (EU-Badegewaesserrichtlinie 2006/7/EG), Mapping mit CC-BY-Attribution, dann der
-    Daten-Envelope.
+    Flow (API-01, GOV-02/03): Registry lookup (unknown slug -> 404 with hint),
+    source toggle check (disabled -> 200 ``source_status=disabled``, never
+    5xx), resilient fetch via facade against the keyless EEA DiscoMap service
+    (EU Bathing Water Directive 2006/7/EC), mapping with CC-BY attribution, then the
+    data envelope.
 
-    KRITISCH (Pitfall 4, Ehrlichkeit): Badegewaesser liegen ORTSNAH (Umland), NICHT
-    stadtgenau; ``data.payload.sites[].distance_km`` weist das aus. Inland-Staedte
-    ohne Badegewaesser im Umkreis liefern ehrlich ``count=0``. Graceful Degradation:
-    toter Upstream ohne Cache -> 503 mit selbst-korrigierendem Hint (DX-06).
+    CRITICAL (Pitfall 4, honesty): Bathing waters are LOCATED NEARBY (surroundings), NOT
+    city-specific; ``data.payload.sites[].distance_km`` reports this. Inland cities
+    without bathing waters in their vicinity honestly return ``count=0``. Graceful degradation:
+    dead upstream without cache -> 503 with self-correcting hint (DX-06).
     """
     entry = get_city(slug)
 
@@ -1670,14 +1670,14 @@ async def city_bathing_water(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/hospitals-atlas")
 async def city_hospitals_atlas(slug: str, request: Request) -> dict:
-    """Liefert Krankenhausstandorte im Umkreis einer Stadt (Bundes-Klinik-Atlas).
+    """Returns hospital locations in the vicinity of a city (Bundes-Klinik-Atlas).
 
-    FAIL-CLOSED: Der Bundes-Klinik-Atlas weist KEINE explizite offene Lizenz aus;
-    die Quelle ist daher per Default DEAKTIVIERT (``enable_klinik_atlas=False`` ->
-    200 ``source_status=disabled``) und als license_id UNKNOWN/Tier C getaggt, bis
-    BMG/IQTIG die Lizenz bestaetigt. Standortgenaue Liste (Name/Adresse/Betten/
-    Kontakt/Koordinaten), ORTSNAH gefiltert (Pitfall 4, ``distance_km`` je Standort).
-    Graceful Degradation: toter Upstream ohne Cache -> 503 mit Hint (DX-06).
+    FAIL-CLOSED: Bundes-Klinik-Atlas indicates NO explicit open license;
+    the source is therefore DISABLED by default (``enable_klinik_atlas=False`` ->
+    200 ``source_status=disabled``) and tagged as license_id UNKNOWN/Tier C until
+    BMG/IQTIG confirms the license. Precise location list (name/address/beds/
+    contact/coordinates), filtered NEARBY (Pitfall 4, ``distance_km`` per location).
+    Graceful degradation: dead upstream without cache -> 503 with hint (DX-06).
     """
     entry = get_city(slug)
 
@@ -1728,23 +1728,23 @@ async def city_hospitals_atlas(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/station-facilities")
 async def city_station_facilities(slug: str, request: Request) -> dict:
-    """Liefert Aufzug-/Rolltreppen-Status an Bahnhoefen einer Stadt (DB FaSta).
+    """Returns elevator/escalator status at train stations in a city (DB FaSta).
 
-    KEY-GATED: Die FaSta-API laeuft ueber denselben DB-API-Marketplace wie
-    db_timetables/stada und nutzt die gemeinsamen ``db_client_id``/``db_api_key``
-    (gleiche "cityscape"-Anwendung, kein eigener Key). Ohne diese Credentials (oder
-    bei ``enable_db_fasta=False``) liefert die Route 200 ``source_status=disabled``
-    (nie 5xx). Echtzeit-Barrierefreiheit (ACTIVE/INACTIVE/UNKNOWN je Anlage),
-    ORTSNAH gefiltert (Pitfall 4, ``distance_km`` je Anlage). Graceful Degradation:
-    toter Upstream ohne Cache -> 503 mit selbst-korrigierendem Hint (DX-06).
+    KEY-GATED: The FaSta API runs through the same DB API Marketplace as
+    db_timetables/stada and uses the shared ``db_client_id``/``db_api_key``
+    (same "cityscape" application, no separate key). Without these credentials (or
+    with ``enable_db_fasta=False``) the route returns 200 ``source_status=disabled``
+    (never 5xx). Real-time accessibility (ACTIVE/INACTIVE/UNKNOWN per facility),
+    filtered NEARBY (Pitfall 4, ``distance_km`` per facility). Graceful degradation:
+    dead upstream without cache -> 503 with self-correcting hint (DX-06).
     """
     entry = get_city(slug)
 
     settings = Settings()
-    # Gemeinsame DB-API-Marketplace-Credentials (wie db_timetables/stada).
+    # Shared DB API Marketplace credentials (like db_timetables/stada).
     client_id = settings.db_client_id
     api_key = settings.db_api_key
-    # KEY-GATED: ohne Toggle ODER ohne Credentials -> ehrlich disabled (kein 5xx).
+    # KEY-GATED: without toggle OR without credentials -> honest disabled (no 5xx).
     if not settings.enable_db_fasta or client_id is None or api_key is None:
         return {
             "data": None,
@@ -1794,20 +1794,20 @@ async def city_station_facilities(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/pois")
 async def city_pois(slug: str, request: Request, type: str) -> dict:
-    """Liefert nach Typ gefilterte OSM-POIs im kanonischen Envelope (DATA-04).
+    """Returns OSM POIs filtered by type in the canonical envelope (DATA-04).
 
-    Ablauf (DATA-04/06, API-01, GOV-02): Register-Lookup (unbekannter
-    Slug -> 404 mit Hint über den zentralen Handler), Quellen-Toggle-Prüfung
-    (deaktiviert -> 200 ``source_status=disabled``, nie 5xx), Typ-Whitelist-
-    Prüfung VOR dem Fetch (unbekannter Typ -> 422, kein roher Input in die
-    Overpass-QL, T-05-09), resilienter Fetch über die Fassade (der ``type``
-    fließt per ``params`` als sha256-Hash in den Cache-Key -> Cache-Poisoning-
-    Schutz T-05-10), Mapping, dann der Daten-Envelope.
+    Flow (DATA-04/06, API-01, GOV-02): Registry lookup (unknown
+    slug -> 404 with hint via central handler), source toggle check
+    (disabled -> 200 ``source_status=disabled``, never 5xx), type allowlist
+    check BEFORE fetch (unknown type -> 422, no raw input into
+    Overpass QL, T-05-09), resilient fetch via facade (the ``type``
+    flows via ``params`` as sha256 hash into the cache key -> cache poisoning
+    protection T-05-10), mapping, then the data envelope.
     """
     entry = get_city(slug)
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
-    # per-Test gesetzte Env-Override greift). DATA-06: deaktiviert -> 200 disabled.
+    # Read source toggle freshly (Settings() instead of app.state.settings so that the
+    # per-test set env override takes effect). DATA-06: disabled -> 200 disabled.
     if not Settings().enable_overpass:
         return {
             "data": None,
@@ -1817,9 +1817,9 @@ async def city_pois(slug: str, request: Request, type: str) -> dict:
             },
         }
 
-    # T-05-09 Injection: unbekannter Typ -> 422, BEVOR ein Fetch läuft. Roher
-    # User-Input gelangt nie in die Overpass-QL (die Whitelist mappt auf ein
-    # festes amenity-Tag). Der Hint nennt die erlaubten Typen.
+    # T-05-09 Injection: unknown type -> 422 BEFORE a fetch runs. Raw
+    # user input never enters Overpass QL (the allowlist maps to a
+    # fixed amenity tag). Hint lists allowed types.
     if type not in _ALLOWED_TYPES:
         raise UnprocessableError(
             f"Unbekannter POI-Typ '{type}'.",
@@ -1827,7 +1827,7 @@ async def city_pois(slug: str, request: Request, type: str) -> dict:
         )
 
     client = request.app.state.resilient_client
-    # type als params -> sha256-Hash im Cache-Key (Cache-Poisoning-Schutz, T-05-10).
+    # type as params -> sha256 hash in cache key (cache poisoning protection, T-05-10).
     key = build_cache_key("overpass", city_slug=entry.slug, params={"type": type})
 
     async def fetch_fn():
@@ -1842,8 +1842,8 @@ async def city_pois(slug: str, request: Request, type: str) -> dict:
 
     raw, status = await client.fetch("overpass", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. 503 mit selbst-korrigierendem Hint (DX-06).
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. 503 with self-correcting hint (DX-06).
     if raw is None:
         raise UpstreamError(
             "Quelle 'overpass' voruebergehend nicht erreichbar, kein gecachter "
@@ -1867,21 +1867,21 @@ async def city_pois(slug: str, request: Request, type: str) -> dict:
 
 
 async def _osm_feature_response(request: Request, entry, feature: str) -> dict:
-    """Geteilte Logik aller OSM-Feature-Endpunkte (Overpass, Tier B copyleft).
+    """Shared logic of all OSM feature endpoints (Overpass, Tier B copyleft).
 
-    Identischer Ablauf wie ``/pois`` (DATA-04/06): Quellen-Toggle (deaktiviert ->
-    200 ``source_status=disabled``, nie 5xx), resilienter Fetch über die Fassade
-    (``feature`` fließt per ``params`` als sha256-Hash in den Cache-Key, Cache-
-    Poisoning-Schutz T-05-10), None-Guard (toter Upstream ohne Cache -> 503), dann
-    Mapping mit ODbL-Attribution und Daten-Envelope. ``feature`` ist stets ein
-    festes, intern gesetztes Literal aus ``_OSM_FEATURES`` (kein User-Input).
+    Identical flow to ``/pois`` (DATA-04/06): source toggle (disabled ->
+    200 ``source_status=disabled``, never 5xx), resilient fetch via facade
+    (``feature`` flows via ``params`` as sha256 hash into the cache key, cache
+    poisoning protection T-05-10), None guard (dead upstream without cache -> 503), then
+    mapping with ODbL attribution and data envelope. ``feature`` is always a
+    fixed, internally set literal from ``_OSM_FEATURES`` (no user input).
 
-    Die ``items``-Liste ist über ``limit`` (Default 50, max 200) + ``offset``
-    paginierbar; ``meta.pagination`` weist total/returned/truncated ehrlich aus,
-    Offset-Overflow -> leere Seite 200. ``payload.count`` trägt die ausgelieferte
-    Seitenlänge (PoiPayload-Semantik), ``total_available`` bleibt der echte
-    Overpass-Gesamtbestand. So erben education/playgrounds/post-boxes/
-    parcel-lockers/public-wifi und die übrigen OSM-Features limit/offset."""
+    The ``items`` list is pageable via ``limit`` (default 50, max 200) + ``offset``;
+    ``meta.pagination`` reports total/returned/truncated honestly,
+    offset overflow -> empty page 200. ``payload.count`` carries the delivered
+    page length (PoiPayload semantics), ``total_available`` remains the true
+    Overpass total count. Thus education/playgrounds/post-boxes/
+    parcel-lockers/public-wifi and remaining OSM features inherit limit/offset."""
     if not Settings().enable_overpass:
         return {
             "data": None,
@@ -1892,7 +1892,7 @@ async def _osm_feature_response(request: Request, entry, feature: str) -> dict:
         }
 
     client = request.app.state.resilient_client
-    # feature als params -> sha256-Hash im Cache-Key (Cache-Poisoning-Schutz).
+    # feature as params -> sha256 hash in cache key (cache poisoning protection).
     key = build_cache_key("overpass", city_slug=entry.slug, params={"feature": feature})
 
     async def fetch_fn():
@@ -1907,8 +1907,8 @@ async def _osm_feature_response(request: Request, entry, feature: str) -> dict:
 
     raw, status = await client.fetch("overpass", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. 503 mit selbst-korrigierendem Hint (DX-06).
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. 503 with self-correcting hint (DX-06).
     if raw is None:
         raise UpstreamError(
             "Quelle 'overpass' voruebergehend nicht erreichbar, kein gecachter "
@@ -1927,10 +1927,10 @@ async def _osm_feature_response(request: Request, entry, feature: str) -> dict:
         "source_status": "ok",
         "cache_status": status,
     }
-    # Listen-Paginierung (DATA-04): items-Liste begrenzen. delivered_count_field=
-    # "count" -> PoiPayload.count == ausgelieferte Seite; total_available bleibt der
-    # echte Overpass-Gesamtbestand. Der Helper liest limit/offset selbst aus der
-    # Query (kein Depends), daher erben alle OSM-Route-Signaturen die Paginierung.
+    # List pagination (DATA-04): limit items list. delivered_count_field=
+    # "count" -> PoiPayload.count == delivered page; total_available remains the
+    # true Overpass total count. The helper reads limit/offset directly from the
+    # query (no Depends), so all OSM route signatures inherit pagination.
     p = parse_page_params(request)
     paginate_envelope(data, meta, p, list_key="items", delivered_count_field="count")
     return {"data": data, "meta": meta}
@@ -1938,94 +1938,94 @@ async def _osm_feature_response(request: Request, entry, feature: str) -> dict:
 
 @router.get("/cities/{slug}/playgrounds")
 async def city_playgrounds(slug: str, request: Request) -> dict:
-    """Liefert öffentliche Spielplätze (OSM ``leisure=playground``, Tier B)."""
+    """Returns public playgrounds (OSM ``leisure=playground``, Tier B)."""
     entry = get_city(slug)
     return await _osm_feature_response(request, entry, "playgrounds")
 
 
 @router.get("/cities/{slug}/drinking-water")
 async def city_drinking_water(slug: str, request: Request) -> dict:
-    """Liefert öffentliche Trinkwasserbrunnen (OSM ``amenity=drinking_water``).
+    """Returns public drinking water fountains (OSM ``amenity=drinking_water``).
 
-    Hinweis: Die OSM-Abdeckung ist je Stadt unterschiedlich vollständig."""
+    Note: OSM coverage varies in completeness across cities."""
     entry = get_city(slug)
     return await _osm_feature_response(request, entry, "drinking-water")
 
 
 @router.get("/cities/{slug}/public-toilets")
 async def city_public_toilets(slug: str, request: Request) -> dict:
-    """Liefert öffentliche Toiletten (OSM ``amenity=toilets``).
+    """Returns public toilets (OSM ``amenity=toilets``).
 
-    Je Element werden Barrierefreiheits-Tags ausgewiesen (``wheelchair``,
-    ``changing_table``) sowie ``fee``/``access``/``opening_hours``/``unisex``.
-    Hinweis: Die OSM-Abdeckung ist je Stadt unterschiedlich vollständig."""
+    Per-element accessibility tags are reported (``wheelchair``,
+    ``changing_table``) as well as ``fee``/``access``/``opening_hours``/``unisex``.
+    Note: OSM coverage varies in completeness across cities."""
     entry = get_city(slug)
     return await _osm_feature_response(request, entry, "public-toilets")
 
 
 @router.get("/cities/{slug}/markets")
 async def city_markets(slug: str, request: Request) -> dict:
-    """Liefert Wochen-/Marktplaetze (OSM ``amenity=marketplace``, Tier B).
+    """Returns weekly/marketplaces (OSM ``amenity=marketplace``, Tier B).
 
-    Markttage/Zeiten kommen als optionales ``opening_hours`` je Element (oft leer)."""
+    Market days/times provided as optional ``opening_hours`` per element (often empty)."""
     entry = get_city(slug)
     return await _osm_feature_response(request, entry, "markets")
 
 
 @router.get("/cities/{slug}/parcel-lockers")
 async def city_parcel_lockers(slug: str, request: Request) -> dict:
-    """Liefert Paketstationen/Locker (OSM ``amenity=parcel_locker``, Tier B).
+    """Returns parcel lockers / stations (OSM ``amenity=parcel_locker``, Tier B).
 
-    ``operator``/``brand`` (DHL/Amazon/DPD/Hermes/GLS) je Element, wenn getaggt."""
+    ``operator``/``brand`` (DHL/Amazon/DPD/Hermes/GLS) per element when tagged."""
     entry = get_city(slug)
     return await _osm_feature_response(request, entry, "parcel-lockers")
 
 
 @router.get("/cities/{slug}/post-offices")
 async def city_post_offices(slug: str, request: Request) -> dict:
-    """Liefert Postfilialen (OSM ``amenity=post_office``, Tier B)."""
+    """Returns post offices (OSM ``amenity=post_office``, Tier B)."""
     entry = get_city(slug)
     return await _osm_feature_response(request, entry, "post-offices")
 
 
 @router.get("/cities/{slug}/post-boxes")
 async def city_post_boxes(slug: str, request: Request) -> dict:
-    """Liefert öffentliche Briefkästen (OSM ``amenity=post_box``, Tier B).
+    """Returns public post boxes (OSM ``amenity=post_box``, Tier B).
 
-    Leerungszeiten kommen als optionales ``collection_times`` je Element (~3/4
-    der Briefkästen getaggt; ``null``/fehlend = Datenpunkt-Lücke, kein Fehler)."""
+    Collection times provided as optional ``collection_times`` per element (~3/4
+    of post boxes tagged; ``null``/missing = data point gap, not an error)."""
     entry = get_city(slug)
     return await _osm_feature_response(request, entry, "post-boxes")
 
 
 @router.get("/cities/{slug}/public-wifi")
 async def city_public_wifi(slug: str, request: Request) -> dict:
-    """Liefert öffentliche WLAN-Standorte (OSM ``internet_access=wlan``, Tier B)."""
+    """Returns public Wi-Fi locations (OSM ``internet_access=wlan``, Tier B)."""
     entry = get_city(slug)
     return await _osm_feature_response(request, entry, "public-wifi")
 
 
 @router.get("/cities/{slug}/recycling-centres")
 async def city_recycling_centres(slug: str, request: Request) -> dict:
-    """Liefert Recycling-/Wertstoffhoefe (OSM ``amenity=recycling`` +
-    ``recycling_type=centre``, Tier B). ``opening_hours`` je Element, wenn getaggt."""
+    """Returns recycling/materials centres (OSM ``amenity=recycling`` +
+    ``recycling_type=centre``, Tier B). ``opening_hours`` per element when tagged."""
     entry = get_city(slug)
     return await _osm_feature_response(request, entry, "recycling-centres")
 
 
 @router.get("/cities/{slug}/government-offices")
 async def city_government_offices(slug: str, request: Request) -> dict:
-    """Liefert Behoerden/Aemter (OSM ``office=government`` + ``amenity=townhall``).
+    """Returns government offices / town halls (OSM ``office=government`` + ``amenity=townhall``).
 
-    Konsolidiert Bürgerämter, Verwaltungs- und sonstige Ämter; der Subtyp steht
-    je Element als optionales ``government``-Tag."""
+    Consolidates citizen service centres, administrative and other offices; the subtype is indicated
+    per element as an optional ``government`` tag."""
     entry = get_city(slug)
     return await _osm_feature_response(request, entry, "government-offices")
 
 
 @router.get("/cities/{slug}/education")
 async def city_education(slug: str, request: Request) -> dict:
-    """Liefert Bildungseinrichtungen (OSM ``amenity=school/college/university/
+    """Returns educational institutions (OSM ``amenity=school/college/university/
     kindergarten``, Tier B)."""
     entry = get_city(slug)
     return await _osm_feature_response(request, entry, "education")
@@ -2033,23 +2033,23 @@ async def city_education(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/heritage")
 async def city_heritage(slug: str, request: Request) -> dict:
-    """Liefert Bau-/Denkmal-Objekte je Stadt (Denkmalliste, Land-WFS).
+    """Returns architectural/heritage monuments per city (monument list, state WFS).
 
-    Ablauf (DATA-OSM-Tier-2): Register-Lookup (unbekannter Slug -> 404), Coverage-
-    Guard (Denkmalschutz ist Landessache -> nur Städte in Ländern mit
-    verifiziertem offenem WFS, sonst 200 ``not_covered`` + covered_cities),
-    Quellen-Toggle (deaktiviert -> 200 ``disabled``), resilienter WFS-Fetch
-    (GeoJSON, Repräsentativpunkt je Objekt), Mapping mit landesabhängiger Lizenz
-    (Berlin DL-DE/Zero 2.0), dann der Daten-Envelope. Toter Upstream ohne Cache
-    -> 503 mit Hint auf GET /api/v1/health."""
+    Flow (DATA-OSM-Tier-2): Registry lookup (unknown slug -> 404), coverage
+    guard (monument protection is a state matter -> only cities in states with
+    verified open WFS, otherwise 200 ``not_covered`` + covered_cities),
+    source toggle (disabled -> 200 ``disabled``), resilient WFS fetch
+    (GeoJSON, representative point per object), mapping with state-dependent license
+    (Berlin DL-DE/Zero 2.0), then the data envelope. Dead upstream without cache
+    -> 503 with hint pointing to GET /api/v1/health."""
     entry = get_city(slug)
 
-    # Coverage-Guard (föderiert je Bundesland): nicht abgedeckte Stadt -> ehrlich
-    # not_covered (200) + covered_cities, klar unterscheidbar von no_data.
+    # Coverage guard (federated per state): uncovered city -> honest
+    # not_covered (200) + covered_cities, clearly distinguishable from no_data.
     if not is_covered("heritage", entry.slug):
         return _not_covered("heritage")
 
-    # Quellen-Toggle frisch lesen (Env-Override-tauglich). DATA-06.
+    # Read source toggle freshly (suitable for env overrides). DATA-06.
     if not Settings().enable_denkmal:
         return {
             "data": None,
@@ -2074,8 +2074,8 @@ async def city_heritage(slug: str, request: Request) -> dict:
 
     raw, status = await client.fetch("denkmal", key, fetch_fn)
 
-    # Pitfall 4: raw is None (toter Upstream ohne Cache) MUSS vor dem Mapper
-    # geprüft werden, sonst 500. 503 mit selbst-korrigierendem Hint (DX-06).
+    # Pitfall 4: raw is None (dead upstream without cache) MUST be checked before the mapper,
+    # otherwise 500. 503 with self-correcting hint (DX-06).
     if raw is None:
         raise UpstreamError(
             "Quelle 'denkmal' voruebergehend nicht erreichbar, kein gecachter "
@@ -2100,20 +2100,20 @@ async def city_heritage(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/tree-cadastre")
 async def city_tree_cadastre(slug: str, request: Request) -> dict:
-    """Liefert das städtische Baumkataster (kommunaler WFS, Tier A).
+    """Returns the municipal tree cadastre (municipal WFS, Tier A).
 
-    Ablauf (DATA-OSM-Tier-2): Register-Lookup (unbekannter Slug -> 404), Coverage-
-    Guard (Baumkataster ist kommunal -> nur Städte mit verifiziertem offenem WFS,
-    sonst 200 ``not_covered`` + covered_cities), Quellen-Toggle (deaktiviert -> 200
-    ``disabled``), resilienter WFS-Fetch (GeoJSON-Punkte, gedeckelte Stichprobe),
-    Mapping mit stadtabhängiger Lizenz (Berlin DL-DE/Zero 2.0), dann der Daten-
-    Envelope. HINWEIS: Kataster sind sehr groß; die Antwort ist eine gedeckelte
-    Stichprobe (``count`` = ausgelieferte Bäume; der echte Gesamtbestand steht in
-    ``total_available``, ``truncated=true`` zeigt die Deckelung an, Audit-220).
-    Toter Upstream ohne Cache -> 503 mit Hint auf GET /api/v1/health."""
+    Flow (DATA-OSM-Tier-2): Registry lookup (unknown slug -> 404), coverage
+    guard (tree cadastre is municipal -> only cities with verified open WFS,
+    otherwise 200 ``not_covered`` + covered_cities), source toggle (disabled -> 200
+    ``disabled``), resilient WFS fetch (GeoJSON points, capped sample),
+    mapping with city-dependent license (Berlin DL-DE/Zero 2.0), then data
+    envelope. NOTE: Cadastres are very large; the response is a capped
+    sample (``count`` = delivered trees; true total count is in
+    ``total_available``, ``truncated=true`` indicates capping, Audit-220).
+    Dead upstream without cache -> 503 with hint pointing to GET /api/v1/health."""
     entry = get_city(slug)
 
-    # Coverage-Guard (per Stadt): nicht abgedeckt -> ehrlich not_covered (200).
+    # Coverage guard (per city): uncovered -> honest not_covered (200).
     if not is_covered("tree-cadastre", entry.slug):
         return _not_covered("tree-cadastre")
 
@@ -2158,15 +2158,15 @@ async def city_tree_cadastre(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/population-density")
 async def city_population_density(slug: str, request: Request) -> dict:
-    """Liefert die Einwohnerdichte je Stadt aus dem Zensus-2022-100m-Gitter.
+    """Returns population density per city from the Zensus 2022 100m grid.
 
-    Ablauf (DATA-OSM-Tier-2): Register-Lookup (unbekannter Slug -> 404), Quellen-
-    Toggle (deaktiviert -> 200 ``disabled``), resilienter Fetch (server-seitige
-    Aggregation über die Gitterzellen mit der Stadt-AGS: Summe Einwohner + Zahl
-    bewohnter Zellen), Mapping (bewohnte Fläche + Dichte je km2). Flächendeckend
-    (jede Stadt hat eine AGS); liefert eine Stadt keine Gitterzellen, ist
-    ``source_status="no_data"`` (data=null). Toter Upstream ohne Cache -> 503 mit
-    Hint auf GET /api/v1/health."""
+    Flow (DATA-OSM-Tier-2): Registry lookup (unknown slug -> 404), source
+    toggle (disabled -> 200 ``disabled``), resilient fetch (server-side
+    aggregation across grid cells with city AGS: sum of inhabitants + number
+    of populated cells), mapping (populated area + density per km2). Nationwide
+    (every city has an AGS); if a city returns no grid cells,
+    ``source_status="no_data"`` (data=null). Dead upstream without cache -> 503 with
+    hint pointing to GET /api/v1/health."""
     entry = get_city(slug)
 
     if not Settings().enable_zensus_grid:
@@ -2195,7 +2195,7 @@ async def city_population_density(slug: str, request: Request) -> dict:
             hint="Erneut versuchen oder GET /api/v1/health fuer Quellen-Status.",
         )
 
-    # Keine bewohnten Zellen -> ehrlich no_data (data=null), kein leeres "ok".
+    # No populated cells -> honest no_data (data=null), not an empty "ok".
     if not raw.get("populated_cells"):
         return {
             "data": None,
@@ -2223,28 +2223,28 @@ async def city_population_density(slug: str, request: Request) -> dict:
 
 @router.get("/cities/{slug}/traffic", deprecated=True)
 async def city_traffic(slug: str, request: Request, response: Response) -> dict:
-    """Liefert Baustellen + Verkehrsmeldungen im kanonischen Envelope (DATA-07/08).
+    """Returns roadworks + traffic events in the canonical envelope (DATA-07/08).
 
-    Ablauf (DATA-07/08/06, API-01, GOV-02): Register-Lookup (unbekannter
-    Slug -> 404 mit Hint über den zentralen Handler), Quellen-Toggle-Prüfung
-    (deaktiviert -> 200 ``source_status=disabled``, nie 5xx), resilienter Fetch
-    über die Fassade gegen die keylose Autobahn-API (Multi-Road + BBox um den
-    Register-Geo), Mapping mit DL-DE/BY-Attribution, dann der Daten-Envelope mit
-    Attribution.
+    Flow (DATA-07/08/06, API-01, GOV-02): Registry lookup (unknown
+    slug -> 404 with hint via central handler), source toggle check
+    (disabled -> 200 ``source_status=disabled``, never 5xx), resilient fetch
+    via facade against the keyless Autobahn API (multi-road + BBox around the
+    registry geo), mapping with DL-DE/BY attribution, then data envelope with
+    attribution.
     """
     entry = get_city(slug)
     # LIVE-03: Altpfad ist deprecated -> /live-Nachfolger (kein Breaking Change).
     _mark_deprecated(response, "/api/v1/live/{slug}/traffic")
 
-    # Coverage-Guard (Owner 2026-06-13): die Autobahn-Verkehrslage deckt nur Städte
-    # mit kuratierten Autobahnen ab (_CITY_ROADS, dieselbe Map wie webcams). Eine
-    # nicht-abgedeckte Stadt liefert ehrlich not_covered (200) + covered_cities,
-    # statt eines leeren "ok". Vor dem Toggle: die Abdeckung ist strukturell.
+    # Coverage guard (owner 2026-06-13): Autobahn traffic conditions only cover cities
+    # with curated highways (_CITY_ROADS, same map as webcams). An
+    # uncovered city honestly returns not_covered (200) + covered_cities,
+    # instead of an empty "ok". Before toggle: coverage is structural.
     if not is_covered("traffic", entry.slug):
         return _not_covered("traffic")
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
-    # per-Test gesetzte Env-Override greift). DATA-06: deaktiviert -> 200 disabled.
+    # Read source toggle freshly (Settings() instead of app.state.settings so that the
+    # per-test set env override takes effect). DATA-06: disabled -> 200 disabled.
     if not Settings().enable_autobahn:
         return {
             "data": None,

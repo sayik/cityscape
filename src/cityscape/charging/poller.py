@@ -1,18 +1,18 @@
-"""Hintergrund-Poller für die eRound-Belegungs-Deltas (DATA-42, Stufe 2).
+"""Background poller for eRound occupancy deltas (DATA-42, Stage 2).
 
-Muster ``transit/poller.py``: langlebiger asyncio-Task im Lifespan
-(``main.py`` ``_schedule``/``bg_tasks``), NIE im Request-Pfad. Je Iteration
-wird das dynamische eRound-Abo gepullt (Drain-Queue: nur Änderungen seit dem
-letzten Pull) und die Deltas werden in Redis akkumuliert
-(``charging/store.store_point_statuses``). Der Request-Pfad
-(``/cities/{slug}/charging-status``) liest danach NUR aus Redis.
+Pattern ``transit/poller.py``: long-running asyncio task in lifespan
+(``main.py`` ``_schedule``/``bg_tasks``), NEVER in request path. Each iteration
+pulls the dynamic eRound subscription (drain queue: only changes since the
+last pull) and accumulates deltas into Redis
+(``charging/store.store_point_statuses``). The request path
+(``/cities/{slug}/charging-status``) subsequently reads ONLY from Redis.
 
-Robustheit: eine scheiternde Iteration (Upstream down, Parse-Fehler) crasht
-den Task NICHT (``log.warning``), nach ``interval_s`` läuft die nächste.
-``CancelledError`` (Shutdown) wird durchgereicht. Ein per-Tick Redis-Lock
-(SET NX EX) verhindert redundante Pulls bei mehreren Workern/Replicas; da der
-Feed eine Drain-Queue ist, wäre ein Doppel-Pull kein Fehler (beide akkumulieren
-ihre Teilmenge nach Redis), nur unnötiger Upstream-Traffic.
+Robustness: a failing iteration (upstream down, parse error) does NOT crash
+the task (``log.warning``), the next one runs after ``interval_s``.
+``CancelledError`` (shutdown) is passed through. A per-tick Redis lock
+(SET NX EX) prevents redundant pulls across multiple workers/replicas; because the
+feed is a drain queue, a duplicate pull would not be an error (both accumulate
+their subset to Redis), only unnecessary upstream traffic.
 """
 
 from __future__ import annotations
@@ -26,19 +26,19 @@ from cityscape.charging.store import store_latest_delta, store_point_statuses
 
 log = structlog.get_logger()
 
-#: Poll-Kadenz: 5 Minuten (Plan-Vorgabe live_5min; der Feed ist minutenfrisch,
-#: die Drain-Queue puffert Änderungen zwischen den Pulls verlustfrei).
+#: Poll cadence: 5 minutes (plan specification live_5min; the feed is minute-fresh,
+#: the drain queue buffers changes between pulls without loss).
 _INTERVAL_S = 300
 
 _LOCK_KEY = "lock:eround_charging_poll"
 
 
 async def eround_status_poller(app, *, abo_id: str, interval_s: int = _INTERVAL_S):
-    """Endlosschleife: dyn-Abo pullen und Deltas nach Redis akkumulieren."""
+    """Infinite loop: pull dynamic subscription and accumulate deltas into Redis."""
     while True:
         try:
-            # Multi-Worker-Guard (Muster gtfs_rt_poller): pro Intervall pollt nur
-            # ein Worker; Redis-Fehler -> trotzdem pollen (Graceful Degradation).
+            # Multi-worker guard (gtfs_rt_poller pattern): only one worker polls
+            # per interval; Redis error -> poll anyway (graceful degradation).
             should_poll = True
             try:
                 should_poll = bool(
@@ -56,25 +56,25 @@ async def eround_status_poller(app, *, abo_id: str, interval_s: int = _INTERVAL_
                 if points:
                     written = await store_point_statuses(app.state.redis, points)
                     log.info("eround_status_accumulated", points=written)
-                # Snapshot IMMER schreiben (auch leer): der /live-Read-Pfad
-                # pullt nie selbst (strikte Entkopplung vom Request-Worker)
-                # und braucht einen frischen Stand fuer ok/no_data-Ehrlichkeit.
+                # ALWAYS write snapshot (even if empty): the /live read path
+                # never pulls by itself (strict decoupling from request worker)
+                # and needs a fresh state for ok/no_data honesty.
                 await store_latest_delta(app.state.redis, raw)
         except asyncio.CancelledError:
-            # Shutdown (Lifespan-finally cancelt die bg_tasks): sauber beenden.
+            # Shutdown (lifespan-finally cancels bg_tasks): exit cleanly.
             raise
-        except Exception as exc:  # noqa: BLE001 - eine Iteration darf nie crashen
+        except Exception as exc:  # noqa: BLE001 - an iteration must never crash
             log.warning("eround_status_poll_failed", error=type(exc).__name__)
         await asyncio.sleep(interval_s)
 
 
 def maybe_start_eround_poller(app, settings, schedule) -> None:
-    """Startet den Poller NUR bei aktivem Toggle + Cert + Abo-ID (Muster GTFS-RT).
+    """Starts the poller ONLY with active toggle + cert + subscription ID (GTFS-RT pattern).
 
-    Ohne ``enable_eround_charging`` ODER ohne mTLS-Client
-    (``app.state.mobilithek_http``) ODER ohne ``eround_charging_abo_id`` wird
-    KEIN Task erzeugt (Graceful Degradation = die Route liefert ``disabled``/
-    ``no_data``, der App-Start bleibt unverändert).
+    Without ``enable_eround_charging`` OR without mTLS client
+    (``app.state.mobilithek_http``) OR without ``eround_charging_abo_id``,
+    NO task is created (graceful degradation = the route returns ``disabled``/
+    ``no_data``, app startup remains unchanged).
     """
     if not getattr(settings, "enable_eround_charging", False):
         return

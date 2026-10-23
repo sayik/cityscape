@@ -1,18 +1,18 @@
-"""Deklarative Quellen-Registry: EINE Stelle pro Upstream-Quelle.
+"""Declarative source registry: ONE place per upstream source.
 
-Single source of truth für die rein-datenhaften Quellen-Attribute, die
-früher auf vier Strukturen verteilt waren:
-  * KNOWN_SOURCES        (vorher api/v1/sources.py:_KNOWN_SOURCES)
-  * SOURCE_LICENSE       (vorher api/v1/sources.py:SOURCE_LICENSE)
-  * SOURCE_TTL           (vorher resilience/client.py:_SOURCE_TTL)
-  * FRAGILE_SOURCE_COOLDOWN (vorher resilience/breaker_redis.py)
+Single source of truth for pure data-oriented source attributes that
+were previously spread across four structures:
+  * KNOWN_SOURCES        (previously api/v1/sources.py:_KNOWN_SOURCES)
+  * SOURCE_LICENSE       (previously api/v1/sources.py:SOURCE_LICENSE)
+  * SOURCE_TTL           (previously resilience/client.py:_SOURCE_TTL)
+  * FRAGILE_SOURCE_COOLDOWN (previously resilience/breaker_redis.py)
 
-Eine neue Quelle hinzufügen = EIN SourceSpec-Eintrag hier (plus weiterhin:
-der enable_<name>-Toggle in config.py, der SourceId-Wert in enums.py, der
-Adapter/Mapper-Code und die wortgenaue Zeile in DATA-LICENSES.md). Die
-Lizenz-Wortlaute bleiben fail-closed gegen DATA-LICENSES.md geprüft
-(tests/unit/test_source_license_map.py); die Reihenfolge hier IST die
-öffentliche Reihenfolge der /sources-Route.
+Adding a new source = ONE SourceSpec entry here (plus continuing:
+the enable_<name> toggle in config.py, the SourceId value in enums.py, the
+adapter/mapper code, and the verbatim line in DATA-LICENSES.md).
+License wordings remain verified fail-closed against DATA-LICENSES.md
+(tests/unit/test_source_license_map.py); the order here IS the
+public order of the /sources route.
 """
 
 from __future__ import annotations
@@ -22,16 +22,16 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class SourceSpec:
-    """Eine Upstream-Quelle, deklarativ.
+    """An upstream source, declaratively.
 
     Args:
-        name: Quellen-Schlüssel; MUSS exakt zum enable_<name>-Toggle
-            (config.py) und zum SourceId-Wert (enums.py) passen.
-        license_id: Lizenz-Kürzel (siehe LicenseId/DATA-LICENSES.md).
-        attribution: wortgenaue Attribution VERBATIM aus DATA-LICENSES.md.
-        ttl: (fresh_s, stale_s) Cache-Fenster; None = Default (60s/120s).
-        cooldown: HALF_OPEN-Probe-Intervall (s) für fragile Upstreams;
-            None = 30s-Default des Breakers.
+        name: Source key; MUST match enable_<name> toggle
+            (config.py) and SourceId value (enums.py) exactly.
+        license_id: License identifier (see LicenseId/DATA-LICENSES.md).
+        attribution: Verbatim attribution VERBATIM from DATA-LICENSES.md.
+        ttl: (fresh_s, stale_s) cache window; None = default (60s/120s).
+        cooldown: HALF_OPEN probe interval (s) for fragile upstreams;
+            None = 30s default of breaker.
     """
 
     name: str
@@ -102,8 +102,8 @@ SOURCE_SPECS: tuple[SourceSpec, ...] = (
         name="dwd_fire",
         license_id="geonutzv",
         attribution="Datenbasis: Deutscher Wetterdienst, eigene Elemente ergänzt",
-        # ArcGIS-Re-Host kann zeitweise traege/aus sein -> grosszuegigeres
-        # Cache-Fenster (taegliche Daten) + eigener HALF_OPEN-Cooldown.
+        # ArcGIS re-host can be intermittently sluggish/down -> generous
+        # cache window (daily data) + custom HALF_OPEN cooldown.
         ttl=(3600.0, 86400.0),
         cooldown=900.0,
     ),
@@ -113,15 +113,15 @@ SOURCE_SPECS: tuple[SourceSpec, ...] = (
         attribution=(
             "European Environment Agency (EEA), Bathing Water Directive 2006/7/EC"
         ),
-        # Jahres-Saisonbewertung (quasi-statisch) -> langes Cache-Fenster.
+        # Annual seasonal assessment (quasi-static) -> long cache window.
         ttl=(86400.0, 2592000.0),
         cooldown=900.0,
     ),
     SourceSpec(
         name="klinik_atlas",
-        # FAIL-CLOSED: Bundes-Klinik-Atlas weist keine explizite offene Lizenz aus
-        # -> UNKNOWN/Tier C, Quelle per Default deaktiviert (s. config), bis BMG/IQTIG
-        # die Lizenz bestaetigt.
+        # FAIL-CLOSED: Bundes-Klinik-Atlas does not declare an explicit open license
+        # -> UNKNOWN/Tier C, source disabled by default (see config) until BMG/IQTIG
+        # confirms the license.
         license_id="unknown",
         attribution="Bundes-Klinik-Atlas (BMG/IQTIG)",
         ttl=(86400.0, 604800.0),
@@ -130,16 +130,16 @@ SOURCE_SPECS: tuple[SourceSpec, ...] = (
         name="db_fasta",
         license_id="cc_by_4_0",
         attribution="Deutsche Bahn / DB InfraGO AG",
-        # Echtzeit-Status -> kurzes Cache-Fenster.
+        # Real-time status -> short cache window.
         ttl=(300.0, 3600.0),
         cooldown=600.0,
     ),
     SourceSpec(
         name="genesis",
         license_id="dl_de_by_2_0",
-        # H15 (Owner 2026-06-29): vereinheitlicht mit der regionalstatistik-Quelle
-        # (gleicher Host www.regionalstatistik.de -> "Statistische Ämter des
-        # Bundes und der Länder"). zensus bleibt separat (eigene ZENSUS-Quelle).
+        # H15 (Owner 2026-06-29): standardized with regionalstatistik source
+        # (same host www.regionalstatistik.de -> "Statistische Ämter des
+        # Bundes und der Länder"). zensus remains separate (own ZENSUS source).
         attribution="Statistische Ämter des Bundes und der Länder",
         ttl=(86400.0, 2592000.0),
     ),
@@ -317,11 +317,11 @@ SOURCE_SPECS: tuple[SourceSpec, ...] = (
         license_id="dl_de_zero_2_0",
         attribution="Stadt Wuppertal",
     ),
-    # Magdeburg-Parken (Mobilithek, ifak e.V.): Datenquelle Stadt Magdeburg ->
-    # deren Open-Data-Nutzungsbedingungen legen mangels anderer Kennzeichnung
-    # Datenlizenz Deutschland Namensnennung 2.0 fest (Recherche 2026-06-30,
-    # magdeburg.de Offene-Verwaltungsdaten), Tier A. Attribution = geforderte
-    # Quellenangabe verbatim.
+    # Magdeburg parking (Mobilithek, ifak e.V.): data source Stadt Magdeburg ->
+    # their open data terms of use establish Datenlizenz Deutschland
+    # Namensnennung 2.0 in absence of other marking (research 2026-06-30,
+    # magdeburg.de open government data), Tier A. Attribution = required
+    # source indication verbatim.
     SourceSpec(
         name="magdeburg_parking",
         license_id="dl_de_by_2_0",
@@ -456,29 +456,29 @@ SOURCE_SPECS: tuple[SourceSpec, ...] = (
         ),
         ttl=(86400.0, 2592000.0),
     ),
-    # DATA-41: Fernwärme-/Wärmenetz-Versorgung je Stadt (föderiert je Stadt-WFS,
-    # je Ursprung lizenzverifiziert). Berlin repräsentativ (DL-DE/Zero 2.0); Hamburg
-    # DL-DE/BY 2.0 trägt der Record je Stadt aus der WFS-Registry. Batch-Ingest, kein
-    # Live-Call im Request-Pfad (lange TTL).
+    # DATA-41: District heating network supply per city (federated per city WFS,
+    # license-verified per origin). Berlin representative (DL-DE/Zero 2.0); Hamburg
+    # DL-DE/BY 2.0 is carried by record per city from WFS registry. Batch ingest, no
+    # live call in request path (long TTL).
     SourceSpec(
         name="district_heating",
         license_id="dl_de_zero_2_0",
         attribution="Geoportal Berlin / Energienetze",
         ttl=(86400.0, 2592000.0),
     ),
-    # Quick-260705-jgt: Koeln Behoerden-Wartezeiten (office-wait-times). Keyloser
-    # Direkt-HTTP gegen waiting-od.php, DL-DE/Zero 2.0 = Tier A, reine Live-Daten.
-    # Attribution "Stadt Koeln" VERBATIM identisch zum DATA-LICENSES.md-Eintrag.
+    # Quick-260705-jgt: Cologne office wait times (office-wait-times). Keyless
+    # direct HTTP against waiting-od.php, DL-DE/Zero 2.0 = Tier A, pure live data.
+    # Attribution "Stadt Koeln" VERBATIM identical to DATA-LICENSES.md entry.
     SourceSpec(
         name="koeln_wartezeiten",
         license_id="dl_de_zero_2_0",
         attribution="Stadt Koeln",
     ),
-    # Quick-260705-ufv: BBK NINA Bevoelkerungsschutz-Warnungen (civil-protection-
-    # warnings). Keyloser GET gegen warnung.bund.de/api31/dashboard/{ARS}.json,
-    # amtlicher Warntext verbatim (§ 5 Abs. 2 UrhG, amtliches Werk = Tier A). Reine
-    # Live-Warnungen (kein Archiv), kurzes Cache-Fenster (60s/300s). Attribution
-    # VERBATIM identisch zu mappers/bbk_nina.py + DATA-LICENSES.md (T-11-SRC-DRIFT).
+    # Quick-260705-ufv: BBK NINA civil protection warnings (civil-protection-
+    # warnings). Keyless GET against warnung.bund.de/api31/dashboard/{ARS}.json,
+    # official warning text verbatim (Sec. 5 para. 2 UrhG, official work = Tier A). Pure
+    # live warnings (no archive), short cache window (60s/300s). Attribution
+    # VERBATIM identical to mappers/bbk_nina.py + DATA-LICENSES.md (T-11-SRC-DRIFT).
     SourceSpec(
         name="bbk_nina",
         license_id="amtliches_werk",
@@ -487,7 +487,7 @@ SOURCE_SPECS: tuple[SourceSpec, ...] = (
     ),
 )
 
-# --- Abgeleitete Sichten (Rückwärts-kompatibel zu den alten Strukturen) ---
+# --- Derived views (backwards compatible to old structures) ---
 KNOWN_SOURCES: tuple[str, ...] = tuple(s.name for s in SOURCE_SPECS)
 
 SOURCE_LICENSE: dict[str, dict[str, str]] = {

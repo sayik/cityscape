@@ -1,19 +1,19 @@
-"""Rate-Limiting-Verträge (API-06): Limiter + key_func + Tier-Konstanten.
+"""Rate limiting contracts (API-06): Limiter + key_func + tier constants.
 
-Wave 1 verdrahtet die echte sync-Redis-URI (Pitfall 1: slowapi teilt NICHT den
-async-Pool ``app.state.redis``, sondern öffnet über ``storage_uri`` eine EIGENE
-synchrone redis-py-Verbindung zum SELBEN Redis-Server). ``build_limiter`` leitet
-die Storage-URI aus den Settings ab (``limit_storage_uri or redis_url``).
+Wave 1 wires up the real sync Redis URI (Pitfall 1: slowapi does NOT share the
+async pool ``app.state.redis``, but opens via ``storage_uri`` its OWN
+synchronous redis-py connection to the SAME Redis server). ``build_limiter`` derives
+the storage URI from settings (``limit_storage_uri or redis_url``).
 
-Die Header werden auf die IETF-Standard-Namen ``RateLimit-Limit`` /
-``RateLimit-Remaining`` / ``RateLimit-Reset`` normalisiert (D-02): slowapi
-emittiert per Default die älteren ``X-RateLimit-*``-Namen; über
-``_header_mapping`` mappen wir sie auf die Standard-Namen ohne ``X-``-Präfix.
+Headers are normalized to the IETF standard names ``RateLimit-Limit`` /
+``RateLimit-Remaining`` / ``RateLimit-Reset`` (D-02): slowapi
+emits the older ``X-RateLimit-*`` names by default; via
+``_header_mapping`` we map them to the standard names without the ``X-`` prefix.
 
-``real_client_ip`` ist PFLICHT statt slowapis ``get_remote_address`` (T-11-RL-
-SPOOF): hinter Caddy/Cloudflare liest ``request.client.host`` nur die Proxy-IP.
-Die echte Client-IP kommt zuerst aus dem Cloudflare-Header, dann aus der ersten
-IP von X-Forwarded-For, sonst dem direkten Peer.
+``real_client_ip`` is MANDATORY instead of slowapi's ``get_remote_address`` (T-11-RL-
+SPOOF): behind Caddy/Cloudflare, ``request.client.host`` only reads the proxy IP.
+The real client IP comes first from the Cloudflare header, then from the first
+IP in X-Forwarded-For, otherwise direct peer.
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from slowapi.extension import HEADERS
 from cityscape.config import Settings
 from cityscape.infra.allowlist import ip_allowlisted, parse_allowlist
 
-# IETF-Standard-RateLimit-Header (D-02, ohne X--Präfix). slowapi nutzt per
-# Default X-RateLimit-*; dieses Mapping normalisiert die Namen.
+# IETF standard RateLimit headers (D-02, without X- prefix). slowapi uses
+# X-RateLimit-* by default; this mapping normalizes names.
 _STANDARD_HEADER_MAPPING = {
     HEADERS.LIMIT: "RateLimit-Limit",
     HEADERS.REMAINING: "RateLimit-Remaining",
@@ -36,16 +36,16 @@ _STANDARD_HEADER_MAPPING = {
 
 
 def ANON_LIMIT() -> str:
-    """Kombiniertes IP-Budget: Burst (limit_anon) + nachhaltiges Fenster.
+    """Combined IP budget: burst (limit_anon) + sustained window.
 
-    Gibt beide Limits semikolon-getrennt zurück; slowapi/limits ``parse_many``
-    liest das als MEHRERE gleichzeitig geltende Limits (Burst pro Minute bremst
-    Spitzen, das Stunden-Limit bremst Dauer-Scraping). Ist nur limit_anon gesetzt
-    (z.B. Test-Override CITYSCAPE_LIMIT_ANON), gilt allein dieses.
+    Returns both limits separated by semicolons; slowapi/limits ``parse_many``
+    interprets this as MULTIPLE concurrently active limits (minute burst caps
+    spikes, hour limit throttles sustained scraping). If only limit_anon is set
+    (e.g. test override CITYSCAPE_LIMIT_ANON), it applies alone.
 
-    Frisch instanziiert statt get_settings()-Cache (Konvention Toggle-Lookup), da
-    @limiter.limit das Limit pro Request liest und per-Test gesetzte CITYSCAPE_-
-    Env-Vars greifen müssen.
+    Freshly instantiated instead of get_settings() cache (toggle lookup convention),
+    since @limiter.limit reads the limit per request and per-test set CITYSCAPE_
+    env vars must take effect.
     """
     s = Settings()
     limits = [s.limit_anon]
@@ -55,21 +55,20 @@ def ANON_LIMIT() -> str:
 
 
 def ADMIN_LOGIN_LIMIT() -> str:
-    """Striktes Budget am Admin-Login gegen Brute-Force (Audit HIGH-1)."""
+    """Strict budget on admin login against brute force (Audit HIGH-1)."""
     return Settings().limit_admin_login
 
 
 def real_client_ip(request: Request) -> str:
-    """Echte Client-IP: CF-Connecting-IP -> X-Forwarded-For[0] -> Peer (PFLICHT).
+    """Real client IP: CF-Connecting-IP -> X-Forwarded-For[0] -> Peer (MANDATORY).
 
-    Nie slowapis ``get_remote_address`` (liest nur die Proxy-IP, T-11-RL-SPOOF).
+    Never use slowapi's ``get_remote_address`` (reads only proxy IP, T-11-RL-SPOOF).
 
-    VERTRAUENS-VORBEDINGUNG (Audit HIGH-2, 2026-06-10): Diese Header sind nur
-    vertrauenswürdig, wenn das Origin AUSSCHLIESSLICH von Cloudflare erreichbar
-    ist (Firewall-Pflichtschritt im Runbook) und Caddy ein client-gesendetes
-    X-Forwarded-For strippt (Caddyfile.prod). Ohne beides könnte ein Angreifer
-    pro Request eine Zufalls-IP setzen und sich frische Rate-Limit-Buckets
-    erschleichen.
+    TRUST PREREQUISITE (Audit HIGH-2, 2026-06-10): These headers are only
+    trustworthy if origin is EXCLUSIVELY reachable from Cloudflare
+    (mandatory firewall step in runbook) and Caddy strips a client-sent
+    X-Forwarded-For (Caddyfile.prod). Without both, an attacker could set
+    a random IP per request and obtain fresh rate limit buckets.
     """
     cf = request.headers.get("cf-connecting-ip")
     if cf:
@@ -81,49 +80,49 @@ def real_client_ip(request: Request) -> str:
 
 
 def rate_key(request: Request) -> str:
-    """Zaehlschluessel pro Client: ``ip:<client-ip>`` (keylose, offene API)."""
+    """Counting key per client: ``ip:<client-ip>`` (keyless, open API)."""
     return f"ip:{real_client_ip(request)}"
 
 
 def _storage_uri(settings: Settings) -> str:
-    """Sync-Storage-URI für slowapi: limit_storage_uri sonst redis_url (Pitfall 1).
+    """Sync storage URI for slowapi: limit_storage_uri otherwise redis_url (Pitfall 1).
 
-    slowapi öffnet damit eine EIGENE synchrone redis-py-Verbindung zum SELBEN
-    Redis-Server (nicht der async app.state.redis-Pool). Das erfüllt "ueber
-    Worker geteilt + überlebt Neustart" faktisch (RESEARCH Open Q1, Variante a).
+    slowapi uses this to open its OWN synchronous redis-py connection to the SAME
+    Redis server (not the async app.state.redis pool). This satisfies "shared across
+    workers + survives restart" in practice (RESEARCH Open Q1, variant a).
     """
     return settings.limit_storage_uri or settings.redis_url
 
 
 def build_limiter(settings: Settings) -> Limiter:
-    """Baut den slowapi-Limiter aus den Settings (Test-Override-sicher).
+    """Builds the slowapi limiter from settings (test override safe).
 
-    ``headers_enabled=True`` lässt slowapi die RateLimit-Header emittieren; das
-    ``_header_mapping`` normalisiert sie auf die IETF-Standard-Namen (D-02).
+    ``headers_enabled=True`` makes slowapi emit RateLimit headers;
+    ``_header_mapping`` normalizes them to IETF standard names (D-02).
 
-    ``default_limits=[ANON_LIMIT]`` (Live-Report M2): das IP-Budget (default
-    60/min) gilt als DEFAULT für JEDE Route, die die RateLimitMiddleware sieht,
-    also auch die City-/Meta-GETs ohne eigenen @limiter.limit-Decorator. Routen
-    MIT eigenem Decorator (/sources, /compare, /admin/login) behalten ihr eigenes
-    Limit (slowapi zieht für dekorierte Routen im Middleware-Pfad NICHT
-    zusätzlich das Default). So tragen alle GET-Routen ein Limit + RateLimit-
-    Header, ohne dass jede Route dekoriert werden muss.
+    ``default_limits=[ANON_LIMIT]`` (Live report M2): IP budget (default
+    60/min) applies as DEFAULT to EVERY route that RateLimitMiddleware sees,
+    including city/meta GETs without own @limiter.limit decorator. Routes
+    WITH their own decorator (/sources, /compare, /admin/login) keep their own
+    limit (slowapi does NOT apply default additionally in middleware path for
+    decorated routes). Thus all GET routes carry a limit + RateLimit
+    headers without needing each route to be decorated.
 
-    Die API ist keylos/offen: alle Clients teilen sich das IP-Budget (ANON_LIMIT),
-    es gibt keine Key-/Tier-Differenzierung mehr.
+    The API is keyless/open: all clients share IP budget (ANON_LIMIT),
+    there is no key/tier differentiation anymore.
 
-    ALLOWLIST-BYPASS (Connectors-Directory-Härtung 2026-07-02): der Wrapper um
-    ``_check_request_limit`` ist der EINE Choke-Point, durch den slowapi ALLE
-    Prüfungen zieht (default_limits via RateLimitMiddleware UND die
-    @limiter.limit-Decorator von /sources, /compare, /admin/login). CIDRs aus
-    CITYSCAPE_RATELIMIT_ALLOWLIST (z.B. Anthropic-Egress: viele Endnutzer
-    hinter wenigen IPs) werden dort nicht gezählt und nie gedrosselt.
-    AUSNAHME /admin*: das Admin-Login-Limit ist Brute-Force-Schutz (Auth-nah,
-    HIGH-1) und gilt IMMER, auch für allowlistete IPs (NUR Limit-Bypass, KEINE
-    Auth-Wirkung). Die Allowlist wird wie ANON_LIMIT pro Request frisch aus den
-    Settings gelesen (Test-Override-Konvention); parse_allowlist ist lru-gecacht,
-    pro Request fällt also nur der billige CIDR-Vergleich an. Fail-safe: leere/
-    kaputte Konfiguration allowlistet niemanden (infra/allowlist.py).
+    ALLOWLIST BYPASS (Connectors directory hardening 2026-07-02): wrapper around
+    ``_check_request_limit`` is the SINGLE choke point through which slowapi runs
+    ALL checks (default_limits via RateLimitMiddleware AND @limiter.limit decorators
+    of /sources, /compare, /admin/login). CIDRs from CITYSCAPE_RATELIMIT_ALLOWLIST
+    (e.g. Anthropic egress: many end users behind few IPs) are not counted there
+    and never throttled.
+    EXCEPTION /admin*: admin login limit is brute force protection (auth-related,
+    HIGH-1) and ALWAYS applies, even for allowlisted IPs (ONLY limit bypass, NO
+    auth impact). Allowlist is read freshly per request from settings like ANON_LIMIT
+    (test override convention); parse_allowlist is lru-cached, so per request only
+    inexpensive CIDR comparison occurs. Fail-safe: empty/broken configuration
+    allowlists no one (infra/allowlist.py).
     """
     lim = Limiter(
         key_func=rate_key,
@@ -131,35 +130,35 @@ def build_limiter(settings: Settings) -> Limiter:
         headers_enabled=True,
         storage_uri=_storage_uri(settings),
     )
-    # Vor dem ersten Request gesetzt: extension._init bewahrt vorhandene Einträge
-    # (header_mapping.get(..., default)), also schlagen die Standard-Namen durch.
+    # Set before first request: extension._init preserves existing entries
+    # (header_mapping.get(..., default)), so standard names pass through.
     lim._header_mapping.update(_STANDARD_HEADER_MAPPING)
 
     orig_check = lim._check_request_limit
 
     def _check_with_allowlist(
         request: Request, endpoint_func, in_middleware: bool = False
-    ) -> None:  # noqa: ANN001 - slowapi-interne Signatur (Callable | None)
+    ) -> None:  # noqa: ANN001 - slowapi internal signature (Callable | None)
         if not request.url.path.startswith("/admin") and ip_allowlisted(
             real_client_ip(request), parse_allowlist(Settings().ratelimit_allowlist)
         ):
-            # Bypass: keine Zählung, kein 429. view_rate_limit explizit auf
-            # None setzen, weil der slowapi-Decorator es nach der Route
-            # ungeprüft liest (request.state wirft sonst AttributeError);
-            # _inject_headers ist mit None ein No-op -> keine RateLimit-Header.
+            # Bypass: no counting, no 429. Set view_rate_limit explicitly to
+            # None, because slowapi decorator reads it unchecked after route
+            # (request.state raises AttributeError otherwise);
+            # _inject_headers is a no-op with None -> no RateLimit headers.
             request.state.view_rate_limit = None
             return
         orig_check(request, endpoint_func, in_middleware)
 
-    # Bewusster Eingriff in die private Methode (Haus-Stil: slowapi 0.1.9 ist
-    # gepinnt, s. _header_mapping oben und _Limiter__marked_for_limiting in
-    # main.py); slowapi selbst bietet keinen request-basierten Exempt-Hook
-    # (exempt_when/_request_filters werden OHNE Request aufgerufen).
+    # Deliberate hook into private method (internal style: slowapi 0.1.9 is
+    # pinned, see _header_mapping above and _Limiter__marked_for_limiting in
+    # main.py); slowapi itself provides no request-based exempt hook
+    # (exempt_when/_request_filters are called WITHOUT request).
     lim._check_request_limit = _check_with_allowlist
     return lim
 
 
-# Modul-Limiter mit Settings-abgeleiteter Storage-URI. create_app() überschreibt
-# diese Instanz NICHT, sondern verdrahtet sie an app.state.limiter; die Storage-URI
-# wird zur Import-Zeit aus den (Test-)Settings gelesen.
+# Module limiter with settings-derived storage URI. create_app() does NOT
+# overwrite this instance, but wires it to app.state.limiter; storage URI
+# is read at import time from (test) settings.
 limiter = build_limiter(Settings())

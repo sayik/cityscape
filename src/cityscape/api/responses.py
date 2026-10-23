@@ -1,12 +1,12 @@
-"""Eigene orjson-Response-Klasse als Ersatz für FastAPIs ORJSONResponse.
+"""Custom orjson response class as replacement for FastAPI's ORJSONResponse.
 
-FastAPI hat ``fastapi.responses.ORJSONResponse`` deprecated (Serialisierung
-läuft dort jetzt über Pydantic, sobald ein response_model gesetzt ist). Die
-Error-Handler und die ``default_response_class`` brauchen aber weiterhin eine
-konkrete Response-Klasse mit orjson-Bytes-Body (der ETag-Middleware-Vertrag
-in main.py hängt an deterministischen Response-Bytes). Diese Klasse ist das
-dokumentierte Starlette-Muster: ``JSONResponse``-Subklasse mit ``render`` via
-``orjson.dumps`` - verhaltensgleich zur alten ORJSONResponse, ohne Deprecation.
+FastAPI deprecated ``fastapi.responses.ORJSONResponse`` (serialization
+there now runs via Pydantic as soon as a response_model is set). However,
+the error handlers and the ``default_response_class`` still require a
+concrete response class with an orjson bytes body (the ETag middleware contract
+in main.py depends on deterministic response bytes). This class is the
+documented Starlette pattern: a ``JSONResponse`` subclass with ``render`` via
+``orjson.dumps`` - identical behavior to the old ORJSONResponse, without deprecation.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from starlette.responses import JSONResponse
 
 
 class OrjsonResponse(JSONResponse):
-    """JSON-Response, die den Body mit orjson serialisiert (bytes)."""
+    """JSON response that serializes the body with orjson (bytes)."""
 
     media_type = "application/json"
 

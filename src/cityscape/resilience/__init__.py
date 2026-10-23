@@ -1,8 +1,8 @@
-"""Resilienz-Bausteine: gepoolter HTTP-Pool, Cache-Aside/SWR, Circuit-Breaker.
+"""Resilience building blocks: pooled HTTP pool, cache-aside/SWR, circuit breaker.
 
-Dieses Paket bündelt die Resilienz-Schicht der Phase 3. ``types.py`` liefert
-die reinen Verträge (``SourceConfig``, ``CacheStatus``) ohne I/O, die die
-Cache- und Fassaden-Plans (03-03/03-04) konsumieren.
+This package bundles the Phase 3 resilience layer. ``types.py`` provides
+pure contracts (``SourceConfig``, ``CacheStatus``) without I/O, consumed by
+the cache and facade plans (03-03/03-04).
 """
 
 from __future__ import annotations

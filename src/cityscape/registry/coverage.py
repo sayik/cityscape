@@ -1,33 +1,33 @@
-"""Oeffentliche Per-City-Coverage-Karte der teilabgedeckten Endpunkte.
+"""Public per-city coverage map of partially covered endpoints.
 
-Ehrlichkeit statt leerer Versprechen (Owner-Entscheidung 2026-06-13): einige
-Endpunkte decken nur kuratierte Städte ab. Früher lieferten sie für eine
-nicht-abgedeckte Stadt ein leeres ``source_status="ok"`` (sieht aus wie "kein
-Ereignis"), was die fehlende Abdeckung verschleiert. Stattdessen weisen die
-Routen jetzt ``source_status="not_covered"`` aus (200, ``data: null``) und
-nennen im meta-Block die abgedeckten Städte (``covered_cities``). ``not_covered``
-ist klar unterscheidbar von ``no_data`` (Stadt abgedeckt, aktuell aber keine
-Daten) und vom 404 (Stadt unbekannt).
+Honesty over empty promises (owner decision 2026-06-13): some
+endpoints only cover curated cities. Previously they returned an empty
+``source_status="ok"`` for an uncovered city (looked like "no
+incident"), which concealed the lack of coverage. Instead, the routes
+now return ``source_status="not_covered"`` (200, ``data: null``) and
+list the covered cities in the meta block (``covered_cities``). ``not_covered``
+is clearly distinguishable from ``no_data`` (city covered, currently no
+data) and from 404 (city unknown).
 
-Dieses Modul ist die EINZIGE Quelle der Wahrheit der Abdeckung und wird aus den
-kuratierten Adapter-Stadt-Maps ABGELEITET (kein Duplizieren der Slug-Listen):
-- ``flood``    -> ``adapters.lhp._CITY_PEGEL`` (kuratierte Pegel je Stadt)
-- ``webcams``  -> ``adapters.autobahn._CITY_ROADS`` (kuratierte Autobahnen)
-- ``traffic``  -> ``adapters.autobahn._CITY_ROADS`` (dieselbe Map wie webcams)
-- ``road-events`` -> ``api.v1.cities.CONNECTOR_MAP`` (kuratierte Stadt-Connectoren)
+This module is the SINGLE source of truth for coverage and is DERIVED from
+curated adapter city maps (no duplicating slug lists):
+- ``flood``    -> ``adapters.lhp._CITY_PEGEL`` (curated gauge per city)
+- ``webcams``  -> ``adapters.autobahn._CITY_ROADS`` (curated highways)
+- ``traffic``  -> ``adapters.autobahn._CITY_ROADS`` (same map as webcams)
+- ``road-events`` -> ``api.v1.cities.CONNECTOR_MAP`` (curated city connectors)
 
-Da ``CONNECTOR_MAP`` in ``cities.py`` lebt (mit fetch_fn/mapper-Tupeln) und
-``cities.py`` dieses Modul importiert, wird die road-events-Liste hier gespiegelt
-statt importiert (Zirkelimport-Vermeidung). Eine Modul-Assertion in ``cities.py``
-sichert die Gleichheit beider Listen ab und fängt Drift beim Import hart ab.
+Since ``CONNECTOR_MAP`` lives in ``cities.py`` (with fetch_fn/mapper tuples) and
+``cities.py`` imports this module, the road-events list is mirrored here
+instead of imported (circular import avoidance). A module assertion in ``cities.py``
+verifies equality of both lists and catches drift hard on import.
 
-NICHT teilabgedeckt (bewusst NICHT in dieser Karte):
-- ``water-level``: Geo-Proximity ohne kuratierte Stadt-Map; liefert bei fehlender
-  naher Station bereits ehrlich ``no_data`` (dynamisch, deutschlandweit an
-  Bundeswasserstraßen).
-- ``live/transit/*``: bundesweiter GTFS-RT-Feed ohne strukturelle Stadt-Grenze;
-  ``no_data`` bei leerem Redis bleibt das ehrliche Verdict.
-Alle übrigen city-/live-Endpunkte sind flächendeckend (84/84).
+NOT partially covered (intentionally NOT in this map):
+- ``water-level``: geo-proximity without curated city map; already returns
+  honest ``no_data`` when no nearby station exists (dynamic, nationwide on
+  federal waterways).
+- ``live/transit/*``: nationwide GTFS-RT feed without structural city boundary;
+  ``no_data`` on empty Redis remains the honest verdict.
+All other city/live endpoints are fully covered nationwide (84/84).
 """
 
 from __future__ import annotations
@@ -40,8 +40,8 @@ from cityscape.adapters.lhp import _CITY_PEGEL
 from cityscape.adapters.parkendd import PARKENDD_CITIES
 from cityscape.registry.cities import CITY_REGISTRY
 
-# road-events: gespiegelt aus ``api.v1.cities.CONNECTOR_MAP`` (siehe Modul-Docstring).
-# Die Assertion in cities.py hält diese Liste mit der CONNECTOR_MAP synchron.
+# road-events: mirrored from ``api.v1.cities.CONNECTOR_MAP`` (see module docstring).
+# The assertion in cities.py keeps this list synchronized with CONNECTOR_MAP.
 _ROAD_EVENTS_CITIES: frozenset[str] = frozenset(
     {
         "berlin",
@@ -56,10 +56,10 @@ _ROAD_EVENTS_CITIES: frozenset[str] = frozenset(
     }
 )
 
-# sharing (DATA-33): gespiegelt aus ``api.v1.cities.GBFS_SYSTEMS`` (kuratierte
-# Nextbike-GBFS-Systeme je Stadt). Wie bei road-events lebt die Quell-Map in
-# cities.py (das dieses Modul importiert), daher wird die Slug-Menge hier
-# gespiegelt und per Modul-Assertion in cities.py drift-synchron gehalten.
+# sharing (DATA-33): mirrored from ``api.v1.cities.GBFS_SYSTEMS`` (curated
+# Nextbike GBFS systems per city). As with road-events, the source map lives in
+# cities.py (which imports this module), so the slug set is mirrored here
+# and kept drift-synchronized via module assertion in cities.py.
 _SHARING_CITIES: frozenset[str] = frozenset(
     {
         "berlin",
@@ -90,49 +90,48 @@ _SHARING_CITIES: frozenset[str] = frozenset(
     }
 )
 
-# station-departures/-arrivals (DATA-34/36): NICHT mehr teilabgedeckt. Die Haupt-
-# Bahnhof-EVAs je Stadt werden aus dem StaDa-Katalog abgeleitet
-# (api.v1.cities._resolve_city_station_evas) -> volle Abdeckung über alle 84
-# Städte. Daher kein PARTIAL_COVERAGE-Eintrag (kein not_covered) mehr.
+# station-departures/-arrivals (DATA-34/36): NO longer partially covered. The main
+# station EVAs per city are derived from StaDa catalog
+# (api.v1.cities._resolve_city_station_evas) -> full coverage across all 84
+# cities. Therefore no PARTIAL_COVERAGE entry (no not_covered) anymore.
 
-# land-values (DATA-35): BORIS ist pro Bundesland föderiert -> abgedeckt sind
-# genau die Register-Städte, deren Bundesland (``state``) entweder einen offenen
-# WFS (``BORIS_WFS``) ODER einen offenen Shapefile-Download (``BORIS_SHAPEFILE``,
-# NW/ST) hat. Direkt aus beiden Maps + Register ABGELEITET (kein Duplizieren): ein
-# neues Land erweitert die Abdeckung automatisch.
+# land-values (DATA-35): BORIS is federated per federal state -> covered are
+# exactly those registry cities whose state (``state``) has either an open
+# WFS (``BORIS_WFS``) OR an open shapefile download (``BORIS_SHAPEFILE``,
+# NW/ST). DERIVED directly from both maps + registry (no duplication): a
+# new state expands coverage automatically.
 _BORIS_STATES = set(BORIS_WFS) | set(BORIS_SHAPEFILE)
 _LAND_VALUES_CITIES: frozenset[str] = frozenset(
     c.slug for c in CITY_REGISTRY if c.state in _BORIS_STATES
 )
 
-# solar-roofs (DATA-39): Dach-Solarkataster ist pro Bundesland föderiert (wie
-# BORIS). NRW-Pilot aus dem amtlichen Gemeinde-Aggregat (Seed) -> abgedeckt sind
-# die Register-Städte in NRW. Ein weiteres Land erweitert die Abdeckung, sobald
-# sein Seed vorliegt (dann hier um das Kürzel ergänzen).
+# solar-roofs (DATA-39): rooftop solar cadastre is federated per federal state (like
+# BORIS). NRW pilot from official municipality aggregate (seed) -> covered are
+# registry cities in NRW. Another state expands coverage as soon as its seed
+# is available (then add state code here).
 _SOLAR_CADASTRE_STATES = {"NW", "BY", "BE", "HH", "BB"}
 _SOLAR_ROOFS_CITIES: frozenset[str] = frozenset(
     c.slug for c in CITY_REGISTRY if c.state in _SOLAR_CADASTRE_STATES
 )
 
-# parking (DATA-40): EIN Parking-Endpunkt mit Quellen-Fallback (Dedup-Prinzip).
-# Bevorzugt ParkenDD-Live-Belegung (aus ``adapters.parkendd.PARKENDD_CITIES``
-# abgeleitet, 22 Städte), zusätzlich München über den statischen CKAN-
-# Standortkatalog (Fallback ohne Live-Belegung). Eine neue ParkenDD-Stadt
-# erweitert die Abdeckung automatisch. Seit 2026-07-02 (Lücken-Schluss Top-12)
-# zusätzlich die drei Mobilithek-mTLS-Städte, deren Quellen vorher NUR als
-# /live-Routen verdrahtet waren (``_MOBILITHEK_PARKING`` in api/v1/cities.py,
-# muss mit dieser Menge synchron bleiben).
+# parking (DATA-40): ONE parking endpoint with source fallback (deduplication principle).
+# Prefers ParkenDD live occupancy (derived from ``adapters.parkendd.PARKENDD_CITIES``,
+# 22 cities), plus Munich via static CKAN location catalog
+# (fallback without live occupancy). A new ParkenDD city
+# expands coverage automatically. Since 2026-07-02 (gap closing top 12)
+# additionally the three Mobilithek mTLS cities whose sources were previously ONLY
+# wired as /live routes (``_MOBILITHEK_PARKING`` in api/v1/cities.py,
+# must remain synchronized with this set).
 _PARKING_CITIES: frozenset[str] = (
     frozenset(PARKENDD_CITIES)
     | {"muenchen"}
     | {"frankfurt-am-main", "wuppertal", "magdeburg"}
 )
 
-# bike-counts (DATA-40): kommunale Radzählstellen-Open-Data je Stadt (KEIN
-# Eco-Counter: Lizenz ungeklärt, Owner-Entscheidung 2026-06-23). Jede Stadt eine
-# eigene, am Ursprung lizenz-verifizierte Quelle. Wächst additiv je integrierter
-# Stadt (muss synchron zu ``_resolve_bike_counts_connector`` in api/v1/cities.py
-# bleiben).
+# bike-counts (DATA-40): municipal bicycle counting stations open data per city (NO
+# Eco-Counter: license unclear, owner decision 2026-06-23). Each city its
+# own origin-verified license source. Grows additively per integrated
+# city (must remain in sync with ``_resolve_bike_counts_connector`` in api/v1/cities.py).
 _BIKE_COUNTS_CITIES: frozenset[str] = frozenset(
     {
         "muenchen",
@@ -146,35 +145,35 @@ _BIKE_COUNTS_CITIES: frozenset[str] = frozenset(
     }
 )
 
-# heritage (DATA-OSM-Tier-2): Denkmallisten sind LANDESsache -> föderiert per WFS
-# (wie BORIS/solar-roofs). Abgedeckt sind die Register-Städte, deren Bundesland
-# (``state``) einen verifizierten, offen lizenzierten Denkmal-WFS hat
-# (``DENKMAL_WFS``). Ein neues Land erweitert die Abdeckung automatisch.
+# heritage (DATA-OSM-Tier-2): monument lists are state matter -> federated via WFS
+# (like BORIS/solar-roofs). Covered are registry cities whose federal state
+# (``state``) has a verified, openly licensed monument WFS
+# (``DENKMAL_WFS``). A new state expands coverage automatically.
 _HERITAGE_STATES = set(DENKMAL_WFS)
 _HERITAGE_CITIES: frozenset[str] = frozenset(
     c.slug for c in CITY_REGISTRY if c.state in _HERITAGE_STATES
 )
 
-# tree-cadastre (DATA-OSM-Tier-2): Baumkataster sind kommunales Open Data -> per
-# Stadt konfiguriert (``BAUM_WFS``). Abgedeckt sind genau die konfigurierten,
-# verifiziert offen lizenzierten Städte. Eine neue Stadt erweitert automatisch.
+# tree-cadastre (DATA-OSM-Tier-2): tree cadastres are municipal open data -> configured
+# per city (``BAUM_WFS``). Covered are exactly the configured,
+# verified openly licensed cities. A new city expands automatically.
 _TREE_CADASTRE_CITIES: frozenset[str] = frozenset(BAUM_WFS)
 
-# district-heating (DATA-41): Fernwärme-/Wärmenetz-Versorgung aus der kommunalen
-# Wärmeplanung, föderiert je Stadt-WFS. Die WFS-Registry (``DISTRICT_HEATING_WFS``)
-# lebt im PRIVATEN Ingest-Modul (``ingest.district_heating``, kein Public-Export);
-# daher wird die Slug-Menge hier gespiegelt (wie road-events/sharing) statt
-# importiert, damit der öffentliche Live-Proxy-Code ohne das private Modul lädt. Eine
-# Modul-Assertion in ``ingest.district_heating`` hält beide Mengen drift-synchron.
+# district-heating (DATA-41): district heating supply from municipal
+# heat planning, federated per city WFS. The WFS registry (``DISTRICT_HEATING_WFS``)
+# lives in PRIVATE ingest module (``ingest.district_heating``, no public export);
+# therefore the slug set is mirrored here (like road-events/sharing) instead of
+# imported, so public live proxy code loads without private module. A
+# module assertion in ``ingest.district_heating`` keeps both sets drift-synchronized.
 _DISTRICT_HEATING_CITIES: frozenset[str] = frozenset({"berlin", "hamburg"})
 
-# office-wait-times (Quick-260705-jgt): Behoerden-Wartezeiten live. Aktuell NUR
-# Koeln abgedeckt (keyloser Direkt-Feed waiting-od.php); andere Staedte liefern
-# ehrlich not_covered (200, kein 404). Waechst additiv je integrierter Stadt.
+# office-wait-times (Quick-260705-jgt): administrative office wait times live. Currently ONLY
+# Cologne covered (keyless direct feed waiting-od.php); other cities return
+# honest not_covered (200, not 404). Grows additively per integrated city.
 _OFFICE_WAIT_TIMES_CITIES: frozenset[str] = frozenset({"koeln"})
 
-# Single source of truth: Endpunkt-Kennung -> abgedeckte Stadt-Slugs.
-# Die Kennung entspricht dem letzten Pfadsegment der Route (``/cities/{slug}/<key>``).
+# Single source of truth: endpoint identifier -> covered city slugs.
+# Identifier matches last path segment of route (``/cities/{slug}/<key>``).
 PARTIAL_COVERAGE: dict[str, frozenset[str]] = {
     "flood": frozenset(_CITY_PEGEL),
     "webcams": frozenset(_CITY_ROADS),
@@ -193,11 +192,11 @@ PARTIAL_COVERAGE: dict[str, frozenset[str]] = {
 
 
 def is_covered(endpoint: str, slug: str) -> bool:
-    """True, wenn ``slug`` für ``endpoint`` abgedeckt ist.
+    """True if ``slug`` is covered for ``endpoint``.
 
-    Ein unbekannter ``endpoint`` (nicht teilabgedeckt -> flächendeckend) gilt
-    immer als abgedeckt (fail-open für die fully-covered-Endpunkte, die diese
-    Karte nie befragen).
+    An unknown ``endpoint`` (not partially covered -> nationwide covered) is
+    always considered covered (fail-open for fully covered endpoints that never
+    query this map).
     """
     covered = PARTIAL_COVERAGE.get(endpoint)
     if covered is None:
@@ -206,9 +205,9 @@ def is_covered(endpoint: str, slug: str) -> bool:
 
 
 def covered_cities(endpoint: str) -> list[str]:
-    """Sortierte Liste der für ``endpoint`` abgedeckten Stadt-Slugs.
+    """Sorted list of covered city slugs for ``endpoint``.
 
-    Für die meta.covered_cities-Ausweisung der ``not_covered``-Antwort. Leer für
-    einen unbekannten (= flächendeckenden) Endpunkt.
+    Used for meta.covered_cities reporting in ``not_covered`` responses. Empty for
+    an unknown (= nationwide covered) endpoint.
     """
     return sorted(PARTIAL_COVERAGE.get(endpoint, frozenset()))

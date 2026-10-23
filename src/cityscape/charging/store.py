@@ -1,17 +1,17 @@
-"""Redis-Store der akkumulierten eRound-Belegungs-Deltas (DATA-42, Stufe 2).
+"""Redis store for accumulated eRound occupancy deltas (DATA-42, Stage 2).
 
-Der dynamische eRound-Feed ist eine DRAIN-QUEUE (live verifiziert 2026-07-03:
-pull1=14, pull2=4 Punkte, 0 Overlap): jeder Pull liefert nur die Änderungen
-seit dem letzten Pull, NIE den Vollzustand. Der Vollzustand entsteht erst durch
-AKKUMULATION der Deltas in Redis.
+The dynamic eRound feed is a DRAIN QUEUE (live verified 2026-07-03:
+pull1=14, pull2=4 points, 0 overlap): each pull yields only changes
+since the last pull, NEVER the full state. The full state only arises through
+ACCUMULATION of deltas in Redis.
 
-Key-Layout (versioniert, Muster ``transit/store.py``):
+Key layout (versioned, ``transit/store.py`` pattern):
 - ``eround_charging:v1:{refill_point_id}`` -> orjson ``{status, observed_at}``
-  (SET mit ``ex=ttl``).
+  (SET with ``ex=ttl``).
 
-Jeder Key trägt die TTL als ehrliches Staleness-Fenster: fällt der Poller aus,
-verfallen veraltete Stati automatisch (kein ewig eingefrorenes "available").
-KEIN Archiv-Write (reine Live-Daten, T-20-ARCHIVE).
+Each key carries TTL as an honest staleness window: if the poller fails,
+outdated statuses expire automatically (no perpetually frozen "available").
+NO archive write (pure live data, T-20-ARCHIVE).
 """
 
 from __future__ import annotations
@@ -20,23 +20,23 @@ import orjson
 
 _KEY_PREFIX = "eround_charging:v1:"
 
-#: Snapshot des juengsten Delta-Pull-Ergebnisses (fuer den /live-Read-Pfad).
-#: Der Request-Pfad pullt NIE selbst (strikte Entkopplung Datenupdate vom
-#: Request-Worker): der Poller ist der EINZIGE Upstream-Puller und legt hier
-#: das letzte Pull-Ergebnis ab; die /live-Route liest nur diesen Key.
+#: Snapshot of the latest delta pull result (for the /live read path).
+#: The request path NEVER pulls by itself (strict decoupling of data updates from
+#: request worker): the poller is the ONLY upstream puller and deposits
+#: the last pull result here; the /live route only reads this key.
 _LATEST_KEY = "eround_charging:latest"
 
-#: Frische-Fenster des Snapshots: 3 Poll-Ticks (300 s) Gnade, danach ehrliches
-#: no_data statt eines eingefrorenen Alt-Stands (Poller tot = sichtbar).
+#: Freshness window of the snapshot: 3 poll ticks (300 s) grace period, then honest
+#: no_data instead of a frozen outdated state (poller dead = visible).
 LATEST_TTL_S = 900
 
-#: Staleness-Fenster: ein Ladepunkt-Status ohne frisches Delta gilt maximal
-#: 24 h (der Feed liefert nur Änderungen; ein unveränderter Punkt bleibt
-#: dadurch länger gültig als die Poll-Kadenz, aber nicht ewig).
+#: Staleness window: a charging point status without a fresh delta is valid for at
+#: most 24 h (the feed only delivers changes; an unchanged point therefore remains
+#: valid longer than the poll cadence, but not forever).
 STATUS_TTL_S = 24 * 60 * 60
 
-#: MGET-Chunk-Größe für den Lese-Pfad (Hamburg hat ~2700 Punkte; ein einzelnes
-#: Riesen-MGET bleibt vermeidbar).
+#: MGET chunk size for the read path (Hamburg has ~2700 points; a single
+#: giant MGET is avoided).
 _MGET_CHUNK = 1000
 
 
@@ -45,12 +45,12 @@ def _key(refill_point_id: str) -> str:
 
 
 async def store_point_statuses(redis, points, *, ttl: int = STATUS_TTL_S) -> int:
-    """Akkumuliert Belegungs-Deltas in Redis (je Punkt SET mit TTL).
+    """Accumulates occupancy deltas in Redis (SET with TTL per point).
 
-    ``points`` sind die Adapter-dicts aus ``adapters/mobilithek_afir.py``
-    (``refill_point_id`` + ``status`` [+ ``observed_at``]). Einträge ohne ID
-    oder Status fallen ehrlich raus. Rückgabe: Anzahl geschriebener Punkte.
-    Idempotent (ein erneutes Schreiben desselben Delta-Stands ist harmlos).
+    ``points`` are adapter dicts from ``adapters/mobilithek_afir.py``
+    (``refill_point_id`` + ``status`` [+ ``observed_at``]). Entries without ID
+    or status are honestly omitted. Returns: count of written points.
+    Idempotent (rewriting the same delta state is harmless).
     """
     pipe = redis.pipeline()
     written = 0
@@ -72,19 +72,19 @@ async def store_point_statuses(redis, points, *, ttl: int = STATUS_TTL_S) -> int
 
 
 async def store_latest_delta(redis, raw: dict, *, ttl: int = LATEST_TTL_S) -> None:
-    """Legt das juengste Delta-Pull-Ergebnis als Snapshot ab (nur der Poller).
+    """Stores the latest delta pull result as snapshot (poller only).
 
-    ``raw`` ist das Adapter-dict aus ``fetch_afir`` (``points`` + ``as_of``).
-    Auch ein LEERES Ergebnis wird geschrieben: es haelt den Snapshot frisch und
-    laesst den Read-Pfad ehrlich ``no_data`` melden (Feed lieferte nichts),
-    statt einen Alt-Stand einzufrieren.
+    ``raw`` is the adapter dict from ``fetch_afir`` (``points`` + ``as_of``).
+    Even an EMPTY result is written: it keeps the snapshot fresh and
+    lets the read path honestly report ``no_data`` (feed delivered nothing),
+    instead of freezing an old state.
     """
     value = orjson.dumps({"points": raw.get("points") or [], "as_of": raw.get("as_of")})
     await redis.set(_LATEST_KEY, value, ex=ttl)
 
 
 async def read_latest_delta(redis) -> dict | None:
-    """Liest den juengsten Delta-Snapshot (oder ``None`` bei Miss/kaputt)."""
+    """Reads the latest delta snapshot (or ``None`` on miss/corrupt)."""
     raw = await redis.get(_LATEST_KEY)
     if raw is None:
         return None
@@ -96,11 +96,11 @@ async def read_latest_delta(redis) -> dict | None:
 
 
 async def get_point_statuses(redis, rp_ids) -> dict[str, dict]:
-    """Liest die akkumulierten Stati fuer eine ID-Menge (MGET in Chunks).
+    """Reads accumulated statuses for a set of IDs (chunked MGET).
 
-    Rückgabe: ``{refill_point_id: {status, observed_at}}`` NUR für Punkte mit
-    frischem (nicht abgelaufenem) Status; unbekannte/abgelaufene IDs fehlen
-    ehrlich. Ein kaputter Einzelwert wird übersprungen (kein 500).
+    Returns: ``{refill_point_id: {status, observed_at}}`` ONLY for points with
+    fresh (unexpired) status; unknown/expired IDs are honestly omitted.
+    A corrupt single value is skipped (no 500).
     """
     ids = [str(i) for i in rp_ids]
     result: dict[str, dict] = {}

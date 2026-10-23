@@ -1,9 +1,9 @@
-"""Zentrales Fehler-Mapping mit einheitlicher Envelope (FND-04, REST-Regel 7).
+"""Central error mapping with uniform envelope (FND-04, REST rule 7).
 
-Eine ``AppError``-Hierarchie trägt status_code + maschinenlesbaren code. Ein
-einziges ``register_exception_handlers(app)`` mappt AppError,
-RequestValidationError und die Catch-All-Exception auf eine ``ErrorEnvelope``.
-Der Catch-All leakt NIE Stacktrace/Secrets an den Client (Pitfall 2 / T-01-01).
+An ``AppError`` hierarchy carries status_code + machine-readable code. A
+single ``register_exception_handlers(app)`` maps AppError,
+RequestValidationError, and the catch-all exception to an ``ErrorEnvelope``.
+The catch-all NEVER leaks stacktraces/secrets to the client (Pitfall 2 / T-01-01).
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ log = structlog.get_logger()
 
 
 class ErrorDetail(BaseModel):
-    """Maschinen- und menschenlesbares Fehlerdetail."""
+    """Machine- and human-readable error detail."""
 
     code: str
     message: str
@@ -32,14 +32,14 @@ class ErrorDetail(BaseModel):
 
 
 class ErrorEnvelope(BaseModel):
-    """Einheitliche Fehler-Antwort: error-Detail + meta (correlation_id, ts)."""
+    """Uniform error response: error detail + meta (correlation_id, ts)."""
 
     error: ErrorDetail
     meta: dict
 
 
 class AppError(Exception):
-    """Basis aller anwendungsspezifischen Fehler."""
+    """Base of all application-specific errors."""
 
     status_code: int = 500
     code: str = "internal_error"
@@ -75,11 +75,11 @@ class ValidationFailedError(AppError):
 
 
 class UnprocessableError(AppError):
-    """Syntaktisch gültige, aber semantisch unzulässige Eingabe (HTTP 422).
+    """Syntactically valid but semantically impermissible input (HTTP 422).
 
-    Genutzt für den ``?type=``-Whitelist-Verstoß der POI-Route: ein
-    unbekannter POI-Typ wird abgewiesen, BEVOR roher User-Input in die
-    Overpass-QL gelangt (T-05-09 Injection-Schutz).
+    Used for the ``?type=`` allowlist violation of the POI route: an
+    unknown POI type is rejected BEFORE raw user input reaches
+    Overpass QL (T-05-09 injection protection).
     """
 
     status_code, code = 422, "unprocessable"
@@ -91,7 +91,7 @@ def _envelope(
     message: str,
     hint: str | None = None,
 ) -> OrjsonResponse:
-    """Baut eine einheitliche ErrorEnvelope-Response."""
+    """Builds a uniform ErrorEnvelope response."""
     body = ErrorEnvelope(
         error=ErrorDetail(code=code, message=message, hint=hint),
         meta={
@@ -103,7 +103,7 @@ def _envelope(
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    """Registriert die zentralen Exception-Handler auf der App."""
+    """Registers the central exception handlers on the app."""
 
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError) -> OrjsonResponse:
@@ -111,8 +111,8 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RateLimitExceeded)
     async def _rate_limited(request: Request, exc: RateLimitExceeded) -> OrjsonResponse:
-        # 429 über den zentralen Envelope (kein slowapi-Default-JSON, kein
-        # Stacktrace/Detail-Leak, T-11-RL-LEAK). Code "rate_limited" == RateLimitError.
+        # 429 via central envelope (no slowapi default JSON, no
+        # stacktrace/detail leak, T-11-RL-LEAK). Code "rate_limited" == RateLimitError.
         response = _envelope(
             429,
             "rate_limited",
@@ -122,8 +122,8 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "(RateLimit-Header beachten)."
             ),
         )
-        # Standard-RateLimit-Header (D-02) auf die 429-Antwort setzen. slowapi
-        # injiziert sie über das normalisierte _header_mapping des Limiters
+        # Set standard RateLimit headers (D-02) on the 429 response. slowapi
+        # injects them via the limiter's normalized _header_mapping
         # (RateLimit-Limit/Remaining/Reset + Retry-After).
         limiter = getattr(request.app.state, "limiter", None)
         view_limit = getattr(request.state, "view_rate_limit", None)
@@ -135,9 +135,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _validation_error(
         request: Request, exc: RequestValidationError
     ) -> OrjsonResponse:
-        # Nur Feldpfad + Fehlertyp an den Client (Audit MEDIUM-2, 2026-06-10):
-        # str(exc.errors()) würde Pydantic-Interna UND den Roh-Input (input=...)
-        # reflektieren (Information Disclosure). Volle Details nur serverseitig.
+        # Only field path + error type to the client (Audit MEDIUM-2, 2026-06-10):
+        # str(exc.errors()) would reflect Pydantic internals AND raw input (input=...)
+        # (Information Disclosure). Full details only server-side.
         log.info("request_validation_failed", errors=exc.errors()[:5])
         fields = "; ".join(
             ".".join(str(part) for part in e.get("loc", ())) + f": {e.get('type', '')}"
@@ -154,13 +154,13 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _http_exception(
         request: Request, exc: StarletteHTTPException
     ) -> OrjsonResponse:
-        # FastAPI/Starlette wirft StarletteHTTPException für Routing-Fälle, die
-        # NICHT über unsere AppError-Hierarchie laufen: unbekannter Pfad (404) und
-        # falsche Methode (405). Ohne diesen Handler liefert Starlette dort den
-        # Default ``{"detail": "..."}`` statt des projektweiten Error-Envelopes
-        # (Live-Report M4). Fachliche Fehler (unbekannte Stadt, POI-Typ, Validierung,
-        # 503) sind AppError/RequestValidationError und werden vom spezifischeren
-        # Handler oben bedient, NICHT hier.
+        # FastAPI/Starlette raises StarletteHTTPException for routing cases that
+        # do NOT go through our AppError hierarchy: unknown path (404) and
+        # wrong method (405). Without this handler, Starlette returns the
+        # default ``{"detail": "..."}`` instead of the project-wide error envelope
+        # (Live report M4). Domain errors (unknown city, POI type, validation,
+        # 503) are AppError/RequestValidationError and are handled by the more specific
+        # handler above, NOT here.
         code_map = {
             404: ("not_found", "Die angeforderte Ressource wurde nicht gefunden."),
             405: (
@@ -176,13 +176,13 @@ def register_exception_handlers(app: FastAPI) -> None:
         if exc.status_code == 404:
             hint = "Pfad prüfen oder GET /api/v1/openapi.yaml für die Routenliste."
         elif exc.status_code == 405:
-            # Erlaubte Methoden aus dem Allow-Header durchreichen, falls gesetzt.
+            # Pass through allowed methods from Allow header if set.
             allowed = exc.headers.get("Allow") if exc.headers else None
             hint = f"Erlaubte Methoden: {allowed}." if allowed else None
         return _envelope(exc.status_code, code, message, hint)
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> OrjsonResponse:
-        # Stacktrace nur serverseitig loggen, NIE str(exc) an den Client.
+        # Log stacktrace only server-side, NEVER str(exc) to client.
         log.error("unhandled_exception", exc_info=exc)
         return _envelope(500, "internal_error", "An unexpected error occurred")

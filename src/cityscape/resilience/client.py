@@ -1,28 +1,28 @@
-"""ResilientSourceClient: die zentrale fetch-Fassade (Integration RES-01..05).
+"""ResilientSourceClient: the central fetch facade (Integration RES-01..05).
 
-Diese Klasse verschmilzt die einzelnen Resilienz-Schichten zu EINER Funktion,
-die Phase 4+ pro Quellen-Adapter trivial konsumiert:
+This class merges the individual resilience layers into ONE function,
+which Phase 4+ trivially consumes per source adapter:
 
-- RES-01/05 (Pool + User-Agent): der gepoolte ``httpx.AsyncClient`` aus
-  ``app.state.http`` wird durchgereicht; der Quellen-Adapter erhält ihn als
-  einzigen I/O-Kanal.
-- RES-02/03 (Cache-Aside + SWR + Single-Flight): jeder Read läuft durch
-  ``cache_get_or_set`` (genau ein Upstream-Call bei HIT/Single-Flight).
-- RES-04 (per-Source-Breaker): die Upstream-Coroutine wird pro Quelle durch den
-  ``CircuitBreaker`` der ``BreakerRegistry`` geschützt. Eine tote Quelle trippt
-  nur ihren eigenen Breaker und blockiert weder andere Quellen noch die
-  Gesamt-Response (T-03-10).
+- RES-01/05 (Pool + User-Agent): the pooled ``httpx.AsyncClient`` from
+  ``app.state.http`` is passed through; the source adapter receives it as
+  its only I/O channel.
+- RES-02/03 (Cache-Aside + SWR + Single-Flight): every read goes through
+  ``cache_get_or_set`` (exactly one upstream call on HIT/single-flight).
+- RES-04 (per-source breaker): the upstream coroutine is protected per source by the
+  ``CircuitBreaker`` of the ``BreakerRegistry``. A dead source only trips
+  its own breaker and blocks neither other sources nor the
+  overall response (T-03-10).
 
-Fallback-Politik (T-03-10/12): fällt der Upstream aus (Breaker OPEN ODER
-``httpx.HTTPError``), liefert die Fassade einen vorhandenen (auch abgelaufenen)
-Cache-Eintrag als ``STALE-ON-ERROR`` zurück. Existiert kein Cache, liefert sie
-``(None, STALE-ON-ERROR)`` statt zu blockieren oder einen Stacktrace zu leaken;
-der aufrufende API-Layer (Phase 4) entscheidet, ob daraus ein ``UpstreamError``
-(503) wird. ``fetch`` blockiert nie und wirft keinen ungemappten Upstream-Fehler.
+Fallback policy (T-03-10/12): if the upstream fails (breaker OPEN OR
+``httpx.HTTPError``), the facade returns an existing (even expired)
+cache entry as ``STALE-ON-ERROR``. If no cache exists, it returns
+``(None, STALE-ON-ERROR)`` instead of blocking or leaking a stacktrace;
+the calling API layer (Phase 4) decides whether this becomes an ``UpstreamError``
+(503). ``fetch`` never blocks and does not raise an unmapped upstream error.
 
-``fetch_fn`` ist eine reine parameterlose async-Funktion, die der Quellen-Adapter
-liefert (kennt weder Cache noch Breaker). So bleibt der Adapter schlank und die
-gesamte Resilienz steckt in dieser Fassade.
+``fetch_fn`` is a pure parameterless async function provided by the source adapter
+(knows neither cache nor breaker). This keeps the adapter lean and all
+resilience logic contained within this facade.
 """
 
 from __future__ import annotations
@@ -46,11 +46,11 @@ log = structlog.get_logger()
 
 
 async def _last_cache(redis, key: str):
-    """Liest den (auch abgelaufenen) Cache-Value bytes-sicher; None bei Miss/Fehler.
+    """Reads the (even expired) cache value in a bytes-safe manner; None on miss/error.
 
-    Graceful Degradation (T-03-09): jeder Redis-Fehler -> None statt Raise. Der
-    Value-Container ist derselbe wie in ``infra/cache._store`` (payload +
-    fresh_until/stale_until); base64-gewrappte bytes werden zurück dekodiert.
+    Graceful degradation (T-03-09): any Redis error -> None instead of raise. The
+    value container is the same as in ``infra/cache._store`` (payload +
+    fresh_until/stale_until); base64-wrapped bytes are decoded back.
     """
     try:
         raw = await redis.get(key)
@@ -72,21 +72,21 @@ async def _last_cache(redis, key: str):
     return payload
 
 
-# Default-Cache-Fenster (fresh_s, stale_s) für Quellen ohne expliziten Registry-
-# Eintrag: bisheriges Verhalten (60s fresh, ~120s stale via Pad).
+# Default cache window (fresh_s, stale_s) for sources without an explicit registry
+# entry: previous behavior (60s fresh, ~120s stale via pad).
 _DEFAULT_TTL: tuple[float, float] = (60.0, 120.0)
-# Per-Source-Cache-TTL (fresh_s, stale_s) aus der deklarativen Quellen-Registry
-# (registry/source_specs.py). Quellen ohne Eintrag nutzen _DEFAULT_TTL.
+# Per-source cache TTL (fresh_s, stale_s) from declarative source registry
+# (registry/source_specs.py). Sources without an entry use _DEFAULT_TTL.
 _SOURCE_TTL: dict[str, tuple[float, float]] = dict(_REGISTRY_TTL)
 
-# --- Outbound-Limits je Upstream (ToS-Compliance) -----------------------------
-# Obergrenze gleichzeitiger Upstream-Calls je Quelle. Geteilte VM-IP -> der
-# Wikidata-WDQS-Endpoint erlaubt nur ~5 parallele Queries/IP. Quellen ohne
-# Eintrag: unbegrenzt (Verhalten unverändert).
+# --- Outbound limits per upstream (ToS compliance) ----------------------------
+# Upper limit of concurrent upstream calls per source. Shared VM IP -> the
+# Wikidata WDQS endpoint allows only ~5 parallel queries/IP. Sources without
+# an entry: unlimited (behavior unchanged).
 _SOURCE_MAX_CONCURRENCY: dict[str, int] = {"wikidata": 5}
-# Mindestabstand (Sekunden) zwischen Upstream-Calls je Quelle (Aggregat-Rate).
-# DB-Timetables-ToS: <=60 Aufrufe/Minute -> >=1.0s. Quellen ohne Eintrag: kein
-# Limit. Alle cityscape-Nutzer teilen sich den DB-Key, daher Aggregat begrenzen.
+# Minimum interval (seconds) between upstream calls per source (aggregate rate).
+# DB Timetables ToS: <=60 calls/minute -> >=1.0s. Sources without entry: no
+# limit. All cityscape users share the DB key, therefore limit the aggregate.
 _SOURCE_MIN_INTERVAL_S: dict[str, float] = {"db_timetables": 1.0}
 
 _semaphores: dict[str, asyncio.Semaphore] = {}
@@ -95,7 +95,7 @@ _last_call_monotonic: dict[str, float] = {}
 
 
 def _source_semaphore(source: str) -> asyncio.Semaphore | None:
-    """Lazy per-Source-Semaphore (None = unbegrenzt). Single-Loop-App: prozessweit."""
+    """Lazy per-source semaphore (None = unlimited). Single-loop app: process-wide."""
     limit = _SOURCE_MAX_CONCURRENCY.get(source)
     if limit is None:
         return None
@@ -107,7 +107,7 @@ def _source_semaphore(source: str) -> asyncio.Semaphore | None:
 
 
 async def _pace(source: str) -> None:
-    """Erzwingt den Mindestabstand zwischen Calls einer Quelle (no-op ohne Eintrag)."""
+    """Enforces minimum interval between calls of a source (no-op without entry)."""
     interval = _SOURCE_MIN_INTERVAL_S.get(source)
     if not interval:
         return
@@ -123,7 +123,7 @@ async def _pace(source: str) -> None:
 
 
 async def _run_limited(source: str, fetch_fn: Callable[[], Awaitable]):
-    """Fuehrt ``fetch_fn`` unter Per-Source-Concurrency + Mindestabstand aus."""
+    """Executes ``fetch_fn`` under per-source concurrency + minimum interval."""
     sem = _source_semaphore(source)
     if sem is None:
         await _pace(source)
@@ -167,35 +167,35 @@ class ResilientSourceClient:
         *,
         store: bool = True,
     ):
-        """Hole Daten der Quelle ``source`` unter ``key`` (resilient, nie blockierend).
+        """Fetch data from source ``source`` under ``key`` (resilient, never blocking).
 
-        Reihenfolge: Cache (HIT/STALE/MISS) um eine Breaker-geschützte
-        Upstream-Coroutine. Bei OPEN-Breaker oder Upstream-Fehler -> last-cache-
-        Fallback (STALE-ON-ERROR) bzw. ``(None, STALE-ON-ERROR)``.
+        Order: Cache (HIT/STALE/MISS) around a breaker-protected upstream
+        coroutine. On OPEN breaker or upstream error -> last-cache fallback
+        (STALE-ON-ERROR) or ``(None, STALE-ON-ERROR)``.
 
         Args:
-            store: Wenn ``False``, läuft der Call ON-DEMAND: KEIN Redis-Read/Write,
-                kein Stale-Fallback, kein SWR-Background-Refresh; nur der
-                Breaker-Schutz um den Live-Call bleibt. Für Quellen, deren ToS
-                das Spiegeln/Vorhalten verbieten (Tankerkoenig/MTS-K): Daten nur
-                live bei Useraktion, nie zwischengespeichert (T-08-CRED-Folge).
+            store: If ``False``, the call runs ON-DEMAND: NO Redis read/write,
+                no stale fallback, no SWR background refresh; only the
+                breaker protection around the live call remains. For sources whose
+                ToS prohibit mirroring/caching (Tankerkoenig/MTS-K): data only
+                live on user action, never cached (T-08-CRED consequence).
 
         Returns:
-            ``(payload, status)``-Tupel (nie None). ``status`` ist ein
-            ``CacheStatus``-String (HIT/MISS/STALE/STALE-ON-ERROR).
+            ``(payload, status)`` tuple (never None). ``status`` is a
+            ``CacheStatus`` string (HIT/MISS/STALE/STALE-ON-ERROR).
         """
         breaker = self._breakers.get(source)
-        # Optionale Redis-Persistenz des Breaker-States (RedisBreakerRegistry, C-2026):
-        # hydrate ZIEHT den prozessübergreifenden State vor der Entscheidung, persist
-        # SCHREIBT ihn nach jedem record_*. Duck-Typing -> die schlanke in-memory
-        # BreakerRegistry (Tests/Fallback) bleibt völlig unverändert (keine Methoden).
+        # Optional Redis persistence of breaker state (RedisBreakerRegistry, C-2026):
+        # hydrate PULLS cross-process state before the decision, persist
+        # WRITES it after each record_*. Duck typing -> the lightweight in-memory
+        # BreakerRegistry (tests/fallback) remains completely untouched (no methods).
         hydrate = getattr(self._breakers, "hydrate", None)
         persist = getattr(self._breakers, "persist", None)
         if hydrate is not None:
             await hydrate(source, breaker)
 
         async def refresh():
-            # Breaker pro Quelle, aber EIN geteilter Pool (RES-01/04).
+            # Breaker per source, but ONE shared pool (RES-01/04).
             if not breaker.allow_request():
                 raise BreakerOpen(source)
             try:
@@ -211,9 +211,9 @@ class ResilientSourceClient:
             return result
 
         if not store:
-            # ON-DEMAND (kein Redis-Read/Write, kein Stale, kein SWR-Refresh): nur
-            # der Live-Call hinter dem Breaker. Anbieter-ToS, die Spiegeln/Vorhalten
-            # verbieten (Tankerkoenig/MTS-K), erlauben nur Live-Abruf bei Useraktion.
+            # ON-DEMAND (no Redis read/write, no stale, no SWR refresh): only
+            # the live call behind the breaker. Provider ToS that prohibit
+            # mirroring/caching (Tankerkoenig/MTS-K) only allow live retrieval on user action.
             try:
                 result = await refresh()
                 await incr_cache_status(self._redis, CacheStatus.MISS)
@@ -239,14 +239,14 @@ class ResilientSourceClient:
                 fetch=refresh,
                 schedule=self._schedule,
             )
-            # Cache-Status-Counter am EINZIGEN Chokepoint (OPS-02). result[1] ist
-            # der rohe Status-str (HIT/MISS/STALE); incr_cache_status ist intern
-            # try/except-gekapselt (13-01) und kann den fetch-Pfad nie blockieren.
-            # NOCH IM try-Block, damit das except-Verhalten unten unverändert bleibt.
+            # Cache status counter at the SINGLE chokepoint (OPS-02). result[1] is
+            # the raw status str (HIT/MISS/STALE); incr_cache_status is internally
+            # wrapped in try/except (13-01) and can never block the fetch path.
+            # STILL INSIDE try block so that the except behavior below remains unchanged.
             await incr_cache_status(self._redis, result[1])
             return result
         except (BreakerOpen, httpx.HTTPError) as exc:
-            # Upstream tot ODER Breaker offen: last-cache-Fallback statt Block.
+            # Upstream dead OR breaker open: last-cache fallback instead of blocking.
             stale = await _last_cache(self._redis, key)
             log.info(
                 "resilient_fetch_fallback",
@@ -255,6 +255,6 @@ class ResilientSourceClient:
                 has_stale=stale is not None,
                 error=type(exc).__name__,
             )
-            # Auch der Fallback-Pfad zählt am Chokepoint (STALE-ON-ERROR-Bucket).
+            # The fallback path also counts at the chokepoint (STALE-ON-ERROR bucket).
             await incr_cache_status(self._redis, CacheStatus.STALE_ON_ERROR)
             return stale, CacheStatus.STALE_ON_ERROR

@@ -1,17 +1,17 @@
-"""Multi-City-Compare (API-05): EINE Ressource über mehrere Städte fächern.
+"""Multi-city compare (API-05): fan out ONE resource across multiple cities.
 
-D-06: ein Endpunkt liefert eine Ressource über mehrere Städte in EINER Response;
-je Stadt ein ``source_status`` (ok/disabled/no_data/error/not_found). Eine fehlende
-oder tote Stadt-Quelle erzeugt KEIN Gesamt-5xx (per-Stadt Graceful Degradation):
-der Fan-out läuft über ``asyncio.gather`` gegen die resiliente Fassade
-(``request.app.state.resilient_client.fetch``), die nie blockiert und keinen
-ungemappten Upstream-Fehler raised.
+D-06: one endpoint delivers one resource across multiple cities in ONE response;
+per city a ``source_status`` (ok/disabled/no_data/error/not_found). A missing
+or dead city source produces NO overall 5xx (per-city graceful degradation):
+fan-out runs via ``asyncio.gather`` against the resilient facade
+(``request.app.state.resilient_client.fetch``), which never blocks and raises no
+unmapped upstream errors.
 
-Sicherheit: ``resource`` wird gegen ``RESOURCE_MAP`` validiert (unbekannt -> 400
-ValidationFailedError, BEVOR roher User-String in einen Cache-Key/Fetch gelangt,
-T-11-FILTER-INJ). Die ``cities``-Liste wird auf ``_MAX_CITIES`` begrenzt
-(T-11-CMP-DOS); die Slugs validiert ``get_city`` (build_cache_key nur aus dem
-validierten Register-Slug). Die Route ist rate-limitiert (@limiter.limit).
+Security: ``resource`` is validated against ``RESOURCE_MAP`` (unknown -> 400
+ValidationFailedError BEFORE raw user string reaches cache key/fetch,
+T-11-FILTER-INJ). The ``cities`` list is capped at ``_MAX_CITIES``
+(T-11-CMP-DOS); slugs are validated by ``get_city`` (build_cache_key only from
+validated registry slug). The route is rate-limited (@limiter.limit).
 """
 
 from __future__ import annotations
@@ -35,11 +35,11 @@ from cityscape.registry import get_city
 
 router = APIRouter()
 
-# Ressource -> (source, fetch_fn, mapper, toggle). Additiv erweiterbar (analog
-# CONNECTOR_MAP in cities.py). Die Schlüssel definieren die erlaubten resource-
-# Werte (Whitelist, T-11-FILTER-INJ); ein Wert außerhalb -> 400. Genau die hier
-# eingetragenen, bestehenden Adapter/Mapper werden wiederverwendet (keine neuen
-# Quellen): "weather" -> DWD (keylos), "air" -> UBA (Tier-A-Luftpfad).
+# Resource -> (source, fetch_fn, mapper, toggle). Additively extensible (analogous
+# to CONNECTOR_MAP in cities.py). The keys define allowed resource
+# values (allowlist, T-11-FILTER-INJ); a value outside -> 400. Exactly the
+# existing adapters/mappers registered here are reused (no new
+# sources): "weather" -> DWD (keyless), "air" -> UBA (Tier A air path).
 RESOURCE_MAP: dict[str, tuple] = {
     "weather": ("dwd", fetch_weather, map_weather, "enable_dwd"),
     "air": ("uba", fetch_air_uba, map_air_uba, "enable_uba"),
@@ -47,21 +47,21 @@ RESOURCE_MAP: dict[str, tuple] = {
 
 
 def _delegated_resources() -> dict:
-    """Ressource -> bestehender City-Route-Handler (Compare-Ausbau 2026-07-04).
+    """Resource -> existing city route handler (compare expansion 2026-07-04).
 
-    Zweiter Zweig neben RESOURCE_MAP: statt eines Adapter-Fetches wird der
-    EXISTIERENDE Route-Handler je Stadt aufgerufen (identisches Verhalten
-    inkl. Toggles, Fallbacks, no_data/not_ingested und Attribution; keine
-    Logik-Duplikate). Nur billige Kandidaten sind gelistet: Store-Reads
-    (indicators), gecachte Quellen (GENESIS-Regio, DWD-Warnungen: EIN
-    bundesweiter Fetch fuer alle Staedte) und der Redis-Join
-    (charging-status). BEWUSST NICHT dabei: fuel-prices (Tankerkoenig-ToS
-    verlangt on-demand ohne Cache, ein 28-Staedte-Fan-out je Request waere
-    ein ToS-/Limit-Risiko).
+    Second branch alongside RESOURCE_MAP: instead of an adapter fetch, the
+    EXISTING route handler is invoked per city (identical behavior
+    incl. toggles, fallbacks, no_data/not_ingested and attribution; no
+    logic duplicates). Only cheap candidates are listed: store reads
+    (indicators), cached sources (GENESIS regio, DWD warnings: ONE
+    nationwide fetch for all cities), and Redis join
+    (charging-status). INTENTIONALLY EXCLUDED: fuel-prices (Tankerkoenig ToS
+    demands on-demand without cache, a 28-city fan-out per request would be
+    a ToS/limit risk).
 
-    Lazy als Funktion statt Modul-Konstante: cities.py importiert beim Laden
-    viel Adapter-Geflecht; der lokale Import vermeidet Import-Zyklen ueber
-    api.v1.__init__ und haelt die Modul-Ladezeit von compare.py klein.
+    Lazy function instead of module constant: cities.py imports heavy
+    adapter dependencies on load; local import avoids import cycles via
+    api.v1.__init__ and keeps module load time of compare.py small.
     """
     from cityscape.api.v1 import cities as city_routes
 
@@ -75,34 +75,34 @@ def _delegated_resources() -> dict:
     }
 
 
-# Obergrenze für die Anzahl verglichener Städte (T-11-CMP-DOS): begrenzt den
-# Fan-out unabhängig von der Register-Größe, damit ein langer cities-String
-# nicht beliebig viele parallele Upstream-Calls auslöst.
+# Upper limit for number of compared cities (T-11-CMP-DOS): bounds fan-out
+# independent of registry size, preventing a long cities string from
+# triggering arbitrarily many parallel upstream calls.
 _MAX_CITIES = 28
 
-# Whitelist der sortierbaren Felder der Compare-Liste (T-11-FILTER-INJ).
+# Allowlist of sortable fields for compare list (T-11-FILTER-INJ).
 _COMPARE_SORT_WHITELIST = {"city", "source_status"}
 
 
 async def _one(slug: str, request: Request, resource: str) -> dict:
-    """Holt eine Ressource für EINE Stadt; degradiert per-Stadt graceful (D-06).
+    """Fetches a resource for ONE city; degrades per-city gracefully (D-06).
 
-    Wirft NIE in den Fan-out hinein: unbekannter Slug -> ``not_found``, Toggle aus
-    -> ``disabled``, toter Upstream ohne Cache (raw is None) -> ``error``, leere
-    Antwort -> ``no_data``, sonst Mapper -> ``ok``. Jeder Zweig trägt seinen
-    eigenen ``source_status``; kein Zweig führt zu einem Gesamt-5xx.
+    NEVER raises into the fan-out: unknown slug -> ``not_found``, toggle off
+    -> ``disabled``, dead upstream without cache (raw is None) -> ``error``, empty
+    response -> ``no_data``, else mapper -> ``ok``. Each branch carries its
+    own ``source_status``; no branch results in an overall 5xx.
     """
     source, fetch_fn_adapter, mapper, toggle = RESOURCE_MAP[resource]
 
-    # Unbekannter Slug -> per-Stadt not_found als Teilergebnis (D-06: kein 404 für
-    # die gesamte Vergleichs-Antwort, eine schlechte Stadt verdirbt nicht die Batch).
+    # Unknown slug -> per-city not_found as partial result (D-06: no 404 for
+    # entire compare response, one bad city does not spoil the batch).
     try:
         entry = get_city(slug)
     except NotFoundError:
         return {"city": slug, "data": None, "source_status": "not_found"}
 
-    # Quellen-Toggle frisch lesen (Settings() statt app.state.settings, damit der
-    # per-Test gesetzte Env-Override greift). DATA-06: deaktiviert -> disabled.
+    # Freshly read source toggle (Settings() instead of app.state.settings so that
+    # per-test env override takes effect). DATA-06: disabled -> disabled.
     if not getattr(Settings(), toggle):
         return {"city": entry.slug, "data": None, "source_status": "disabled"}
 
@@ -117,21 +117,21 @@ async def _one(slug: str, request: Request, resource: str) -> dict:
             lon=entry.geo.lon,
         )
 
-    # D-06: der Fan-out raised NIE. Die Fassade fängt httpx-Fehler/Breaker-Open
-    # bereits ab (-> (None, STALE-ON-ERROR)); ein darüber hinaus durchschlagender
-    # Fehler (z.B. ein Adapter-/Mapper-Defekt einer einzelnen Stadt) wird hier
-    # zusätzlich zu per-Stadt "error" degradiert, damit eine kaputte Stadt nicht
-    # die gesamte Vergleichs-Antwort mit 5xx verdirbt.
+    # D-06: fan-out NEVER raises. Facade already catches httpx errors/breaker open
+    # (-> (None, STALE-ON-ERROR)); any error penetrating beyond that
+    # (e.g. adapter/mapper defect of an individual city) is additionally degraded
+    # here to per-city "error" so a broken city does not spoil the entire compare
+    # response with 5xx.
     try:
         raw, status = await client.fetch(source, key, fetch_fn)
-    except Exception:  # noqa: BLE001 - per-Stadt still degradieren (D-06)
+    except Exception:  # noqa: BLE001 - silently degrade per city (D-06)
         return {"city": entry.slug, "data": None, "source_status": "error"}
 
-    # Toter Upstream ohne Cache -> per-Stadt error (KEIN raise, D-06).
+    # Dead upstream without cache -> per-city error (NO raise, D-06).
     if raw is None:
         return {"city": entry.slug, "data": None, "source_status": "error"}
 
-    # Quelle erreichbar, aber keine Nutzlast -> ehrliches no_data.
+    # Source reachable, but no payload -> honest no_data.
     if not raw:
         return {"city": entry.slug, "data": None, "source_status": "no_data"}
 
@@ -139,7 +139,7 @@ async def _one(slug: str, request: Request, resource: str) -> dict:
         record = mapper(
             raw, retrieved_at=datetime.now(UTC), ags=entry.ags, wikidata_qid=entry.qid
         )
-    except Exception:  # noqa: BLE001 - defekter Datensatz einer Stadt -> error (D-06)
+    except Exception:  # noqa: BLE001 - defective record for a city -> error (D-06)
         return {"city": entry.slug, "data": None, "source_status": "error"}
 
     return {
@@ -151,19 +151,19 @@ async def _one(slug: str, request: Request, resource: str) -> dict:
 
 
 async def _one_delegated(slug: str, request: Request, resource: str) -> dict:
-    """Holt eine delegierte Ressource für EINE Stadt über den Route-Handler.
+    """Fetches a delegated resource for ONE city via route handler.
 
-    Gleicher D-06-Vertrag wie ``_one``: unbekannter Slug -> ``not_found``,
-    JEDER Handler-Fehler (inkl. UpstreamError-503 des Einzel-Endpunkts) wird
-    zu per-Stadt ``error`` degradiert, nie zu einem Gesamt-5xx. Der
-    ``source_status`` des Handler-Envelopes (ok/disabled/no_data/
-    not_ingested/...) wird unverändert durchgereicht, ``cache_status``/
-    ``fallback`` ebenso.
+    Same D-06 contract as ``_one``: unknown slug -> ``not_found``,
+    ANY handler error (incl. UpstreamError 503 of single endpoint) is
+    degraded to per-city ``error``, never to an overall 5xx.
+    ``source_status`` of handler envelope (ok/disabled/no_data/
+    not_ingested/...) is passed through unchanged, ``cache_status``/
+    ``fallback`` as well.
 
-    Sonderfall charging-status: die Einzelpunkt-Liste (bis 500 je Stadt)
-    wird im Compare weggelassen (``points_omitted``-Marker statt Liste),
-    sonst wüchse eine 28-Städte-Antwort auf Megabyte; für den Vergleich
-    zählen die Aggregate (total/reported/status_counts).
+    Special case charging-status: single point list (up to 500 per city)
+    is omitted in compare (``points_omitted`` marker instead of list),
+    otherwise a 28-city response would grow to megabytes; for comparison
+    the aggregates matter (total/reported/status_counts).
     """
     try:
         entry = get_city(slug)
@@ -173,7 +173,7 @@ async def _one_delegated(slug: str, request: Request, resource: str) -> dict:
     handler = _delegated_resources()[resource]
     try:
         envelope = await handler(entry.slug, request)
-    except Exception:  # noqa: BLE001 - per-Stadt still degradieren (D-06)
+    except Exception:  # noqa: BLE001 - silently degrade per city (D-06)
         return {"city": entry.slug, "data": None, "source_status": "error"}
 
     data = envelope.get("data")
@@ -205,19 +205,19 @@ async def compare(
     response: Response,
     cities: str,
     resource: str,
-    page: PageParams = Depends(page_params),  # noqa: B008 - FastAPI-Dependency-Idiom
+    page: PageParams = Depends(page_params),  # noqa: B008 - FastAPI dependency idiom
 ) -> dict:
-    """Faechert ``resource`` über mehrere ``cities`` (API-05, D-06).
+    """Fans out ``resource`` across multiple ``cities`` (API-05, D-06).
 
-    ``cities`` ist eine kommaseparierte Slug-Liste; ``resource`` muss in
-    ``RESOURCE_MAP`` liegen (sonst 400). Der Fan-out läuft per ``asyncio.gather``
-    über die resiliente Fassade; je Stadt ein ``source_status``, eine
-    fehlende/tote Quelle erzeugt KEIN Gesamt-5xx. Das Ergebnis ist paginierbar
-    (API-04, Whitelist {city, source_status}).
+    ``cities`` is a comma-separated slug list; ``resource`` must be in
+    ``RESOURCE_MAP`` (otherwise 400). Fan-out runs via ``asyncio.gather``
+    across resilient facade; per city a ``source_status``, a
+    missing/dead source produces NO overall 5xx. Result is paginatable
+    (API-04, allowlist {city, source_status}).
     """
-    # resource gegen die Whitelist (T-11-FILTER-INJ): unbekannt -> 400, BEVOR der
-    # rohe Wert in einen Cache-Key/Fetch gelangt. Erlaubt sind die Adapter-
-    # Ressourcen (RESOURCE_MAP) plus die delegierten Route-Ressourcen.
+    # resource against allowlist (T-11-FILTER-INJ): unknown -> 400 BEFORE
+    # raw value reaches cache key/fetch. Allowed are adapter
+    # resources (RESOURCE_MAP) plus delegated route resources.
     delegated = _delegated_resources()
     if resource not in RESOURCE_MAP and resource not in delegated:
         raise ValidationFailedError(
@@ -231,7 +231,7 @@ async def compare(
             "Parameter 'cities' darf nicht leer sein.",
             hint="Beispiel: cities=berlin,koeln,hamburg.",
         )
-    # Fan-out-Größe begrenzen (T-11-CMP-DOS).
+    # Bound fan-out size (T-11-CMP-DOS).
     slugs = slugs[:_MAX_CITIES]
 
     if resource in delegated:
@@ -241,8 +241,8 @@ async def compare(
     else:
         results = await asyncio.gather(*[_one(s, request, resource) for s in slugs])
 
-    # Optionale Whitelist-gesicherte Sortierung + Paginierung der Compare-Liste
-    # (API-04): unbekanntes sort -> 400, Offset-Overflow -> leere 200-Seite.
+    # Optional allowlist-protected sorting + pagination of compare list
+    # (API-04): unknown sort -> 400, offset overflow -> empty 200 page.
     results = list(results)
     if page.sort:
         results.sort(

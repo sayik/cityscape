@@ -1,1 +1,1 @@
-"""API-Schicht: Router, zentrale Fehler, Abhängigkeiten."""
+"""API layer: routers, central errors, dependencies."""

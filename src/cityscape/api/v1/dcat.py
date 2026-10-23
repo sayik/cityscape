@@ -1,21 +1,21 @@
-"""DCAT-AP-Katalog-Endpunkt ``/api/v1/catalog.jsonld`` (EU-Harvesting).
+"""DCAT-AP catalog endpoint ``/api/v1/catalog.jsonld`` (EU harvesting).
 
-Liefert einen maschinenlesbaren DCAT-AP-Katalog (JSON-LD) der von cityscape
-bereitgestellten Datensätze. Ziel: von ``data.europa.eu`` / GovData / sonstigen
-CKAN-Harvestern indexierbar machen, ohne dass cityscape selbst eine öffentliche
-Stelle sein muss (der Katalog beschreibt die *Distributionen* = API-Endpunkte +
-die offen lizenzierten Bulk-Snapshots auf Zenodo/Hugging Face).
+Provides a machine-readable DCAT-AP catalog (JSON-LD) of the datasets
+served by cityscape. Goal: indexable by ``data.europa.eu`` / GovData / other
+CKAN harvesters without requiring cityscape itself to be a public body
+(the catalog describes the *distributions* = API endpoints +
+openly licensed bulk snapshots on Zenodo/Hugging Face).
 
-Bewusst KEINE neue RDF-Dependency: JSON-LD ist Teil von DCAT-AP und wird hier als
-reines dict serialisiert. Die kuratierten Datensatz-Definitionen liegen in
-``dcat_datasets.json`` (neben diesem Modul, einmal beim Import gelesen wie
-``openapi.py`` die Spec liest). Lizenz-URL wird aus dem hier gepflegten
-``_LICENSE_URI`` und die Attribution aus ``sources.SOURCE_LICENSE`` abgeleitet
-(Single Source of Truth, kein Duplizieren von Lizenztexten).
+Deliberately NO new RDF dependency: JSON-LD is part of DCAT-AP and is serialized
+here as a pure dict. The curated dataset definitions reside in
+``dcat_datasets.json`` (next to this module, read once on import like
+``openapi.py`` reads the spec). License URL is derived from ``_LICENSE_URI``
+maintained here and attribution is derived from ``sources.SOURCE_LICENSE``
+(Single Source of Truth, no duplication of license texts).
 
-Die Route ist ``include_in_schema=False`` (wie ``openapi.py``): der Katalog ist ein
-eigenes JSON-LD-Dokument, kein Teil des Daten-Envelopes, und soll nicht in
-``/openapi.json`` bzw. den Drift-Detektor geraten.
+The route is ``include_in_schema=False`` (like ``openapi.py``): the catalog is its
+own JSON-LD document, not part of the data envelope, and should not end up in
+``/openapi.json`` or the drift detector.
 """
 
 from __future__ import annotations
@@ -34,21 +34,21 @@ BASE = "https://cityscape.dev/api/v1"
 HOMEPAGE = "https://cityscape.dev"
 PUBLISHER_NAME = "cityscape"
 
-# EU-Daten-Themen-Vokabular (Authority-Table publications.europa.eu).
+# EU data theme vocabulary (authority table publications.europa.eu).
 _THEME = "http://publications.europa.eu/resource/authority/data-theme/{}"
 GERMANY = "http://publications.europa.eu/resource/authority/country/DEU"
 _FILE_TYPE = "http://publications.europa.eu/resource/authority/file-type/{}"
 
-# Kuratierte Datensatz-Definitionen (Topic-Granularität) ausgelagert, damit die
-# langen mehrsprachigen Texte nicht der Python-Zeilenlänge unterliegen.
+# Curated dataset definitions (topic granularity) separated so that long
+# multilingual texts are not constrained by Python line length limits.
 _DATA_PATH = Path(__file__).parent / "dcat_datasets.json"
 _DATA = json.loads(_DATA_PATH.read_text(encoding="utf-8"))
 _DATASETS: list[dict] = _DATA["datasets"]
 _SNAPSHOT_DISTRIBUTIONS: list[dict] = _DATA["snapshot_distributions"]
 
-# license_id (String wie in SOURCE_LICENSE) -> (Label, URI). Spiegelt
-# manifest._SPDX_MAP + ergänzt die Nicht-Tier-A-Fälle (odbl/gemeinfrei), die im
-# Katalog ehrlich ausgewiesen werden. unknown/mixed -> keine Lizenz-URI.
+# license_id (string as in SOURCE_LICENSE) -> (label, URI). Mirrors
+# manifest._SPDX_MAP + supplements non-Tier-A cases (odbl/public domain), which
+# are reported honestly in the catalog. unknown/mixed -> no license URI.
 _LICENSE_URI: dict[str, tuple[str, str]] = {
     "cc0": ("CC0-1.0", "https://creativecommons.org/publicdomain/zero/1.0/"),
     "cc_by_4_0": ("CC-BY-4.0", "https://creativecommons.org/licenses/by/4.0/"),
@@ -75,7 +75,7 @@ def _publisher() -> dict:
 
 
 def _lang(de: str, en: str) -> list[dict]:
-    """DCAT-AP-Mehrsprachigkeit als JSON-LD language-tagged Literale."""
+    """DCAT-AP multilingualism as JSON-LD language-tagged literals."""
     return [{"@value": de, "@language": "de"}, {"@value": en, "@language": "en"}]
 
 
@@ -170,7 +170,7 @@ def _snapshot_dataset() -> dict:
 
 
 def build_catalog() -> dict:
-    """Baut den DCAT-AP-Katalog als JSON-LD-Dokument (reine Funktion, testbar)."""
+    """Builds the DCAT-AP catalog as JSON-LD document (pure function, testable)."""
     datasets = [_dataset_node(d) for d in _DATASETS]
     datasets.append(_snapshot_dataset())
     return {
@@ -209,6 +209,6 @@ def build_catalog() -> dict:
 
 @router.get("/catalog.jsonld", include_in_schema=False)
 async def catalog_jsonld() -> Response:
-    """Liefert den DCAT-AP-Katalog als JSON-LD (EU-Harvesting, kein Envelope)."""
+    """Delivers the DCAT-AP catalog as JSON-LD (EU harvesting, no envelope)."""
     body = json.dumps(build_catalog(), ensure_ascii=False, indent=2)
     return Response(body, media_type="application/ld+json")

@@ -1,18 +1,18 @@
-"""Per-Bahnhof-Live-Boards ``/stations/{eva}/departures`` + ``/arrivals`` (DATA-36).
+"""Per-station live boards ``/stations/{eva}/departures`` + ``/arrivals`` (DATA-36).
 
-Anders als die stadtweiten ``/cities/{slug}/station-departures`` (kuratierte
-Metropolen-Hbf) liefern diese Endpunkte die Live-Tafel JEDES beliebigen DB-
-Bahnhofs über seine EVA-Nummer (aus dem Katalog ``/cities/{slug}/stations``),
-inklusive Nahverkehr (alle Gattungen ICE/IC/RE/RB/S) und Stoerungen/Meldungen.
-Quelle: DB Timetables (DB API Marketplace, CC BY 4.0 = Tier A), derselbe Adapter
-wie die stadtweiten Boards, nur mit genau einer EVA.
+Unlike city-wide ``/cities/{slug}/station-departures`` (curated
+metropolis main stations), these endpoints provide the live board of ANY arbitrary DB
+station via its EVA number (from catalog ``/cities/{slug}/stations``),
+including local transit (all train types ICE/IC/RE/RB/S) and disruptions/notices.
+Source: DB Timetables (DB API Marketplace, CC BY 4.0 = Tier A), same adapter
+as city-wide boards, just with exactly one EVA.
 
-Sicherheit:
-- T-05-08/T-12 (SSRF/Injection): ``eva`` wird strikt als 6-8-stellige Zahl
-  validiert, BEVOR sie in die Upstream-URL gelangt (reiner numerischer
-  Pfadbestandteil; ein nicht-numerischer/zu langer Wert -> 422).
-- T-08-CRED: Client-Id/Api-Key gehen NUR in die Request-Header (Adapter), nie in
-  Cache-Key/Response/Log.
+Security:
+- T-05-08/T-12 (SSRF/Injection): ``eva`` is strictly validated as a 6-8 digit number
+  BEFORE it enters the upstream URL (pure numeric path component;
+  a non-numeric or too long value -> 422).
+- T-08-CRED: Client-Id/Api-Key go ONLY into request headers (adapter), never into
+  cache key/response/log.
 """
 
 from __future__ import annotations
@@ -37,13 +37,13 @@ from cityscape.normalization.mappers.db_timetables import (
 
 router = APIRouter()
 
-# Eine EVA-Nummer (Europäische Vehicle-/Bahnhofs-Nummer) ist eine reine Zahl
-# (deutsche Bahnhöfe 7-stellig, defensiv 6-8). Strikte Validierung = SSRF-Schutz.
+# An EVA number (European Vehicle/Station number) is a pure number
+# (German stations 7 digits, defensively 6-8). Strict validation = SSRF protection.
 _EVA_RE = re.compile(r"^\d{6,8}$")
 
 
 def _validate_eva(eva: str) -> str:
-    """Validiert die EVA als 6-8-stellige Zahl (SSRF, T-12); 422 bei Verstoß."""
+    """Validates EVA as 6-8 digit number (SSRF, T-12); 422 on violation."""
     if not _EVA_RE.match(eva):
         raise UnprocessableError(
             f"Ungueltige EVA-Nummer {eva!r}: erwartet eine 6-8-stellige Zahl.",
@@ -61,10 +61,10 @@ async def _board(
     mapper,
     empty_key: str,
 ) -> dict:
-    """Gemeinsamer Kern für Abfahrts-/Ankunfts-Board einer einzelnen EVA.
+    """Common core for departure/arrival board of a single EVA.
 
-    Drei ``source_status``: ``disabled`` (Toggle aus/keine Keys), ``no_data``
-    (Bahnhof erreichbar, keine Züge im Zeitfenster), ``ok`` (gemappter Payload).
+    Three ``source_status``: ``disabled`` (toggle off/no keys), ``no_data``
+    (station reachable, no trains in time window), ``ok`` (mapped payload).
     """
     eva = _validate_eva(eva)
     cid = correlation_id.get()
@@ -128,11 +128,11 @@ async def _board(
 
 @router.get("/{eva}/departures")
 async def station_departures_by_eva(eva: str, request: Request) -> dict:
-    """Live-Abfahrten eines beliebigen DB-Bahnhofs (EVA) inkl. Nahverkehr + Meldungen.
+    """Live departures for any DB station (EVA) incl. local transit + disruptions.
 
-    Nächste Zugabfahrten am Bahnhof mit EVA-Nummer ``eva`` (alle Gattungen
-    ICE/IC/RE/RB/S, Echtzeit-Verspätung, Stoerungen/Meldungen). EVA aus dem Katalog
-    ``GET /api/v1/cities/{slug}/stations``. Quelle DB Timetables (CC BY 4.0).
+    Next train departures at station with EVA number ``eva`` (all train types
+    ICE/IC/RE/RB/S, real-time delays, disruptions/notices). EVA from catalog
+    ``GET /api/v1/cities/{slug}/stations``. Source DB Timetables (CC BY 4.0).
     """
     return await _board(
         request,
@@ -146,10 +146,10 @@ async def station_departures_by_eva(eva: str, request: Request) -> dict:
 
 @router.get("/{eva}/arrivals")
 async def station_arrivals_by_eva(eva: str, request: Request) -> dict:
-    """Live-Ankünfte eines beliebigen DB-Bahnhofs (EVA) inkl. Nahverkehr + Meldungen.
+    """Live arrivals for any DB station (EVA) incl. local transit + disruptions.
 
-    Spiegelbild zu ``station_departures_by_eva`` (``origin`` statt ``destination``).
-    Quelle DB Timetables (CC BY 4.0).
+    Mirror endpoint to ``station_departures_by_eva`` (``origin`` instead of ``destination``).
+    Source DB Timetables (CC BY 4.0).
     """
     return await _board(
         request,

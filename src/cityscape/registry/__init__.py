@@ -1,11 +1,11 @@
-"""Stadt-Register-Library: Großstädte + Lookup mit 404-Pfad (CORE-03/CORE-04).
+"""City registry library: major cities + lookup with 404 path (CORE-03/CORE-04).
 
-Re-exportiert das ``CityRegistryEntry``-Modell und die ``CITY_REGISTRY``-
-Konstante und stellt den ``get_city``-Lookup bereit. Ein unbekannter Slug wirft
-``NotFoundError`` (aus der bestehenden Phase-1-Fehler-Infrastruktur), das der
-zentrale Handler auf den einheitlichen 404-Envelope mit Hint mappt. Die
-Schicht-Kopplung registry -> api/errors ist eine bewusste, dokumentierte
-MVP-Entscheidung (02-RESEARCH Pattern 4 Variante a / Open Question 2).
+Re-exports ``CityRegistryEntry`` model and ``CITY_REGISTRY``
+constant, and provides ``get_city`` lookup. An unknown slug raises
+``NotFoundError`` (from existing Phase 1 error infrastructure), mapped by
+the central handler to the uniform 404 envelope with hint. The
+layer coupling registry -> api/errors is a deliberate, documented
+MVP decision (02-RESEARCH Pattern 4 variant a / Open Question 2).
 """
 
 from __future__ import annotations
@@ -22,22 +22,22 @@ __all__ = [
     "list_cities",
 ]
 
-# Bekannte per-Stadt Sub-Ressourcen (Datenart-Keys aus dem Katalog + die Meta-
-# Discovery-Ressource "overview"). Dient dem DX-Hinweis: ruft jemand
-# /cities/<datenart> statt /cities/<stadt>/<datenart> ab, ist der "Slug" in
-# Wahrheit eine Datenart, keine Stadt -> gezielter Korrektur-Hinweis.
+# Known per-city sub-resources (data type keys from catalog + meta-
+# discovery resource "overview"). Used for DX hint: if someone calls
+# /cities/<datatype> instead of /cities/<city>/<datatype>, the "slug" is
+# actually a data type, not a city -> targeted correction hint.
 _CITY_SUBRESOURCES: frozenset[str] = frozenset(
     {dt.key for dt in CITY_DATA_CATALOG} | {"overview"}
 )
 
 
 def _unknown_city_hint(slug: str) -> str:
-    """Baut den 404-Hint für einen unbekannten Stadt-Slug.
+    """Builds the 404 hint for an unknown city slug.
 
-    Ist der Slug in Wahrheit eine Datenart (z.B. ``overview``, ``crime-stats``),
-    hat der Aufrufer vermutlich den Stadt-Slug vergessen
-    (``/cities/overview`` statt ``/cities/<stadt>/overview``); dann zusätzlich
-    auf den per-Stadt-Pfad verweisen. Sonst der generische Städte-Listen-Hint.
+    If the slug is actually a data type (e.g. ``overview``, ``crime-stats``),
+    the caller likely forgot the city slug
+    (``/cities/overview`` instead of ``/cities/<city>/overview``); then additionally
+    reference the per-city path. Otherwise generic city list hint.
     """
     base = "Nutze GET /api/v1/cities fuer alle unterstuetzten Staedte."
     key = slug.lower()
@@ -50,7 +50,7 @@ def _unknown_city_hint(slug: str) -> str:
 
 
 def get_city(slug: str) -> CityRegistryEntry:
-    """Liefert den Stadt-Eintrag zum Slug (case-insensitive) oder wirft 404."""
+    """Returns the city entry for slug (case-insensitive) or raises 404."""
     entry = _BY_SLUG.get(slug.lower())
     if entry is None:
         raise NotFoundError(
@@ -61,5 +61,5 @@ def get_city(slug: str) -> CityRegistryEntry:
 
 
 def list_cities() -> tuple[CityRegistryEntry, ...]:
-    """Gibt alle registrierten Städte zurück (28 Kern + >100k-EW-Expansion)."""
+    """Returns all registered cities (28 core + >100k population expansion)."""
     return CITY_REGISTRY

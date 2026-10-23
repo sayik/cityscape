@@ -1,10 +1,10 @@
-"""Walking-Skeleton-Demo-Routen (FND-03/04/05).
+"""Walking skeleton demo routes (FND-03/04/05).
 
-Beweist jeden Cross-Cutting-Concern end-to-end:
-- /health  -> Redis-Ping + Status (FND-05)
-- /ping    -> Correlation-ID in meta + JSON-Log mit request_id (FND-03/05)
-- /echo    -> typvalidierter Query (löst 400-Envelope bei Fehler aus, FND-04)
-- /_boom   -> erzwungener UpstreamError (beweist 503-Envelope, FND-04)
+Demonstrates each cross-cutting concern end-to-end:
+- /health  -> Redis ping + status (FND-05)
+- /ping    -> Correlation ID in meta + JSON log with request_id (FND-03/05)
+- /echo    -> Type-validated query (triggers 400 envelope on error, FND-04)
+- /_boom   -> Forced UpstreamError (demonstrates 503 envelope, FND-04)
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ log = structlog.get_logger()
 
 @router.get("/health")
 async def health(request: Request) -> dict:
-    """Liveness/Readiness inkl. Redis-Ping (Ping nur hier, nicht im Lifespan)."""
+    """Liveness/readiness incl. Redis ping (ping only here, not in lifespan)."""
     redis = request.app.state.redis
     try:
         await redis.ping()
@@ -35,20 +35,20 @@ async def health(request: Request) -> dict:
 
 @router.get("/ping")
 async def ping() -> dict:
-    """Erzeugt eine JSON-Log-Zeile mit request_id und gibt die ID im meta zurück."""
+    """Generates a JSON log line with request_id and returns the ID in meta."""
     log.info("ping_received")
     return {"data": {"pong": True}, "meta": {"correlation_id": correlation_id.get()}}
 
 
 @router.get("/echo")
 async def echo(n: int) -> dict:
-    """Echo eines int-Query; nicht-int löst RequestValidationError -> 400 aus."""
+    """Echo of an int query; non-int triggers RequestValidationError -> 400."""
     return {"data": {"n": n}, "meta": {"correlation_id": correlation_id.get()}}
 
 
 @router.get("/_boom")
 async def boom() -> dict:
-    """Walking-Skeleton: beweist die einheitliche Error-Envelope (503)."""
+    """Walking skeleton: demonstrates uniform error envelope (503)."""
     raise UpstreamError(
         "Simulated upstream failure",
         hint="This route exists only to test error mapping.",

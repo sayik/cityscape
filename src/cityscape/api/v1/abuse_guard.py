@@ -52,10 +52,10 @@ def _make_storage(settings: Settings):
     """Redis storage (shared via replicas); fallback to in-memory storage—see mcp/ratelimit."""
     uri = settings.limit_storage_uri or settings.redis_url
     try:
-        # Kurze Connect-/Read-Timeouts: sonst kann check() bei nicht erreichbarem
-        # Redis (lokaler Start ohne Redis, DNS-Hijack des Compose-Servicenamens)
-        # bis zum OS-Default blockieren -> App-Start hängt, statt auf den
-        # In-Memory-Fallback zu fallen. memory:// ignoriert die kwargs (kein Netz).
+        # Short connect/read timeouts: otherwise check() on unreachable Redis
+        # (local start without Redis, DNS hijack of compose service name)
+        # can block up to the OS default -> app startup hangs instead of falling
+        # back to in-memory. memory:// ignores kwargs (no network).
         storage = storage_from_string(
             uri, socket_connect_timeout=0.5, socket_timeout=0.5
         )
@@ -66,7 +66,7 @@ def _make_storage(settings: Settings):
             "(per process, not shared across replicas).",
             uri,
         )
-    except Exception as exc:  # noqa: BLE001 - jeder Storage-Init-Fehler -> Fallback
+    except Exception as exc:  # noqa: BLE001 - any storage init error -> fallback
         logger.warning("AbuseGuard: Redis Storage Init Failed (%s): %s", uri, exc)
     return MemoryStorage()
 
@@ -74,7 +74,7 @@ def _make_storage(settings: Settings):
 class AbuseGuardMiddleware(BaseHTTPMiddleware):
     """Subnet rate limit + optional CF bot score block (runs before the IP limit)."""
 
-    def __init__(self, app) -> None:  # noqa: ANN001 - Starlette-App
+    def __init__(self, app) -> None:  # noqa: ANN001 - Starlette app
         super().__init__(app)
         s = Settings()
         self._bot_score_min = s.bot_score_min
@@ -119,7 +119,7 @@ class AbuseGuardMiddleware(BaseHTTPMiddleware):
                         hint="Automated access detected (low bot score).",
                     )
 
-        # 2. Aggregiertes Subnetz-Limit gegen verteilte Bots.
+        # 2. Aggregated subnet limit against distributed bots.
         if self._limiter is not None:
             net = subnet_of(real_client_ip(request), self._v4, self._v6)
             if not self._limiter.hit(self._item, "subnet", net):

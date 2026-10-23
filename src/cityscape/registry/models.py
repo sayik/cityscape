@@ -1,10 +1,10 @@
-"""Stadt-Register-Modell mit Cross-Walk-IDs (CORE-03).
+"""City registry model with cross-walk IDs (CORE-03).
 
-Definiert ``CityRegistryEntry`` als gefrorenes Wert-Objekt (Pitfall 2:
-``frozen=True`` gegen Manipulation, T-02-06). Pflicht-Cross-Walk-IDs sind die
-Wikidata-QID und die OSM-Relation; DWD-Station und GTFS-Stop sind optionale
-Felder (Slots vorhanden, leer/None), die erst Phase 5/6 befüllt. ``slug`` ist
-ASCII (muenchen), ``name_de`` trägt korrekte Umlaute (München).
+Defines ``CityRegistryEntry`` as a frozen value object (Pitfall 2:
+``frozen=True`` against tampering, T-02-06). Mandatory cross-walk IDs are
+Wikidata QID and OSM relation; DWD station and GTFS stop are optional
+fields (slots present, empty/None), populated in Phase 5/6. ``slug`` is
+ASCII (muenchen), ``name_de`` contains correct umlauts (München).
 """
 
 from __future__ import annotations
@@ -15,16 +15,16 @@ from cityscape.normalization import GeoPoint
 
 
 class CityRegistryEntry(BaseModel):
-    """Ein validierter Stadt-Eintrag mit stabilen Cross-Walk-Kennungen.
+    """A validated city entry with stable cross-walk identifiers.
 
-    QID und OSM-Relation sind per SPARQL verifiziert und Pflicht. Die
-    DWD-/GTFS-Felder existieren als Slots (CORE-03 verlangt die Spalten),
-    bleiben in Phase 2 aber leer/None.
+    QID and OSM relation are SPARQL-verified and mandatory.
+    DWD/GTFS fields exist as slots (CORE-03 requires columns),
+    but remain empty/None in Phase 2.
 
-    ``ags`` ist der amtliche 8-stellige Gemeindeschlüssel und dient als
-    dim_city-Join-Anker gegen Zensus/Wahlen/MaStR (ARCH-02). ``state`` ist das
-    bereits vorhandene Bundesland-Kürzel und dient ebenfalls als Join-Anker
-    (kein neues Feld nötig).
+    ``ags`` is the official 8-digit municipality key (Gemeindeschlüssel) and serves as
+    dim_city join anchor against census/elections/MaStR (ARCH-02). ``state`` is the
+    existing state abbreviation and likewise serves as join anchor
+    (no new field needed).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -40,9 +40,9 @@ class CityRegistryEntry(BaseModel):
     population: int | None = None
     dwd_station_ids: tuple[str, ...] = ()
     gtfs_stop_ref: str | None = None
-    # Abdeckungsgrad (Expansion 2026-06): "full" = handverifizierte Kern-Stadt mit
-    # allen Quellen inkl. hand-kuratierter Maps (LHP-Pegel, DWD-Pollen-Region,
-    # DIVI-Kreis, Stadt-Baustellen-Connector); "auto" = über 100k-EW-Stadt, die
-    # NUR von den AGS-/geo-automatischen Tier-A-Quellen bedient wird, hand-
-    # kuratierte Quellen liefern ehrliches no_data. Default "full" (Kern-Register).
+    # Coverage level (expansion 2026-06): "full" = manually verified core city with
+    # all sources incl. hand-curated maps (LHP gauge, DWD pollen region,
+    # DIVI county, city road event connector); "auto" = >100k population city
+    # served ONLY by AGS/geo-automatic Tier A sources; hand-curated
+    # sources return honest no_data. Default "full" (core registry).
     coverage: str = Field(default="full", pattern=r"^(full|auto)$")

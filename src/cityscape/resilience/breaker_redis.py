@@ -1,23 +1,23 @@
-"""Redis-persistente Breaker-Registry (RES-04 Upgrade, 2026-06-14).
+"""Redis-persistent breaker registry (RES-04 Upgrade, 2026-06-14).
 
-Die in-process ``BreakerRegistry`` verliert ihren Zustand bei jedem Deploy/
-Neustart und teilt ihn nicht zwischen mehreren Uvicorn-Workern: ein in Worker A
-oder vor einem Deploy getrippter Breaker startet danach wieder CLOSED und
-hammert die kranke Quelle erneut, bis er erneut 5x failt. Diese Unterklasse
-spiegelt den Breaker-State je Quelle write-through nach Redis und hydriert ihn
-vor jedem Zugriff zurück, sodass OPEN/HALF_OPEN Deploys und Worker-Grenzen
-überlebt (der im Code vorgesehene Upgrade-Pfad, breaker.py-Docstring T-03-13).
+The in-process ``BreakerRegistry`` loses its state on every deploy/restart
+and does not share it across multiple uvicorn workers: a breaker tripped in
+worker A or before a deploy restarts as CLOSED afterwards and hammers the
+sick source again until it fails 5x again. This subclass mirrors the breaker
+state per source write-through to Redis and hydrates it back before each access,
+so that OPEN/HALF_OPEN survives deploys and worker boundaries (the upgrade path
+envisioned in the code, breaker.py docstring T-03-13).
 
-Wichtig (Uhr): der persistierte ``opened_at`` ist nur prozessübergreifend
-sinnvoll, wenn er eine WALL-CLOCK-Zeit ist. Daher injiziert diese Registry
-``time.time`` (statt des ``time.monotonic``-Defaults der Basisklasse) in jeden
-erzeugten ``CircuitBreaker``; der Cooldown-Vergleich (now - opened_at >= cooldown)
-bleibt damit über Prozesse hinweg korrekt.
+Important (clock): the persisted ``opened_at`` is only meaningful across
+processes if it is a WALL-CLOCK time. Therefore this registry injects
+``time.time`` (instead of the base class default ``time.monotonic``) into each
+created ``CircuitBreaker``; the cooldown comparison (now - opened_at >= cooldown)
+thus remains correct across processes.
 
-Graceful Degradation (RES-Kernprinzip): jeder Redis-Fehler in hydrate/persist
-degradiert still zum reinen in-memory-Verhalten (nur ``type(exc).__name__``
-geloggt, nie ``str(exc)``). Der Breaker funktioniert also auch ohne Redis weiter,
-nur eben wieder prozess-lokal.
+Graceful degradation (core RES principle): any Redis error in hydrate/persist
+silently degrades to pure in-memory behavior (only ``type(exc).__name__``
+is logged, never ``str(exc)``). The breaker continues to function even without
+Redis, just process-locally again.
 """
 
 from __future__ import annotations
@@ -36,28 +36,28 @@ from .breaker import BreakerRegistry, BreakerState, CircuitBreaker
 
 log = structlog.get_logger()
 
-# State-Schlüssel je Quelle. Eigener Namespace, getrennt von den Cache-Keys
-# (source:{name}:v1:...), damit ein Breaker-State nie mit Nutzdaten kollidiert.
+# State key per source. Separate namespace, partitioned from cache keys
+# (source:{name}:v1:...), ensuring a breaker state never collides with payload data.
 _KEY_PREFIX = "breaker:state:"
 
-# TTL des persistierten States: nach einem Tag ohne jeden Zugriff verfällt der
-# Eintrag (eine seit 24h unberührte Quelle startet sauber CLOSED). Ein aktiver
-# OPEN-Breaker wird bei jedem record_* neu geschrieben und verlängert die TTL.
+# TTL of persisted state: after one day without any access, the entry
+# expires (a source untouched for 24h starts cleanly CLOSED). An active
+# OPEN breaker is rewritten on every record_*, extending the TTL.
 _STATE_TTL = 86400
 
-# Per-Source-Cooldown (s) für fragile Upstreams aus der deklarativen Quellen-
-# Registry (registry/source_specs.py). Quellen ohne Eintrag behalten 30s.
+# Per-source cooldown (s) for fragile upstreams from declarative source
+# registry (registry/source_specs.py). Sources without an entry retain 30s.
 _FRAGILE_SOURCE_COOLDOWN: dict[str, float] = dict(_REGISTRY_COOLDOWN)
 
 
 class RedisBreakerRegistry(BreakerRegistry):
-    """``BreakerRegistry`` mit write-through-Persistenz des Breaker-States in Redis.
+    """``BreakerRegistry`` with write-through persistence of breaker state in Redis.
 
     Args:
-        redis: redis.asyncio-kompatibler Client (app.state.redis).
-        failure_threshold/cooldown: wie Basisklasse.
-        now: injizierbare Uhr; Default ``time.time`` (WALL-CLOCK, prozess-
-            übergreifend gültig), NICHT der monotonic-Default der Basisklasse.
+        redis: redis.asyncio-compatible client (app.state.redis).
+        failure_threshold/cooldown: same as base class.
+        now: Injectable clock; default ``time.time`` (WALL-CLOCK, valid
+            across processes), NOT the monotonic default of the base class.
     """
 
     def __init__(
@@ -82,15 +82,15 @@ class RedisBreakerRegistry(BreakerRegistry):
         return f"{_KEY_PREFIX}{source}"
 
     async def hydrate(self, source: str, breaker: CircuitBreaker) -> None:
-        """Laedt den persistierten State aus Redis in den in-memory Breaker.
+        """Loads persisted state from Redis into the in-memory breaker.
 
-        Redis ist die Quelle der Wahrheit (Multi-Worker-Konvergenz). Fehlt der
-        Eintrag oder ist er unlesbar, bleibt der in-memory Breaker unverändert
-        (frischer Worker -> CLOSED). Still degradierend bei jedem Redis-Fehler.
+        Redis is the source of truth (multi-worker convergence). If the
+        entry is missing or unreadable, the in-memory breaker remains unchanged
+        (fresh worker -> CLOSED). Silently degrades on any Redis error.
         """
         try:
             raw = await self._redis.get(self._key(source))
-        except Exception as exc:  # noqa: BLE001 - Redis-Fehler -> in-memory-Fallback
+        except Exception as exc:  # noqa: BLE001 - Redis error -> in-memory fallback
             log.debug("breaker_hydrate_failed", source=source, error=type(exc).__name__)
             return
         if raw is None:
@@ -103,7 +103,7 @@ class RedisBreakerRegistry(BreakerRegistry):
             breaker.opened_at = data["opened_at"]
             breaker.failure_count = int(data["failure_count"])
         except (ValueError, KeyError, TypeError) as exc:
-            # Defekter Eintrag: ignorieren statt crashen (in-memory bleibt gültig).
+            # Defective entry: ignore instead of crash (in-memory remains valid).
             log.debug(
                 "breaker_hydrate_parse_failed",
                 source=source,
@@ -111,10 +111,10 @@ class RedisBreakerRegistry(BreakerRegistry):
             )
 
     async def persist(self, source: str, breaker: CircuitBreaker) -> None:
-        """Schreibt den aktuellen Breaker-State write-through nach Redis (best-effort).
+        """Writes current breaker state write-through to Redis (best-effort).
 
-        Wird nach jedem record_success/record_failure aufgerufen, damit der nächste
-        Worker/der nächste Request den State sieht. Still degradierend.
+        Called after each record_success/record_failure so that the next
+        worker/request sees the state. Silently degrades.
         """
         payload = orjson.dumps(
             {
@@ -125,5 +125,5 @@ class RedisBreakerRegistry(BreakerRegistry):
         )
         try:
             await self._redis.set(self._key(source), payload, ex=_STATE_TTL)
-        except Exception as exc:  # noqa: BLE001 - Persist-Verlust ist nicht fatal
+        except Exception as exc:  # noqa: BLE001 - Persist loss is not fatal
             log.debug("breaker_persist_failed", source=source, error=type(exc).__name__)

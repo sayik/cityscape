@@ -1,14 +1,14 @@
-"""Source-Status-Route /sources (API-03).
+"""Source status route /sources (API-03).
 
-Listet je bekannter Upstream-Quelle ihren ``enabled``-Zustand (aus den
-``enable_*``-Settings) und den Circuit-Breaker-State (CLOSED/OPEN/HALF_OPEN aus
-der prozessweiten ``app.state.breakers``-Registry). So sehen Clients und Agenten
-auf einen Blick, welche Quelle aktiv ist und ob ihr Breaker getrippt hat
-(Graceful-Degradation-Transparenz).
+Lists each known upstream source's ``enabled`` state (from the
+``enable_*`` settings) and its circuit breaker state (CLOSED/OPEN/HALF_OPEN from
+the process-wide ``app.state.breakers`` registry). This allows clients and agents
+to see at a glance which source is active and whether its breaker has tripped
+(graceful degradation transparency).
 
-Der Breaker wird über die bestehende ``BreakerRegistry`` lazy angelegt; ein noch
-nie aufgerufener Breaker meldet seinen Default-State CLOSED. KEINE eigene
-HTTPException/try-except mit Detail-Leak: der zentrale Handler bleibt zuständig.
+The breaker is created lazily via the existing ``BreakerRegistry``; a breaker
+never called before reports its default state CLOSED. NO custom
+HTTPException/try-except with detail leak: the central handler remains responsible.
 """
 
 from __future__ import annotations
@@ -23,17 +23,17 @@ from cityscape.registry.source_specs import SOURCE_LICENSE
 
 router = APIRouter()
 
-# Whitelist der sortier-/filterbaren Felder für /sources (T-11-FILTER-INJ): nur
-# diese Feldnamen sind als sort erlaubt, ein unbekanntes Feld -> 400, BEVOR roher
-# User-String interpretiert wird (nie in eine Query/einen Cache-Key interpoliert).
+# Allowlist of sortable/filterable fields for /sources (T-11-FILTER-INJ): only
+# these field names are allowed as sort, unknown field -> 400 BEFORE raw
+# user string is interpreted (never interpolated into a query/cache key).
 _SOURCES_SORT_WHITELIST = {"source", "enabled", "license"}
 
-# _KNOWN_SOURCES (Reihenfolge = öffentliche /sources-Reihenfolge) und
-# SOURCE_LICENSE (Lizenz + wortgenaue Attribution, VERBATIM aus
+# _KNOWN_SOURCES (order = public /sources order) and
+# SOURCE_LICENSE (license + verbatim attribution, VERBATIM from
 # DATA-LICENSES.md, fail-closed via tests/unit/test_source_license_map.py)
-# kommen jetzt aus der deklarativen Quellen-Registry (registry/source_specs.py),
-# damit eine neue Quelle nur EINEN Eintrag dort braucht statt vieler verstreuter
-# Stellen. Beide Namen sind oben importiert (Rückwärts-Kompatibilität).
+# now originate from declarative source registry (registry/source_specs.py),
+# so that a new source needs only ONE entry there instead of many scattered
+# places. Both names are imported above (backwards compatibility).
 
 
 @router.get("/sources")
@@ -41,22 +41,22 @@ _SOURCES_SORT_WHITELIST = {"source", "enabled", "license"}
 async def sources(
     request: Request,
     response: Response,
-    page: PageParams = Depends(page_params),  # noqa: B008 - FastAPI-Dependency-Idiom
+    page: PageParams = Depends(page_params),  # noqa: B008 - FastAPI dependency idiom
 ) -> dict:
-    """Listet je Quelle enabled (aus den Settings) + Breaker-State (API-03).
+    """Lists per source enabled (from settings) + breaker state (API-03).
 
-    Rate-limitiert (API-06): @limiter.limit unter @router.get, ``request`` ist
-    Pflicht-Param (Pitfall 4). ``response`` ist Pflicht, damit slowapi die
-    Standard-RateLimit-Header auf die Erfolgsantwort injizieren kann; bei
-    Überschreitung greift der 429-Envelope-Handler.
+    Rate-limited (API-06): @limiter.limit below @router.get, ``request`` is
+    mandatory param (Pitfall 4). ``response`` is mandatory so slowapi can inject
+    standard RateLimit headers into the success response; on limit breach
+    the 429 envelope handler takes over.
 
-    Keylos/offen: kein API-Key nötig, das IP-Limit (ANON_LIMIT) gilt für alle.
+    Keyless/open: no API key required, IP limit (ANON_LIMIT) applies to everyone.
 
-    Paginiert (API-04, REST-Best-Practice #3/#8): ``Depends(page_params)`` liest
-    page/limit/offset/sort/order; ``paginate`` schneidet die Seite Whitelist-
-    gesichert (unbekanntes sort -> 400, T-11-FILTER-INJ) und liefert bei Offset-
-    Overflow eine leere Liste mit 200 (nie 500). ``limit > MAX_LIMIT`` wird über
-    ``Query(le=MAX_LIMIT)`` als 422 abgewiesen.
+    Paginated (API-04, REST Best Practice #3/#8): ``Depends(page_params)`` reads
+    page/limit/offset/sort/order; ``paginate`` slices the page allowlist-
+    protected (unknown sort -> 400, T-11-FILTER-INJ) and returns an empty list
+    with 200 on offset overflow (never 500). ``limit > MAX_LIMIT`` is rejected as
+    422 via ``Query(le=MAX_LIMIT)``.
     """
     settings = request.app.state.settings
     breakers = request.app.state.breakers
@@ -72,8 +72,8 @@ async def sources(
         for name in _KNOWN_SOURCES
     ]
 
-    # Whitelist-gesicherte Sortierung VOR dem Slice (sort nur aus der Whitelist,
-    # sonst 400 in paginate). order steuert die Richtung, beides ist validiert.
+    # Allowlist-protected sorting BEFORE slicing (sort only from allowlist,
+    # otherwise 400 in paginate). order controls direction, both are validated.
     if page.sort:
         data.sort(
             key=lambda row: (row.get(page.sort) is None, row.get(page.sort)),

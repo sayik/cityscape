@@ -1,13 +1,13 @@
-"""OpenAPI-YAML-Auslieferungsroute /openapi.yaml (API-09, design-first).
+"""OpenAPI YAML serving route /openapi.yaml (API-09, design-first).
 
-FastAPI serviert das generierte Schema intern nur als JSON unter /openapi.json.
-Die stabile, design-first gepflegte Spec liegt als ``docs/openapi.yaml`` im Repo
-(REST-Regel 11) und wird hier unverändert als ``application/yaml`` ausgeliefert.
+FastAPI serves the generated schema internally only as JSON under /openapi.json.
+The stable, design-first maintained spec resides as ``docs/openapi.yaml`` in the repo
+(REST rule 11) and is served here unchanged as ``application/yaml``.
 
-Sicherheit (T-04-10): ``_SPEC`` ist eine hartkodierte Konstante ohne
-User-Input-Anteil (kein Pfad-Parameter -> kein Path-Traversal). ``include_in_schema
-=False`` hält die Route aus dem generierten Schema heraus (keine Rekursion in
-/openapi.json bzw. den Drift-Detektor).
+Security (T-04-10): ``_SPEC`` is a hardcoded constant without
+user input components (no path parameter -> no path traversal). ``include_in_schema
+=False`` keeps the route out of the generated schema (no recursion in
+/openapi.json or the drift detector).
 """
 
 from __future__ import annotations
@@ -19,14 +19,14 @@ from fastapi.responses import Response
 
 router = APIRouter()
 
-# Hartkodierter Pfad zur design-first-Spec (kein User-Input, T-04-10). Die Spec
-# ist statisch; sie wird einmal beim Import gelesen (kein blockierendes
-# Datei-I/O je Request, ruff ASYNC240) und unverändert ausgeliefert.
+# Hardcoded path to design-first spec (no user input, T-04-10). The spec
+# is static; it is read once upon import (no blocking
+# file I/O per request, ruff ASYNC240) and delivered unchanged.
 _SPEC_PATH = Path("docs/openapi.yaml")
 _SPEC_TEXT = _SPEC_PATH.read_text(encoding="utf-8")
 
 
 @router.get("/openapi.yaml", include_in_schema=False)
 async def openapi_yaml() -> Response:
-    """Liefert die design-first OpenAPI-Spec als YAML (API-09)."""
+    """Delivers the design-first OpenAPI spec as YAML (API-09)."""
     return Response(_SPEC_TEXT, media_type="application/yaml")

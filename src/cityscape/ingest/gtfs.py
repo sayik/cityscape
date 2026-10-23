@@ -1,24 +1,24 @@
-"""GTFS-Entry-Streamer (utf-8, memory-konstant, DATA-05).
+"""GTFS entry streamer (utf-8, constant memory, DATA-05).
 
-``stream_entry(zip_path, entry_name)`` öffnet AUSSCHLIESSLICH den benannten
-Entry der GTFS-ZIP per Name (kein ``extractall``, kein ``raw.read()``) und gibt
-die Zeilen zeilenweise als ``dict`` zurück (Iterator). ``stream_stops`` ist die
-spezialisierte Bequemlichkeit für ``stops.txt`` und ruft intern
-``stream_entry(zip_path, "stops.txt")``. Damit bleibt der Speicherbedarf
-konstant, auch wenn die echte DELFI-ZIP entpackt 431 MB stops.txt und 2,8 GB
-stop_times.txt enthält.
+``stream_entry(zip_path, entry_name)`` opens EXCLUSIVELY the named
+entry of the GTFS ZIP by name (no ``extractall``, no ``raw.read()``) and yields
+lines line-by-line as a ``dict`` (iterator). ``stream_stops`` is the
+specialized convenience for ``stops.txt`` and internally calls
+``stream_entry(zip_path, "stops.txt")``. This keeps memory footprint
+constant, even when the real uncompressed DELFI ZIP contains 431 MB stops.txt and 2.8 GB
+stop_times.txt.
 
-Memory-/Sicherheits-Vertrag (T-06-03/T-06-05/T-19-MEM/T-19-ZIP):
-- NIE ``ZipFile.extractall`` (Zip-Slip-Schutz) und NIE ``raw.read()`` (OOM-Schutz).
-- Auch ``stream_entry`` darf nur per Namen öffnen und zeilenweise streamen.
-  ``stop_times.txt`` (mehrere GB) wird ausschließlich gestreamt und gefiltert,
-  NIE komplett geladen (siehe ``transit/resolver.py``).
-- Dekodierung mit ``encoding="utf-8", errors="replace"``: die GTFS-Spezifikation
-  schreibt UTF-8 vor und der DELFI-Feed liefert es auch so (Audit-Rerun
-  2026-06-29 live verifiziert: ``stops.txt`` trägt für "ö" die Bytes ``c3 b6``,
-  Content-Type ``charset=utf-8``). Die frühere cp1252-Annahme erzeugte
-  Doppel-Mojibake ("Köln Hbf" -> "KÃ¶ln Hbf") bei jedem Halt mit Umlaut/ß.
-  ``errors="replace"`` bleibt als Schutz gegen vereinzelte ungültige Bytes.
+Memory/security contract (T-06-03/T-06-05/T-19-MEM/T-19-ZIP):
+- NEVER ``ZipFile.extractall`` (Zip slip protection) and NEVER ``raw.read()`` (OOM protection).
+- ``stream_entry`` must also only open by name and stream line-by-line.
+  ``stop_times.txt`` (multiple GB) is streamed and filtered exclusively,
+  NEVER loaded completely (see ``transit/resolver.py``).
+- Decoding with ``encoding="utf-8", errors="replace"``: the GTFS specification
+  mandates UTF-8 and the DELFI feed provides it as such (audit rerun
+  2026-06-29 verified live: ``stops.txt`` carries bytes ``c3 b6`` for "ö",
+  Content-Type ``charset=utf-8``). Earlier cp1252 assumption caused
+  double-mojibake ("Köln Hbf" -> "KÃ¶ln Hbf") on every stop with umlauts/ß.
+  ``errors="replace"`` remains as protection against isolated invalid bytes.
 """
 
 from __future__ import annotations
@@ -31,16 +31,16 @@ from pathlib import Path
 
 
 def stream_entry(zip_path: str | Path, entry_name: str) -> Iterator[dict[str, str]]:
-    """Streamt die Zeilen eines beliebigen GTFS-Entries aus der ZIP (utf-8).
+    """Streams lines of any GTFS entry from the ZIP (utf-8).
 
-    Öffnet ausschließlich den Entry ``entry_name`` per Namen (``z.open``) und
-    gibt jede CSV-Zeile als ``dict`` (Spaltenname -> Wert) zurück. Yield-basiert:
-    es wird nie die ganze Datei in den Speicher gelesen.
+    Opens exclusively the entry ``entry_name`` by name (``z.open``) and
+    yields each CSV line as a ``dict`` (column name -> value). Yield-based:
+    the entire file is never read into memory.
 
-    Sicherheits-/Memory-Vertrag (T-06-03/T-19-MEM/T-19-ZIP): NIE ``extractall``
-    (Zip-Slip), NIE ``raw.read()`` (OOM). Auch für ``stop_times.txt`` (mehrere
-    GB) gilt: nur zeilenweise streamen und im Aufrufer filtern, NIE komplett
-    laden.
+    Security/memory contract (T-06-03/T-19-MEM/T-19-ZIP): NEVER ``extractall``
+    (Zip slip), NEVER ``raw.read()`` (OOM). Applies also to ``stop_times.txt`` (multiple
+    GB): stream line-by-line only and filter in caller, NEVER load
+    completely.
     """
     with zipfile.ZipFile(zip_path) as z:
         with z.open(entry_name) as raw:
@@ -49,9 +49,9 @@ def stream_entry(zip_path: str | Path, entry_name: str) -> Iterator[dict[str, st
 
 
 def stream_stops(zip_path: str | Path) -> Iterator[dict[str, str]]:
-    """Streamt die Zeilen von ``stops.txt`` aus der GTFS-ZIP (utf-8).
+    """Streams lines of ``stops.txt`` from the GTFS ZIP (utf-8).
 
-    Spezialisierung von :func:`stream_entry` auf ``stops.txt`` (kein
-    Verhaltensbruch zur bisherigen Implementierung).
+    Specialization of :func:`stream_entry` for ``stops.txt`` (no
+    behavioral break from previous implementation).
     """
     yield from stream_entry(zip_path, "stops.txt")

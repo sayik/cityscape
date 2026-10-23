@@ -1,8 +1,8 @@
-"""Strukturiertes JSON-Logging mit Correlation-ID (FND-03).
+"""Structured JSON logging with correlation ID (FND-03).
 
-``add_correlation`` zieht die per-Request gesetzte Correlation-ID
-(asgi-correlation-id ContextVar) als Feld ``request_id`` in jede Log-Zeile.
-Der Processor muss als ERSTER laufen, ``JSONRenderer`` als letzter.
+``add_correlation`` extracts the correlation ID set per request
+(asgi-correlation-id ContextVar) as the ``request_id`` field into every log line.
+The processor must run FIRST, ``JSONRenderer`` last.
 """
 
 from __future__ import annotations
@@ -17,14 +17,14 @@ from asgi_correlation_id import correlation_id
 def add_correlation(
     logger: Any, method_name: str, event_dict: dict[str, Any]
 ) -> dict[str, Any]:
-    """Bindet die aktuelle Correlation-ID als ``request_id`` an das Event."""
+    """Binds the current correlation ID as ``request_id`` to the event."""
     if request_id := correlation_id.get():
         event_dict["request_id"] = request_id
     return event_dict
 
 
 def configure_logging(level: str = "INFO") -> None:
-    """Konfiguriert structlog für JSON-Logs auf stdout (Docker-erfassbar)."""
+    """Configures structlog for JSON logs on stdout (collectible by Docker)."""
     logging.basicConfig(
         format="%(message)s",
         level=getattr(logging, level.upper(), logging.INFO),
@@ -41,7 +41,7 @@ def configure_logging(level: str = "INFO") -> None:
         ],
         wrapper_class=structlog.stdlib.BoundLogger,
         logger_factory=structlog.stdlib.LoggerFactory(),
-        # Caching deaktiviert: erlaubt deterministische Reconfiguration in Tests
-        # (Capture-Pipeline) und kostet bei stdlib-LoggerFactory praktisch nichts.
+        # Caching disabled: allows deterministic reconfiguration in tests
+        # (capture pipeline) and costs virtually nothing with stdlib LoggerFactory.
         cache_logger_on_first_use=False,
     )

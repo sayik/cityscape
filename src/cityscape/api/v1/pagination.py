@@ -1,13 +1,13 @@
-"""Paginierungs-Verträge (API-04): PageParams + page_params + paginate.
+"""Pagination contracts (API-04): PageParams + page_params + paginate.
 
-Opt-in Listen-Paginierung (D-07): page/limit/offset + Whitelist für sort/order.
-``limit`` wird auf ``MAX_LIMIT`` gedeckelt (200 mit gedeckelter Seite statt 5xx,
-Best-Practice #8): der zentrale RequestValidationError-Handler mappt auf 400, ein
-überhöhtes limit soll aber NICHT als invalid_request gelten, daher wird in
-``page_params`` über ``min(limit, MAX_LIMIT)`` gedeckelt statt über ``le=``
-abgewiesen. Whitelist-Verstoß bei sort/order -> ``ValidationFailedError`` (400),
-BEVOR roher User-String interpretiert wird (T-11-FILTER-INJ). Offset-Overflow ->
-Python-Slice ergibt ``[]`` (200, nie 500, Best-Practice #8).
+Opt-in list pagination (D-07): page/limit/offset + allowlist for sort/order.
+``limit`` is capped at ``MAX_LIMIT`` (200 with capped page instead of 5xx,
+Best Practice #8): the central RequestValidationError handler maps to 400, but an
+excessive limit should NOT be considered an invalid_request, so in
+``page_params`` it is capped via ``min(limit, MAX_LIMIT)`` instead of being
+rejected via ``le=``. Allowlist violation on sort/order -> ``ValidationFailedError`` (400)
+BEFORE raw user string is interpreted (T-11-FILTER-INJ). Offset overflow ->
+Python slice yields ``[]`` (200, never 500, Best Practice #8).
 """
 
 from __future__ import annotations
@@ -18,14 +18,14 @@ from fastapi import Query
 
 from cityscape.api.errors import ValidationFailedError
 
-# Defaults + harte Obergrenze für das Seiten-Limit (Cap via Query(le=MAX_LIMIT)).
+# Defaults + hard upper limit for page limit (cap via Query(le=MAX_LIMIT)).
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
 
 
 @dataclass
 class PageParams:
-    """Validierte Paginierungs-Parameter eines Listen-GETs."""
+    """Validated pagination parameters of a list GET."""
 
     page: int
     limit: int
@@ -41,10 +41,10 @@ def page_params(
     sort: str | None = Query(None),
     order: str = Query("asc"),
 ) -> PageParams:
-    """FastAPI-Dependency: parst + validiert page/limit/offset/sort/order.
+    """FastAPI dependency: parses + validates page/limit/offset/sort/order.
 
-    ``limit`` wird über ``min(limit, MAX_LIMIT)`` gedeckelt (gedeckelte 200-Seite
-    statt 5xx/4xx, Best-Practice #8), nicht über ``le=`` hart abgewiesen.
+    ``limit`` is capped via ``min(limit, MAX_LIMIT)`` (capped 200 page
+    instead of 5xx/4xx, Best Practice #8), not rejected hard via ``le=``.
     """
     if order not in ("asc", "desc"):
         raise ValidationFailedError(
@@ -56,10 +56,10 @@ def page_params(
 
 
 def paginate(items: list, p: PageParams, *, sort_whitelist: set[str]) -> list:
-    """Schneidet eine Seite aus ``items`` (Whitelist-gesichert).
+    """Slices a page out of ``items`` (allowlist protected).
 
-    sort nicht in der Whitelist -> ValidationFailedError(400). Offset-Overflow
-    ergibt durch den Python-Slice eine leere Liste (200, nie 500).
+    sort not in allowlist -> ValidationFailedError(400). Offset overflow
+    yields an empty list via Python slicing (200, never 500).
     """
     if p.sort and p.sort not in sort_whitelist:
         raise ValidationFailedError(
@@ -71,12 +71,11 @@ def paginate(items: list, p: PageParams, *, sort_whitelist: set[str]) -> list:
 
 
 def _parse_int_param(raw: str | None, *, name: str, minimum: int, default: int) -> int:
-    """Parst einen rohen Query-String zu einem int mit Mindestwert (oder Default).
+    """Parses a raw query string into an int with a minimum value (or default).
 
-    ``None`` (Parameter nicht gesetzt) -> ``default``. Nicht-numerisch oder unter
-    ``minimum`` -> ``ValidationFailedError`` (400 invalid_request), BEVOR der Wert
-    in einen Slice-Index gelangt (T-chc-03). Kein roher String erreicht die
-    Slice-Semantik.
+    ``None`` (parameter not set) -> ``default``. Non-numeric or below
+    ``minimum`` -> ``ValidationFailedError`` (400 invalid_request) BEFORE the value
+    enters a slice index (T-chc-03). No raw string reaches slice semantics.
     """
     if raw is None:
         return default
@@ -96,21 +95,20 @@ def _parse_int_param(raw: str | None, *, name: str, minimum: int, default: int) 
 
 
 def parse_page_params(request, *, default_limit: int = DEFAULT_LIMIT) -> PageParams:
-    """Parst limit/offset (und page) aus ``request.query_params`` (ohne Depends).
+    """Parses limit/offset (and page) from ``request.query_params`` (without Depends).
 
-    Gegenstueck zu ``page_params`` fuer Routen/Helper, in denen kein FastAPI-
-    ``Depends`` greift (z.B. der geteilte OSM-Helper und die Store-Routen, die die
-    Query selbst lesen). Spiegelt die Validierung von ``page_params``:
-    ``limit`` >= 1 (Default ``default_limit``, pro Endpunkt konfigurierbar),
-    ``offset`` >= 0, ``page`` >= 1; nicht-numerisch/zu klein -> 400 invalid_request;
-    ``limit`` wird ueber ``min(limit, MAX_LIMIT)`` gedeckelt (gedeckelte Seite statt
-    Fehler, Best-Practice #8).
+    Counterpart to ``page_params`` for routes/helpers where FastAPI
+    ``Depends`` is not used (e.g. shared OSM helper and store routes that read
+    the query themselves). Mirrors validation of ``page_params``:
+    ``limit`` >= 1 (default ``default_limit``, configurable per endpoint),
+    ``offset`` >= 0, ``page`` >= 1; non-numeric/too small -> 400 invalid_request;
+    ``limit`` is capped via ``min(limit, MAX_LIMIT)`` (capped page instead of
+    error, Best Practice #8).
 
-    ``sort``/``order`` werden fuer diese Datenart-Listen BEWUSST nicht angeboten:
-    die zugrunde liegenden Listen tragen keine zugesicherte, stabile serverseitige
-    Sortier-Ordnung, daher waere ein ``sort``-Versprechen unehrlich. Sie bleiben
-    fix ``None`` / ``"asc"``, sodass ``paginate_envelope`` rein ueber offset/limit
-    schneidet.
+    ``sort``/``order`` are INTENTIONALLY not offered for these data type lists:
+    underlying lists carry no guaranteed, stable server-side sort order,
+    so promising ``sort`` would be dishonest. They remain fixed at
+    ``None`` / ``"asc"``, so ``paginate_envelope`` slices purely via offset/limit.
     """
     qp = request.query_params
     limit = _parse_int_param(
@@ -130,25 +128,25 @@ def paginate_envelope(
     list_key: str,
     delivered_count_field: str | None = None,
 ) -> None:
-    """Begrenzt eine Envelope-Liste EHRLICH und weist den Ausschnitt in meta aus.
+    """Caps an envelope list HONESTLY and indicates the slice in meta.
 
-    Schneidet ``data["payload"][list_key]`` auf die Seite ``[offset:offset+limit]``
-    (Offset-Overflow -> leere Liste, KEIN Fehler, Best-Practice #8) und setzt
-    ``meta["pagination"]`` = total/returned/limit/offset/truncated (keine stille
-    Kappung, CLAUDE.md "No silent caps"). Item-Werte werden NICHT umgeschrieben, nur
-    die Listenlaenge aendert sich (T-chc: nur Ausschnitt/Weglassen).
+    Slices ``data["payload"][list_key]`` to page ``[offset:offset+limit]``
+    (offset overflow -> empty list, NO error, Best Practice #8) and sets
+    ``meta["pagination"]`` = total/returned/limit/offset/truncated (no silent
+    caps, CLAUDE.md "No silent caps"). Item values are NOT rewritten, only
+    list length changes (T-chc: slice/omission only).
 
-    ``delivered_count_field`` (nur PoiPayload-Fall): ist es gesetzt, wird
-    ``payload[delivered_count_field]`` auf die ausgelieferte Seitenlaenge gesetzt
-    (die PoiPayload-Semantik: ``count`` = ausgelieferte Items) und, falls ein
-    ``truncated``-Feld existiert, auf ``(total > returned) or bisheriger Wert``
-    aktualisiert; ``total_available`` bleibt unangetastet (echter Gesamtbestand).
-    Ist ``delivered_count_field`` ``None`` (energy/charging/events), bleiben die
-    aggregierten Kennzahlen (count/by_type/total_power_kw) UNBERUEHRT: der Payload
-    beschreibt weiter den vollen Snapshot, ``meta.pagination`` die ausgelieferte
-    Seite (Auflage 2, ehrliche Trennung Aggregat vs. Seite).
+    ``delivered_count_field`` (PoiPayload case only): if set,
+    ``payload[delivered_count_field]`` is set to delivered page length
+    (PoiPayload semantics: ``count`` = delivered items) and, if a
+    ``truncated`` field exists, updated to ``(total > returned) or previous value``;
+    ``total_available`` remains untouched (true overall total).
+    If ``delivered_count_field`` is ``None`` (energy/charging/events), aggregated
+    metrics (count/by_type/total_power_kw) remain UNTOUCHED: the payload
+    still describes the full snapshot, ``meta.pagination`` the delivered
+    page (Condition 2, honest separation of aggregate vs. page).
 
-    Defensiv: fehlt ``payload`` oder ``list_key`` oder ist kein ``list`` -> no-op.
+    Defensive: missing ``payload`` or ``list_key`` or not a ``list`` -> no-op.
     """
     payload = data.get("payload")
     if not isinstance(payload, dict):
