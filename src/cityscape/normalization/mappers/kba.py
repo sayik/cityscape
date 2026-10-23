@@ -1,16 +1,16 @@
-"""Reiner KBA-Mapper map_vehicle_registrations (Pkw-Bestand, DL-DE/BY 2.0, Tier A).
+"""Pure KBA mapper `map_vehicle_registrations` (passenger car registry, DL-DE/BY 2.0, Tier A).
 
-Bildet die schlanke Zulassungsbezirk-Zeile aus dem SQLite-Reader
-(``archive.kba_db.read_vehicle_registrations``) deterministisch auf einen
-``CanonicalRecord`` mit ``VehicleRegistrationPayload`` ab. Rein: kein HTTP, kein
-Logging, kein ``datetime.now()`` (``retrieved_at`` wird injiziert).
+Deterministically maps the streamlined registration district row from the SQLite reader
+(``archive.kba_db.read_vehicle_registrations``) to a
+``CanonicalRecord`` with ``VehicleRegistrationPayload``. Clean: no HTTP, no
+logging, no ``datetime.now()`` (``retrieved_at`` is injected).
 
-Das Kraftfahrt-Bundesamt führt im Datensatz nur Anteile (Prozent), keine
-absoluten E-Auto-Zahlen; ``bev_estimated`` wird hier aus ``pkw_total`` und
-``bev_share`` abgeleitet (klar als abgeleitet gekennzeichnet, ``modified=False``
-für die unveränderten Quell-Anteile). Lizenz DL-DE/BY 2.0, Attribution
-wortgenau "Kraftfahrt-Bundesamt (KBA)" (muss verbatim in DATA-LICENSES.md +
-SOURCE_LICENSE stehen).
+The Federal Motor Transport Authority (KBA) only includes shares (percentages) in the dataset, not
+absolute electric vehicle numbers; ``bev_estimated`` is derived here from ``pkw_total`` and
+``bev_share`` (clearly marked as derived, ``modified=False``
+for the unmodified source shares). License DL-DE/BY 2.0, Attribution
+exactly as stated: “Federal Motor Transport Authority (KBA)” (must appear verbatim in DATA-LICENSES.md +
+SOURCE_LICENSE).
 """
 
 from __future__ import annotations
@@ -31,15 +31,15 @@ _DL_DE_BY_URL = "https://www.govdata.de/dl-de/by-2-0"
 
 
 def _bev_estimated(pkw_total: int | None, bev_share: float | None) -> int | None:
-    """Leitet die absolute BEV-Zahl aus Gesamtbestand und BEV-Anteil ab.
+    """Derives the absolute BEV figure from the total fleet and the BEV share.
 
-    Hinweis (Audit 2026-06-29): Der KBA-Layer führt zwar Pkw_BEV-Absolutfelder,
-    diese sind aber durchgängig 0/gesperrt -> die Ableitung aus Gesamtbestand x
-    BEV-Anteil (bev_estimated) ist die einzige belastbare Quelle, daher bewusst
-    geschätzt statt geliefert.
+    Note (Audit 2026-06-29): Although the KBA layer contains “Pkw_BEV” absolute fields,
+    these are consistently 0 or locked -> the calculation based on total fleet ×
+    BEV share (bev_estimated) is the only reliable source; therefore, it is intentionally
+    estimated rather than provided.
 
-    Beide Werte nötig; sonst ``None`` (ehrliche Degradation, keine 0). Rundet
-    kaufmännisch auf eine ganze Zahl.
+    Both values are required; otherwise, ``None`` (honest degradation, not 0). Round
+    to the nearest whole number.
     """
     if pkw_total is None or bev_share is None:
         return None
@@ -54,16 +54,16 @@ def map_vehicle_registrations(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet eine KBA-Zulassungsbezirk-Zeile auf einen ``CanonicalRecord`` ab.
+    """Maps a KBA registration district row to a ``CanonicalRecord``.
 
-    ``row`` ist die vom SQLite-Reader gelieferte schlanke Zeile (``pkw_total``/
+    ``row`` is the slim row returned by the SQLite reader (``pkw_total``/
     ``bev_share``/``electric_share``/``plugin_hybrid_share``/``district``/
-    ``district_key``/``reference_period``). Der ``retrieved_at``-Zeitstempel wird
-    injiziert (kein ``datetime.now()`` im Mapper), damit das Ergebnis
-    deterministisch bleibt. Die Join-Keys ``ags``/``wikidata_qid`` werden aus dem
-    Register durchgereicht (Default ``None``). ``geo`` bleibt ``None`` (Bezirk-
-    /Stadtebene); ``observed_at`` bleibt ``None`` (der Berichtszeitpunkt steht im
-    Payload).
+    ``district_key``/``reference_period``). The ``retrieved_at`` timestamp is
+    injected (no ``datetime.now()`` in the mapper) so that the result
+    remains deterministic. The join keys ``ags``/``wikidata_qid`` are passed through from the
+    register (default ``None``). ``geo`` remains ``None`` (district
+    /city level); ``observed_at`` remains ``None`` (the reporting time is included in the
+    payload).
     """
     pkw_total = row.get("pkw_total")
     bev_share = row.get("bev_share")

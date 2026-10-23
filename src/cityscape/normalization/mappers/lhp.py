@@ -1,18 +1,18 @@
-"""Reiner LHP-Hochwasser-Mapper map_flood (DATA-12, GOV-01/03, Pitfall 6).
+"""Pure LHP flood mapper `map_flood` (DATA-12, GOV-01/03, Pitfall 6).
 
-Übersetzt das flache LHP-raw-dict deterministisch in einen ``CanonicalRecord``
-mit ``FloodWarningPayload`` (kind=flood_warning). Die Funktion ist rein: kein
-HTTP, kein Logging, kein ``datetime.now()``. Der ``retrieved_at``-Zeitstempel
-wird keyword-only injiziert, damit Tests deterministisch bleiben.
+Deterministically translates the flat LHP-raw-dict into a ``CanonicalRecord``
+with ``FloodWarningPayload`` (kind=flood_warning). The function is pure: no
+HTTP, no logging, no ``datetime.now()``. The ``retrieved_at`` timestamp
+is injected as a keyword-only value so that tests remain deterministic.
 
-KRITISCH (Tier-Trennung GOV-02): LHP ist Tier A,
-``source=HOCHWASSER`` (Toggle-/Quellenname ist "lhp", License-/Record-Tag aber
+CRITICAL (Tier Separation GOV-02): LHP is Tier A,
+``source=HOCHWASSER`` (toggle/source name is “lhp,” but the license/record tag is
 HOCHWASSER), ``license_id=CC_BY_4_0``, ``license_tier=A``.
 
-KRITISCH (GOV-03, Pitfall 6): Die CC-BY-4.0-Lizenz der Landeshochwasserportale
-verlangt die Quelle UND einen Stand-Zeitstempel. Die Attribution trägt daher
-PFLICHT den Wortlaut ``"Datenquelle: www.hochwasserzentralen.de, Stand: <stand>"``;
-der Mapper-/Routen-Test asserted den ``"Stand:"``-String.
+CRITICAL (GOV-03, Pitfall 6): The CC BY 4.0 license for the state flood portals
+requires the source AND a status timestamp. The attribution therefore
+MUST include the text ``“Data source: www.hochwasserzentralen.de, Status: <stand>”``;
+the Mapper/Route test asserts the ``“Status:”`` string.
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ from cityscape.normalization import (
     SourceId,
 )
 
-# CC-BY 4.0 (Landeshochwasserportale, www.hochwasserzentralen.de).
 _CC_BY_URL = "https://creativecommons.org/licenses/by/4.0/"
 
 
@@ -39,20 +38,20 @@ def map_flood(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet rohe LHP-Hochwasserdaten auf einen ``CanonicalRecord`` ab.
+    """Maps raw LHP flood data to a ``CanonicalRecord``.
 
-    Der ``retrieved_at``-Zeitstempel wird injiziert (kein ``datetime.now()`` im
-    Mapper), damit das Ergebnis deterministisch bleibt. Die Join-Keys
-    ``ags``/``wikidata_qid`` werden aus dem Register durchgereicht (Default
-    ``None``). ``geo`` bleibt ``None`` (Stadtebene, kein Pegel-Geo);
-    ``observed_at`` bleibt ``None`` (Event-Layer ohne Mess-Zeitstempel, der Stand
-    steht im Payload/in der Attribution).
+    The ``retrieved_at`` timestamp is injected (no ``datetime.now()`` in the
+    mapper) so that the result remains deterministic. The join keys
+    ``ags``/``wikidata_qid`` are passed through from the register (default
+    ``None``). ``geo`` remains ``None`` (city level, no gauge geo);
+    ``observed_at`` remains ``None`` (event layer without measurement timestamp; the status
+    is included in the payload/attribution).
 
-    KRITISCH (Pitfall 6, GOV-03): Die Attribution trägt PFLICHT den Wortlaut
-    ``"Datenquelle: www.hochwasserzentralen.de, Stand: {stand}"`` (CC-BY 4.0); der
-    ``"Stand:"``-Teil wird vom Mapper- und Routen-Test asserted.
+    CRITICAL (Pitfall 6, GOV-03): The attribution MUST include the text
+    ``“Data source: www.hochwasserzentralen.de, Status: {stand}”`` (CC-BY 4.0); the
+    ``“Status:”`` part is verified by the mapper and route tests.
 
-    Leere ``warnings`` sind KEIN Fehler (keine aktive Warnung -> leeres Event).
+    Empty ``warnings`` are NOT an error (no active warning -> empty event).
     """
     stand = raw.get("stand")
     return CanonicalRecord(

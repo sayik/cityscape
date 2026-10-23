@@ -1,13 +1,13 @@
-"""Reiner Bundes-Klinik-Atlas-Mapper map_hospital_atlas (Krankenhausstandorte).
+"""Reiner Federal Hospital Atlas Mapper `map_hospital_atlas` (hospital locations).
 
-Uebersetzt das flache raw-dict aus ``fetch_hospital_atlas`` deterministisch in
-einen ``CanonicalRecord`` mit ``HospitalAtlasPayload``. Rein: kein HTTP, kein
-Logging, kein ``datetime.now()`` (``retrieved_at`` injiziert).
+Deterministically converts the flat `raw-dict` from `fetch_hospital_atlas` into
+a `CanonicalRecord` with `HospitalAtlasPayload`. Pure: no HTTP, no
+logging, no ``datetime.now()`` (``retrieved_at`` injected).
 
-FAIL-CLOSED (Lizenz): Der Bundes-Klinik-Atlas weist KEINE explizite offene Lizenz
-aus -> license_id UNKNOWN, Tier C (live-only, kein Archiv), ehrlich getaggt bis
-zur Bestaetigung durch BMG/IQTIG. KRITISCH (Pitfall 4): ortsnah gefiltert,
-``distance_km`` je Standort; ``geo`` bleibt ``None``.
+FAIL-CLOSED (License): The Federal Hospital Atlas has NO explicit open license
+-> license_id UNKNOWN, Tier C (live-only, no archive), honestly tagged until
+confirmation by BMG/IQTIG. CRITICAL (Pitfall 4): Filtered by proximity,
+``distance_km`` per location; ``geo`` remains ``None``.
 """
 
 from __future__ import annotations
@@ -33,11 +33,11 @@ def map_hospital_atlas(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet rohe Bundes-Klinik-Atlas-Standorte auf einen ``CanonicalRecord`` ab.
+    """Maps raw Federal Clinic Atlas locations to a ``CanonicalRecord``.
 
-    ``observed_at`` bleibt ``None`` (Stammdaten, kein Messzeitpunkt). Lizenz
-    UNKNOWN/Tier C (fail-closed). Join-Keys aus dem Register. ``geo=None``
-    (Pitfall 4: ortsnah, nicht stadtgenau).
+    ``observed_at`` remains ``None`` (master data, no measurement time). License
+    UNKNOWN/Tier C (fail-closed). Join keys from the register. ``geo=None``
+    (Pitfall 4: near the location, not exact city).
     """
     return CanonicalRecord(
         city_slug=raw["slug"],

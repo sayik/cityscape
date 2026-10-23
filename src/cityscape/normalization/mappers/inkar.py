@@ -1,17 +1,17 @@
-"""Reiner INKAR-Mapper ``map_indicators`` (BBSR-Indikatoren, DL-DE/BY 2.0, Tier A).
+"""Pure INKAR mapper ``map_indicators`` (BBSR indicators, DL-DE/BY 2.0, Tier A).
 
-Bildet die Indikator-Zeilen aus dem SQLite-Reader
-(``archive.inkar_db.read_indicators``) deterministisch auf einen
-``CanonicalRecord`` mit ``IndicatorsPayload`` ab. Rein: kein HTTP, kein Logging,
-kein ``datetime.now()`` (``retrieved_at`` wird injiziert).
+Deterministically maps the indicator rows from the SQLite reader
+(``archive.inkar_db.read_indicators``) to a
+``CanonicalRecord`` with ``IndicatorsPayload``. Pure: no HTTP, no logging,
+no ``datetime.now()`` (``retrieved_at`` is injected).
 
-Quelle ist das Bundesinstitut für Bau-, Stadt- und Raumforschung (BBSR) /
-INKAR (Indikatoren und Karten zur Raum- und Stadtentwicklung). Lizenz DL-DE/BY
-2.0, Attribution wortgenau "Bundesinstitut für Bau-, Stadt- und Raumforschung
-(BBSR), INKAR" (muss verbatim in DATA-LICENSES.md + SOURCE_LICENSE stehen). Die
-Werte sind unveränderte Quell-Kennzahlen (``modified=False``); ``geo`` bleibt
-``None`` (Kreis-/Stadtebene), ``observed_at`` bleibt ``None`` (das Jahr steht je
-Indikator im Payload).
+Source: Federal Institute for Research on Building, Urban Affairs, and Spatial Development (BBSR) /
+INKAR (Indicators and Maps for Spatial and Urban Development). License: DL-DE/BY
+2.0, attribution must be verbatim: “Federal Institute for Research on Building, Urban Affairs, and Spatial Development
+(BBSR), INKAR” (must appear verbatim in DATA-LICENSES.md + SOURCE_LICENSE). The
+values are unmodified source metrics (``modified=False``); ``geo`` remains
+``None`` (county/city level), ``observed_at`` remains ``None`` (the year is specified
+for each indicator in the payload).
 """
 
 from __future__ import annotations
@@ -51,13 +51,13 @@ def map_indicators(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet die INKAR-Indikator-Zeilen einer Stadt auf einen ``CanonicalRecord`` ab.
+    """Maps a city's INKAR indicator rows to a ``CanonicalRecord``.
 
-    ``rows`` ist die vom SQLite-Reader gelieferte Liste schlanker dicts
-    (``gruppe``/``name``/``value``/``year``/``category``). Der ``retrieved_at``-
-    Zeitstempel wird injiziert (kein ``datetime.now()`` im Mapper), damit das
-    Ergebnis deterministisch bleibt. Die Join-Keys ``ags``/``wikidata_qid`` werden
-    aus dem Register durchgereicht (Default ``None``).
+    ``rows`` is the list of slim dictionaries returned by the SQLite reader
+    (``group``/``name``/``value``/``year``/``category``). The ``retrieved_at``
+    timestamp is injected (no ``datetime.now()`` in the mapper) so that the
+    result remains deterministic. The join keys ``ags``/``wikidata_qid`` are
+    passed through from the register (default ``None``).
     """
     return CanonicalRecord(
         city_slug=slug,
