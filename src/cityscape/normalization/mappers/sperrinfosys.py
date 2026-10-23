@@ -1,18 +1,18 @@
-"""Reiner SPERRINFOSYS-Mapper ``map_sperrinfosys_road_events`` (Tier A DL-DE/BY).
+"""Reiner SPERRINFOSYS Mapper ``map_sperrinfosys_road_events`` (Tier A DL-DE/BY).
 
-Übersetzt das rohe Adapter-dict (``slug``/``events``) deterministisch in einen
-``CanonicalRecord`` mit ``RoadEventPayload`` (``city_source="sperrinfosys"``).
-Rein: kein HTTP, kein Logging, keine Systemuhr (``retrieved_at`` injiziert).
+Deterministically translates the raw adapter dictionary (``slug``/``events``) into a
+``CanonicalRecord`` with ``RoadEventPayload`` (``city_source=“sperrinfosys”``).
+Pure: no HTTP, no logging, no system clock (``retrieved_at`` injected).
 
-Die sachsenweiten Sperrungen des SPERRINFOSYS (Freistaat Sachsen / LISt GmbH,
-Mobilithek-Offer -2102129055146091928, [VERIFIED 2026-07-02]) stehen unter
-Datenlizenz Deutschland Namensnennung 2.0: ``license_id=DL_DE_BY_2_0``,
-``license_tier=A``. Die dreiteilige Attribution ist VERBATIM-verbindlich
-(wortgleich in ``registry/source_specs.py`` und ``DATA-LICENSES.md``,
-T-11-SRC-DRIFT): Namensnennung + Lizenz-Link + Veränderungshinweis.
-``modified=True`` ist PFLICHT: die Koordinaten wurden von EPSG:25833 nach
-WGS84 reprojiziert (Veränderungshinweis nach DL-DE/BY 2.0). Die Einzel-Events
-tragen Zeit und Geometrie im Payload, daher ``observed_at=None`` und
+The Saxony-wide road closures from SPERRINFOSYS (Free State of Saxony / LISt GmbH,
+Mobilithek Offer -2102129055146091928, [VERIFIED 2026-07-02]) are subject to
+the Germany Data License Attribution 2.0: ``license_id=DL_DE_BY_2_0``,
+``license_tier=A``. The three-part attribution is VERBATIM-mandatory
+(exactly the same wording in ``registry/source_specs.py`` and ``DATA-LICENSES.md``,
+T-11-SRC-DRIFT): Attribution + License Link + Modification Notice.
+``modified=True`` is REQUIRED: the coordinates were reprojected from EPSG:25833 to
+WGS84 (modification notice per DL-DE/BY 2.0). The individual events
+carry time and geometry in the payload, hence ``observed_at=None`` and
 ``geo=None``.
 """
 
@@ -39,13 +39,13 @@ def map_sperrinfosys_road_events(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet rohe SPERRINFOSYS-Road-Events auf einen ``CanonicalRecord`` ab.
+    """Maps raw SPERRINFOSYS road events to a ``CanonicalRecord``.
 
-    Die ``events`` (Sperrungen, VKZ-gefiltert je Stadt) wandern unverändert in
-    den ``RoadEventPayload`` (``city_source="sperrinfosys"``). Der
-    ``retrieved_at``-Zeitstempel wird injiziert (keine Systemuhr im Mapper);
-    ``ags``/``wikidata_qid`` kommen aus dem Register (Default ``None``).
-    ``attribution.modified=True`` weil die Koordinaten reprojiziert wurden.
+    The ``events`` (road closures, filtered by VKZ for each city) are passed unchanged into
+    the ``RoadEventPayload`` (``city_source=“sperrinfosys”``). The
+    ``retrieved_at`` timestamp is injected (no system clock in the mapper);
+    ``ags``/``wikidata_qid`` are taken from the registry (default ``None``).
+    ``attribution.modified=True`` because the coordinates were reprojected.
     """
     return CanonicalRecord(
         city_slug=raw["slug"],

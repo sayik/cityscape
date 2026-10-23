@@ -1,12 +1,12 @@
-"""Reiner SMARD-Mapper map_smard (Strommarktdaten, CC BY 4.0, Tier A).
+"""Pure SMARD mapper `map_smard` (Electricity Market Data, CC BY 4.0, Tier A).
 
-Übersetzt das flache SMARD-raw-dict (aus ``adapters.smard.fetch_smard``)
-deterministisch in einen ``CanonicalRecord`` mit ``PowerPayload``. Rein: kein
-HTTP, kein Logging, kein ``datetime.now()`` (``retrieved_at`` wird injiziert).
+Translates the flat SMARD-raw-dict (from ``adapters.smard.fetch_smard``)
+deterministically into a ``CanonicalRecord`` with ``PowerPayload``. Pure: no
+HTTP, no logging, no ``datetime.now()`` (``retrieved_at`` is injected).
 
-SMARD-Daten werden unverändert übernommen (kein Verrechnen), daher
-``modified=False``. Lizenz CC BY 4.0, Attribution wortgenau "Bundesnetzagentur |
-SMARD.de" (muss verbatim in DATA-LICENSES.md + SOURCE_LICENSE stehen).
+SMARD data is adopted unchanged (no processing), therefore
+``modified=False``. License: CC BY 4.0, attribution must read exactly "Bundesnetzagentur |
+SMARD.de" (must appear verbatim in DATA-LICENSES.md + SOURCE_LICENSE).
 """
 
 from __future__ import annotations
@@ -38,12 +38,12 @@ def map_smard(
     lat: float | None = None,
     lon: float | None = None,
 ) -> CanonicalRecord:
-    """Bildet einen SMARD-Tageswert auf einen ``CanonicalRecord`` ab.
+    """Maps an SMARD daily value to a ``CanonicalRecord``.
 
-    ``measure`` ist "load" (Stromverbrauch/Netzlast, je Regelzone) oder "price"
-    (Day-ahead-Großhandelspreis, bundesweit). ``unit`` z.B. "MWh" bzw. "EUR/MWh".
-    ``lat``/``lon`` stammen aus dem Register (die Kennzahl ist regional, wird aber
-    der Stadt zugeordnet).
+    ``measure`` is “load” (electricity consumption/grid load, per control zone) or ‘price’
+    (day-ahead wholesale price, nationwide). ``unit`` is, for example, “MWh” or “EUR/MWh”.
+    ``lat``/``lon`` are taken from the register (the identifier is regional but is
+    assigned to the city).
     """
     geo = GeoPoint(lat=lat, lon=lon) if lat is not None and lon is not None else None
     return CanonicalRecord(

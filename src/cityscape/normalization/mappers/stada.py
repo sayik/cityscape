@@ -1,13 +1,13 @@
-"""Reiner StaDa-Mapper ``map_station_catalog`` (DATA-36, CC BY 4.0, Tier A).
+"""Pure StaDa mapper ``map_station_catalog`` (DATA-36, CC BY 4.0, Tier A).
 
-Übersetzt das je Stadt gefilterte StaDa-raw-dict (``{slug, stations}``, gebaut
-in der Route aus ``adapters.stada.fetch_all_stations`` + ags-Filter)
-deterministisch in einen ``CanonicalRecord`` mit ``StationCatalogPayload``. Rein:
-kein HTTP, kein Logging, kein ``datetime.now()`` (``retrieved_at`` injiziert).
+Converts the StaDa raw dict filtered by city (``{slug, stations}``, built
+in the route from ``adapters.stada.fetch_all_stations`` + ags filters)
+deterministically into a ``CanonicalRecord`` with ``StationCatalogPayload``. Pure:
+no HTTP, no logging, no ``datetime.now()`` (``retrieved_at`` injected).
 
-Der Katalog wird unverändert durchgereicht (kein Merge), daher ``modified=False``.
-Lizenz CC BY 4.0, Attribution wortgenau "Deutsche Bahn AG" (muss verbatim in
-DATA-LICENSES.md + SOURCE_LICENSE stehen, T-11-SRC-DRIFT).
+The catalog is passed through unchanged (no merge), hence ``modified=False``.
+License: CC BY 4.0, attribution must read exactly “Deutsche Bahn AG” (must appear verbatim in
+DATA-LICENSES.md + SOURCE_LICENSE, T-11-SRC-DRIFT).
 """
 
 from __future__ import annotations
@@ -36,11 +36,11 @@ def map_station_catalog(
     lat: float | None = None,
     lon: float | None = None,
 ) -> CanonicalRecord:
-    """Bildet den Bahnhofs-Katalog einer Stadt auf einen ``CanonicalRecord`` ab.
+    """Maps a city's train station catalog to a ``CanonicalRecord``.
 
-    ``modified=False`` (Stammdaten unverändert). ``observed_at=None`` (kein
-    Messzeitpunkt). ``lat``/``lon`` (Stadtkoordinate aus dem Register) werden,
-    falls vorhanden, als ``geo`` gesetzt.
+    ``modified=False`` (master data unchanged). ``observed_at=None`` (no
+    observation time). ``lat``/``lon`` (city coordinates from the registry) are,
+    if available, set as ``geo``.
     """
     stations = raw.get("stations", [])
     geo = GeoPoint(lat=lat, lon=lon) if lat is not None and lon is not None else None

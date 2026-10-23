@@ -1,20 +1,20 @@
-"""Reiner PVGIS-Solar-Mapper map_solar (DATA-38, GOV-03).
+"""Pure PVGIS Solar Mapper map_solar (DATA-38, GOV-03).
 
-Übersetzt das flache PVGIS-raw-dict deterministisch in einen ``CanonicalRecord``
-mit ``SolarPayload``. Die Funktion ist rein: kein HTTP, kein Logging, kein
-``datetime.now()`` (der ``retrieved_at``-Zeitstempel wird keyword-only injiziert,
-damit Tests deterministisch bleiben).
+Deterministically translates the flat PVGIS-raw-dict into a ``CanonicalRecord``
+with ``SolarPayload``. The function is pure: no HTTP, no logging, no
+``datetime.now()`` (the ``retrieved_at`` timestamp is injected as a keyword-only parameter,
+so that tests remain deterministic).
 
-``observed_at`` bleibt bewusst ``None``: PVGIS liefert ein klimatologisches
-Mehrjahresmittel, keinen Messzeitpunkt; der Bezugszeitraum steht als
-``period_start``/``period_end`` im Payload (record_id fällt damit auf
-``retrieved_at`` zurück, ARCH-02).
+``observed_at`` is intentionally set to ``None``: PVGIS provides a climatological
+multi-year average, not a specific measurement time; the reference period is specified as
+``period_start``/``period_end`` in the payload (record_id thus falls back to
+``retrieved_at``, ARCH-02).
 
-KRITISCH (GOV-03): PVGIS-Daten sind aufbereitet (cityscape normiert auf 1 kWp bei
-optimalem Winkel und formt das Schema um), daher trägt die Attribution
-``modified=True`` und den wortgenauen PVGIS-Hinweis. Lizenz und Tier sind
-hartkodiert: EU-Reuse-Policy (EC_REUSE, faktisch CC BY 4.0, frei nutzbar mit
-Quellenangabe) = Tier A.
+CRITICAL (GOV-03): PVGIS data is processed (cityscape normalized to 1 kWp at
+optimal angle and reshapes the schema), so the attribution includes
+``modified=True`` and the exact PVGIS note. The license and tier are
+hard-coded: EU Reuse Policy (EC_REUSE, effectively CC BY 4.0, freely usable with
+attribution) = Tier A.
 """
 
 from __future__ import annotations
@@ -44,12 +44,12 @@ def map_solar(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet rohe PVGIS-Solar-Kennzahlen auf einen ``CanonicalRecord`` ab.
+    """Maps raw PVGIS solar metrics to a ``CanonicalRecord``.
 
-    ``retrieved_at`` wird injiziert (kein ``datetime.now()`` im Mapper), damit das
-    Ergebnis deterministisch und voll testbar bleibt. Die Join-Keys ``ags``/
-    ``wikidata_qid`` werden aus dem Register durchgereicht (Default ``None``).
-    """
+    ``retrieved_at`` is injected (no ``datetime.now()`` in the mapper) so that the
+    result remains deterministic and fully testable. The join keys ``ags``/
+    ``wikidata_qid`` are passed through from the register (default ``None``).
+"""
     return CanonicalRecord(
         city_slug=raw["slug"],
         geo=GeoPoint(lat=raw["lat"], lon=raw["lon"]),
