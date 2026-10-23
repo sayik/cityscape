@@ -1,17 +1,17 @@
-"""Reiner Regionalstatistik-Mapper (DATA-37, DL-DE/BY 2.0, Tier A).
+"""Pure Regional Statistics Mapper (DATA-37, DL-DE/BY 2.0, Tier A).
 
-Bildet die Reader-Zeilen aus ``archive.regionalstatistik_db`` deterministisch auf
-einen ``CanonicalRecord`` ab: ``map_tax_rates`` (Realsteuer-Hebesätze, Tabelle
-71231) und ``map_business_registrations`` (Gewerbean-/-abmeldungen, Tabelle
-52311). Rein: kein HTTP, kein Logging, kein ``datetime.now()`` (``retrieved_at``
-wird injiziert).
+Deterministically maps the reader rows from ``archive.regionalstatistik_db`` to
+a ``CanonicalRecord``: ``map_tax_rates`` (property tax rates, table
+71231) and ``map_business_registrations`` (business registrations/deregistrations, table
+52311). Pure: no HTTP, no logging, no ``datetime.now()`` (``retrieved_at``
+is injected).
 
-Quelle ist der GENESIS-Webservice der Statistischen Ämter des Bundes und der
-Länder (regionalstatistik.de). Lizenz DL-DE/BY 2.0, Attribution wortgenau
-"Statistische Ämter des Bundes und der Länder" (muss verbatim in DATA-LICENSES.md
-+ SOURCE_LICENSE stehen, T-11-SRC-DRIFT). Die Werte sind unveränderte
-Quell-Kennzahlen (``modified=False``); ``geo`` bleibt ``None`` (Gemeinde-/
-Kreisebene), ``observed_at`` bleibt ``None`` (Stichtag/Jahr steht im Payload).
+The source is the GENESIS web service of the Federal and State Statistical Offices
+(regionalstatistik.de). License: DL-DE/BY 2.0, attribution must be verbatim
+“Federal and State Statistical Offices” (must appear verbatim in DATA-LICENSES.md
++ SOURCE_LICENSE; T-11-SRC-DRIFT). The values are unmodified
+source metrics (`modified=False`); `geo` remains `None` (municipality/
+county level), `observed_at` remains `None` (reference date/year is included in the payload).
 """
 
 from __future__ import annotations
@@ -62,12 +62,12 @@ def map_tax_rates(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet die Hebesatz-Zeile einer Stadt auf einen ``CanonicalRecord`` ab (71231).
+    """Maps a city's tax rate row to a ``CanonicalRecord`` (71231).
 
-    ``row`` ist das vom Reader gelieferte dict (``gewerbesteuer``/``grundsteuer_a``/
-    ``grundsteuer_b``/``grundsteuer_c``/``stichtag``). ``retrieved_at`` wird
-    injiziert (kein ``datetime.now()`` im Mapper). Die Join-Keys ``ags``/
-    ``wikidata_qid`` werden aus dem Register durchgereicht.
+    ``row`` is the dict returned by the reader (``business_tax``/``property_tax_a``/
+    ``property_tax_b``/``property_tax_c``/``reference_date``). ``retrieved_at`` is
+    injected (no ``datetime.now()`` in the mapper). The join keys ``ags``/
+    ``wikidata_qid`` are passed through from the register.
     """
     payload = TaxRatesPayload(
         gewerbesteuer_hebesatz=row.get("gewerbesteuer"),
@@ -89,11 +89,11 @@ def map_business_registrations(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet die Gewerbeanzeigen-Zeile einer Stadt auf einen ``CanonicalRecord`` ab.
+    """Maps a city's business listings row to a ``CanonicalRecord``.
 
-    ``row`` ist das vom Reader gelieferte dict (``anmeldungen``/``abmeldungen``/
-    ``saldo``/``jahr``, Tabelle 52311). ``retrieved_at`` wird injiziert. Die
-    Join-Keys ``ags``/``wikidata_qid`` werden aus dem Register durchgereicht.
+    ``row`` is the dict provided by the reader (``anmeldungen``/``abmeldungen``/
+    ``saldo``/``jahr``, Table 52311). ``retrieved_at`` is injected. The
+    join keys ``ags``/``wikidata_qid`` are passed through from the register.
     """
     payload = BusinessRegistrationsPayload(
         anmeldungen=row.get("anmeldungen"),
@@ -114,12 +114,12 @@ def map_insolvencies(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet die Insolvenz-Zeile einer Stadt auf einen ``CanonicalRecord`` ab.
+    """Maps a city's insolvency row to a ``CanonicalRecord``.
 
-    ``row`` ist das vom Reader gelieferte dict (``unternehmensinsolvenzen``/
-    ``uebrige_schuldner_insolvenzen``/``jahr``, Tabellen 52411-02 ISV006 + 52411-03
-    ISV007). ``retrieved_at`` wird injiziert (kein ``datetime.now()`` im Mapper).
-    Die Join-Keys ``ags``/``wikidata_qid`` werden aus dem Register durchgereicht.
+    ``row`` is the dict returned by the reader (``corporate_insolvencies``/
+    ``other_debtor_insolvencies``/``year``, tables 52411-02 ISV006 + 52411-03
+    ISV007). ``retrieved_at`` is injected (no ``datetime.now()`` in the mapper).
+    The join keys ``ags``/``wikidata_qid`` are passed through from the register.
     """
     payload = InsolvenciesPayload(
         unternehmensinsolvenzen=row.get("unternehmensinsolvenzen"),

@@ -1,15 +1,15 @@
-"""Reiner ParkenDD-Mapper map_parkendd (DATA-40, Live-Parken, Tier A je Stadt).
+"""Reiner ParkenDD-Mapper map_parkendd (DATA-40, Live Parking, Tier A per city).
 
-Übersetzt das rohe Adapter-dict (``slug``/``facilities``/``as_of``) deterministisch
-in einen ``CanonicalRecord`` mit ``ParkingPayload``. Rein: kein HTTP, keine
-Systemuhr (``retrieved_at`` keyword-only injiziert).
+Deterministically translates the raw adapter dictionary (``slug``/``facilities``/``as_of``)
+into a ``CanonicalRecord`` with ``ParkingPayload``. Pure: no HTTP, no
+system clock (``retrieved_at`` injected as a keyword only).
 
-LIZENZ (B-1, GOV-01): ParkenDD aggregiert heterogen lizenzierte Stadt-Quellen ohne
-einheitliche Lizenz. Die Lizenz wird daher PRO STADT am echten Ursprung verifiziert
-(``_PARKENDD_LICENSE``) und mit korrektem Tier getragen (CC0/DL-DE-Zero/DL-DE-BY/
-CC-BY, je Stadt; alle Tier A). Es werden NUR Städte mit offener Standardlizenz
-ausgeliefert (Owner-Entscheidung 2026-06-23: keine Tier-B/C-/NC-Auslieferung); die
-übrigen sind aus ``PARKENDD_CITIES`` entfernt (not_covered). Reine Live-Daten.
+LICENSE (B-1, GOV-01): ParkenDD aggregates heterogeneously licensed city sources without
+a uniform license. The license is therefore verified PER CITY at the actual source
+(``_PARKENDD_LICENSE``) and carried with the correct tier (CC0/DL-DE-Zero/DL-DE-BY/
+CC-BY, per city; all Tier A). ONLY cities with an open standard license
+are delivered (owner decision 2026-06-23: no Tier B/C/NC delivery); the
+remaining cities are removed from ``PARKENDD_CITIES`` (not_covered). Pure live data.
 """
 
 from __future__ import annotations
@@ -98,13 +98,13 @@ def map_parkendd(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet rohe ParkenDD-Parkdaten auf einen ``CanonicalRecord`` (Tier C) ab.
+    """Maps raw ParkenDD parking data to a ``CanonicalRecord`` (Tier C).
 
-    Die ``facilities`` (Parkhäuser mit frei/gesamt/Zustand) wandern unverändert
-    in den ``ParkingPayload``. ``observed_at`` kommt aus dem ParkenDD-Datenstand
-    (``as_of``), ``geo=None`` (Koordinaten je Facility im Payload). ``license_id``/
-    ``license_tier``/Attribution kommen PRO STADT aus ``_PARKENDD_LICENSE`` (am
-    Ursprung verifiziert); nicht gelistete Städte fallen ehrlich auf UNKNOWN/Tier C.
+    The ``facilities`` (parking garages with free/total/status) are transferred unchanged
+    to the ``ParkingPayload``. ``observed_at`` comes from the ParkenDD dataset
+    (``as_of``), ``geo=None`` (coordinates for each facility in the payload). ``license_id``/
+    ``license_tier``/attribution come from ``_PARKENDD_LICENSE`` PER CITY (
+    verified at source); unlisted cities are honestly classified as UNKNOWN/Tier C.
     """
     slug = raw["slug"]
     license_id, license_tier, attribution_text = _PARKENDD_LICENSE.get(

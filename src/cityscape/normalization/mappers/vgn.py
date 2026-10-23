@@ -1,15 +1,15 @@
-"""Mapper: VGN/VAG-Nürnberg Live-Abfahrten -> CanonicalRecord (DATA-25, Tier A).
+"""Mapper: VGN/VAG-Nuremberg Live Departures -> CanonicalRecord (DATA-25, Tier A).
 
-Bildet das raw-dict des ``adapters.vgn.fetch_vgn_departures`` (Halt + schlanke
-Abfahrts-dicts inkl. Echtzeitprognose) auf den kanonischen Envelope ab. Wieder-
-verwendung von ``TransitDeparturePayload`` (Phase 19, wie HVV-Geofox), da die
-Form identisch ist: ``stop_id`` + ``departures``.
+Maps the raw dictionary of ``adapters.vgn.fetch_vgn_departures`` (stop + lean
+departure dictionaries, including real-time forecasts) to the canonical envelope. Reuse
+of ``TransitDeparturePayload`` (Phase 19, like HVV-Geofox), since the
+format is identical: ``stop_id`` + ``departures``.
 
-KRITISCH (GOV-02/03): Im Gegensatz zu HVV-Geofox ist die VAG/VGN-Echtzeit-API
-OFFEN unter Creative Commons Attribution 4.0 (opendata.vag.de) -> ``license_id =
-CC_BY_4_0``, ``license_tier = A`` (sauber verwertbar, NICHT Tier C). Reine Live-
-Anzeige, KEIN Archiv. ``retrieved_at`` wird injiziert (keine Systemuhr im Mapper);
-``observed_at`` stammt aus ``as_of`` (Metadata.Timestamp des Abfahrtsmonitors).
+CRITICAL (GOV-02/03): Unlike HVV-Geofox, the VAG/VGN real-time API is
+OPEN under Creative Commons Attribution 4.0 (opendata.vag.de) -> ``license_id =
+CC_BY_4_0``, ``license_tier = A`` (cleanly usable, NOT Tier C). Pure live
+display, NO archive. ``retrieved_at`` is injected (no system clock in the mapper);
+``observed_at`` is derived from ``as_of`` (Metadata.Timestamp from the departure monitor).
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ _CC_BY_URL = "https://creativecommons.org/licenses/by/4.0/"
 
 
 def _parse_as_of(raw: dict) -> datetime | None:
-    """``as_of`` (Metadata.Timestamp, ISO) als aware datetime oder None (rein)."""
+    """``as_of`` (Metadata.Timestamp, ISO) as an aware datetime or None (raw)."""
     text = raw.get("as_of")
     if not text:
         return None
@@ -48,11 +48,11 @@ def map_vgn_departures(
     wikidata_qid: str | None = None,
     city_slug: str = "nuernberg",
 ) -> CanonicalRecord:
-    """Bildet VGN-Live-Abfahrten auf einen ``CanonicalRecord`` ab (Tier A, CC-BY).
+    """Maps VGN Live departures to a ``CanonicalRecord`` (Tier A, CC-BY).
 
-    Die normalisierten ``departures`` (je Abfahrt line/direction/in_minutes/
-    delay_s/alerts/product) wandern in den ``TransitDeparturePayload``. Tier A
-    (CC-BY 4.0, offen), KEIN Archiv (reine Live-Daten).
+    The normalized ``departures`` (for each departure: line/direction/in_minutes/
+    delay_s/alerts/product) are transferred to the ``TransitDeparturePayload``. Tier A
+    (CC-BY 4.0, open), NO archive (live data only).
     """
     return CanonicalRecord(
         city_slug=city_slug,

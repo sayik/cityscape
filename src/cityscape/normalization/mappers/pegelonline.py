@@ -1,18 +1,18 @@
-"""Reiner PEGELONLINE-Pegel-Mapper map_water_level (DATA-11, GOV-01/03, Tier A).
+"""Reiner PEGELONLINE Water Level Mapper map_water_level (DATA-11, GOV-01/03, Tier A).
 
-Übersetzt das flache PEGELONLINE-raw-dict deterministisch in einen
-``CanonicalRecord`` mit ``WaterLevelPayload`` (kind=water_level). Die Funktion ist
-rein: kein HTTP, kein Logging, kein ``datetime.now()``. Der ``retrieved_at``-
-Zeitstempel wird keyword-only injiziert, damit Tests deterministisch bleiben.
+Deterministically translates the flat PEGELONLINE-raw-dict into a
+``CanonicalRecord`` with ``WaterLevelPayload`` (kind=water_level). The function is
+pure: no HTTP, no logging, no ``datetime.now()``. The ``retrieved_at``
+timestamp is injected on a keyword-only basis so that tests remain deterministic.
 
-KRITISCH (Lizenz-Klassifikation GOV-02): PEGELONLINE ist Tier A (offene Lizenz),
-``license_id=DL_DE_ZERO_2_0``, ``license_tier=A``. Der Record wird über die Route
-``/water-level`` ausgeliefert, ABER nur wenn eine Station gefunden wurde
-(Binnenstadt liefert no_data).
+CRITICAL (License Classification GOV-02): PEGELONLINE is Tier A (open license),
+``license_id=DL_DE_ZERO_2_0``, ``license_tier=A``. The record is delivered via the route
+``/water-level``, BUT only if a station was found
+(Binnenstadt returns no_data).
 
-KRITISCH (GOV-03): Datenlizenz Deutschland Zero 2.0 verlangt KEINE
-Namensnennungspflicht; die Attribution wird dennoch geführt ("PEGELONLINE / WSV")
-und trägt KEIN ``modified`` (Daten nicht aufbereitet).
+CRITICAL (GOV-03): The Germany Zero 2.0 data license does NOT require
+attribution; however, attribution is still provided (“PEGELONLINE / WSV”)
+and does NOT include a ``modified`` attribute (data is not processed).
 """
 
 from __future__ import annotations
@@ -39,17 +39,17 @@ def map_water_level(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet rohe PEGELONLINE-Pegeldaten auf einen ``CanonicalRecord`` ab.
+    """Maps raw PEGELONLINE water level data to a ``CanonicalRecord``.
 
-    ``observed_at`` kommt aus dem Mess-Zeitstempel (``raw["observed_at"]``); der
-    ``retrieved_at``-Zeitstempel wird injiziert (kein ``datetime.now()`` im
-    Mapper), damit das Ergebnis deterministisch bleibt. Die Join-Keys
-    ``ags``/``wikidata_qid`` werden aus dem Register durchgereicht (Default
-    ``None``). ``geo`` bleibt ``None`` (Stadtebene, kein Stations-Geo). Die
-    Attribution trägt KEIN ``modified`` (DL-DE/Zero, GOV-03).
+    ``observed_at`` comes from the measurement timestamp (``raw[“observed_at”]``); the
+    ``retrieved_at`` timestamp is injected (no ``datetime.now()`` in the
+    mapper) so that the result remains deterministic. The join keys
+    ``ags``/``wikidata_qid`` are passed through from the register (default
+    ``None``). ``geo`` remains ``None`` (city level, no station geo). The
+    attribution contains NO ``modified`` (DL-DE/Zero, GOV-03).
 
-    Diese Funktion wird NUR aufgerufen, wenn eine Station gefunden wurde; der
-    no_data-Pfad (``raw["station"] is None``) wird bereits in der Route abgefangen.
+    This function is called ONLY if a station was found; the
+    no_data path (``raw[“station”] is None``) is already handled in the route.
     """
     return CanonicalRecord(
         city_slug=raw["slug"],

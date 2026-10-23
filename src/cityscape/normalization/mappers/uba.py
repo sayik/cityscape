@@ -1,19 +1,19 @@
-"""Reiner UBA-Luft-Mapper map_air_uba (DATA-10, GOV-01/03, Tier A).
+"""Pure UBA Air Mapper map_air_uba (DATA-10, GOV-01/03, Tier A).
 
-Übersetzt das flache UBA-raw-dict deterministisch in einen ``CanonicalRecord``
-mit dem WIEDERVERWENDETEN ``AirQualityPayload`` (kind=air_quality, kein neues
-Air-Payload). Die Funktion ist rein: kein HTTP, kein Logging, kein
-``datetime.now()``. Der ``retrieved_at``-Zeitstempel wird keyword-only injiziert,
-damit Tests deterministisch bleiben.
+Deterministically translates the flat UBA-raw-dict into a ``CanonicalRecord``
+using the REUSED ``AirQualityPayload`` (kind=air_quality, no new
+AirPayload). The function is pure: no HTTP, no logging, no
+``datetime.now()``. The ``retrieved_at`` timestamp is injected using keyword-only,
+so that tests remain deterministic.
 
-KRITISCH (Lizenz-Klassifikation GOV-02): UBA ist Tier A (offene Lizenz),
-``license_id=DL_DE_BY_2_0``, ``license_tier=A``. Der UBA-Record wird über die
-Route ``/air-uba`` (Tier-A-Bestand) ausgeliefert.
+CRITICAL (License Classification GOV-02): UBA is Tier A (open license),
+``license_id=DL_DE_BY_2_0``, ``license_tier=A``. The UBA record is delivered via the
+route ``/air-uba`` (Tier A dataset).
 
-KRITISCH (GOV-03): UBA-Daten unter Datenlizenz Deutschland Namensnennung 2.0 sind
-NICHT aufbereitet (anders als DWD-Wetter), daher trägt die Attribution KEIN
-``modified`` (Default ``False``) und die wortgenaue Namensnennung
-"Umweltbundesamt".
+CRITICAL (GOV-03): UBA data under the Germany Attribution 2.0 data license is
+NOT processed (unlike DWD weather data); therefore, the attribution does NOT
+include ``modified`` (default ``False``) and requires verbatim attribution of
+“Umweltbundesamt”.
 """
 
 from __future__ import annotations
@@ -40,15 +40,15 @@ def map_air_uba(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet rohe UBA-Luftdaten auf einen ``CanonicalRecord`` (Tier A) ab.
+    """Maps raw UBA air data to a ``CanonicalRecord`` (Tier A).
 
-    ``observed_at`` kommt aus dem UBA-Messzeitpunkt (``raw["observed_at"]``); der
-    ``retrieved_at``-Zeitstempel wird injiziert (kein ``datetime.now()`` im
-    Mapper), damit das Ergebnis deterministisch bleibt. Die Join-Keys
-    ``ags``/``wikidata_qid`` werden aus dem Register durchgereicht (Default
-    ``None``). Der Payload nutzt das bestehende ``AirQualityPayload``; die
-    UBA-Station-ID dient als fachlicher Schlüssel für die ``record_id``
-    (ARCH-02). Die Attribution trägt KEIN ``modified`` (DL-DE/BY, GOV-03).
+    ``observed_at`` comes from the UBA measurement time (``raw[“observed_at”]``); the
+    ``retrieved_at`` timestamp is injected (no ``datetime.now()`` in the
+    mapper) so that the result remains deterministic. The join keys
+    ``ags``/``wikidata_qid`` are passed through from the register (default
+    ``None``). The payload uses the existing ``AirQualityPayload``; the
+    UBA station ID serves as the business key for the ``record_id``
+    (ARCH-02). The attribution does NOT include a ``modified`` field (DL-DE/BY, GOV-03).
     """
     return CanonicalRecord(
         city_slug=raw["slug"],

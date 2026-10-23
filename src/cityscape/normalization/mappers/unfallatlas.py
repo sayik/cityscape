@@ -1,12 +1,12 @@
-"""Reiner Unfallatlas-Mapper map_accidents (Verkehrsunfälle, DL-DE/BY 2.0, Tier A).
+"""Reiner Accident Atlas Mapper `map_accidents` (traffic accidents, DL-DE/BY 2.0, Tier A).
 
-Bildet das Jahres-Aggregat aus dem SQLite-Reader (``archive.unfallatlas_db.
-read_accidents``) deterministisch auf einen ``CanonicalRecord`` mit
-``AccidentPayload`` ab. Rein: kein HTTP, kein ``datetime.now()`` (injiziert).
+Deterministically maps the annual aggregate from the SQLite reader (``archive.unfallatlas_db.
+read_accidents``) to a ``CanonicalRecord`` with
+``AccidentPayload``. Pure: no HTTP, no ``datetime.now()`` (injected).
 
-Lizenz DL-DE/BY 2.0, Attribution wortgenau "Statistische Ämter des Bundes und
-der Länder, Unfallatlas" (muss verbatim in DATA-LICENSES.md + SOURCE_LICENSE
-stehen). ``observed_at``/``geo`` bleiben ``None`` (Jahres-Aggregat je Kreis).
+License: DL-DE/BY 2.0; attribution must be verbatim: “Federal and
+State Statistical Offices, Accident Atlas” (must appear verbatim in DATA-LICENSES.md + SOURCE_LICENSE
+). ``observed_at``/``geo`` remain ``None`` (annual aggregate per district).
 """
 
 from __future__ import annotations
@@ -33,11 +33,11 @@ def map_accidents(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet ein Unfall-Jahres-Aggregat auf einen ``CanonicalRecord`` ab.
+    """Maps an annual accident aggregate to a ``CanonicalRecord``.
 
-    ``row`` ist das vom SQLite-Reader gelieferte dict (total/fatal/serious/light/
-    with_*/reference_year/district_key). Der ``retrieved_at``-Zeitstempel wird
-    injiziert (kein ``datetime.now()`` im Mapper). GOV-02/03: ``source=
+    ``row`` is the dict returned by the SQLite reader (total/fatal/serious/light/
+    with_*/reference_year/district_key). The ``retrieved_at`` timestamp is
+    injected (no ``datetime.now()`` in the mapper). GOV-02/03: ``source=
     UNFALLATLAS``, ``license_id=DL_DE_BY_2_0``, Tier A.
     """
     return CanonicalRecord(

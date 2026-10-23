@@ -1,16 +1,16 @@
-"""Reiner Overpass-POI-Mapper (DATA-04, Tier B copyleft).
+"""Pure Overpass POI Mapper (DATA-04, Tier B copyleft).
 
-Übersetzt rohe Overpass-Elemente (ein dict mit ``poi_type`` und ``elements``)
-deterministisch in einen ``CanonicalRecord`` mit ``PoiPayload``. Die Funktion ist
-rein: kein HTTP, kein Logging, kein ``datetime.now()``. Der ``retrieved_at``-
-Zeitstempel wird keyword-only injiziert, damit Tests deterministisch bleiben.
+Translates raw Overpass elements (a dict with ``poi_type`` and ``elements``)
+deterministically into a ``CanonicalRecord`` with ``PoiPayload``. The function is
+pure: no HTTP, no logging, no ``datetime.now()``. The ``retrieved_at``
+timestamp is injected as a keyword-only parameter so that tests remain deterministic.
 
-OSM ist ODbL-lizenziert (Tier B copyleft): ``license_id=ODBL``,
-``license_tier=B`` (kennzeichnet die Copyleft-Lizenz zur korrekten Attribution
-und Weiternutzung) und die wortgenaue Attribution
-"© OpenStreetMap contributors". POIs sind
-statisch, daher ``observed_at=None``; ``geo`` ist ``None`` (die Einzel-POIs
-tragen ihre Koordinaten im Payload, kein einzelner Stadt-Geo nötig).
+OSM is licensed under the ODbL (Tier B copyleft): ``license_id=ODBL``,
+``license_tier=B`` (indicates the copyleft license for proper attribution
+and reuse) and the verbatim attribution
+“© OpenStreetMap contributors”. POIs are
+static, so ``observed_at=None``; ``geo`` is ``None`` (the individual POIs
+carry their coordinates in the payload; no single city geo is required).
 """
 
 from __future__ import annotations
@@ -30,13 +30,13 @@ _ODBL_URL = "https://opendatacommons.org/licenses/odbl/1-0/"
 
 
 def _truncation(count: int, total_available: int | None) -> tuple[int | None, bool]:
-    """Leitet ``(total_available, truncated)`` für den Payload ab (Audit K9).
+    """Derive ``(total_available, truncated)`` for the payload (Audit K9).
 
-    ``count`` ist die Zahl ausgelieferter Items (Stichprobe). ``total_available``
-    ist der echte Gesamtbestand laut Quelle (Overpass ``out count;``), ggf.
-    ``None``. ``truncated`` ist True, wenn der echte Bestand größer als die
-    Stichprobe ist. Fehlt der Gesamtbestand, bleibt ``total_available`` ``None``
-    und ``truncated`` ``False`` (ehrlich: keine Truncation behauptet ohne Beleg).
+    ``count`` is the number of items delivered (sample). ``total_available``
+    is the actual total inventory according to the source (Overpass ``out count;``), or
+    ``None``. ``truncated`` is True if the actual inventory is larger than the
+    sample. If the total inventory is missing, ``total_available`` remains ``None``
+    and ``truncated`` remains ``False`` (to be honest: no truncation is claimed without evidence).
     """
     if total_available is None:
         return None, False
@@ -50,15 +50,15 @@ def map_overpass_pois(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet rohe Overpass-POIs auf einen ``CanonicalRecord`` (Tier B) ab.
+    """Maps raw Overpass POIs to a ``CanonicalRecord`` (Tier B).
 
-    Jedes Element wird auf ein schlankes dict (``name``/``lat``/``lon``)
-    reduziert. ``count`` ist immer ``len(items)``. POIs sind statisch, daher ist
-    ``observed_at`` ``None``; der ``retrieved_at``-Zeitstempel wird injiziert
-    (kein ``datetime.now()`` im Mapper), damit das Ergebnis deterministisch
-    bleibt. Die Join-Keys ``ags``/``wikidata_qid`` werden aus dem Register
-    durchgereicht (Default ``None``); POIs haben keine punktstabile Mess-Station,
-    daher KEIN ``station_id`` (``poi_type`` ist der fachliche Schlüssel).
+    Each item is reduced to a slim dict (``name``/``lat``/``lon``)
+    . ``count`` is always ``len(items)``. POIs are static, so
+    ``observed_at`` is ``None``; the ``retrieved_at`` timestamp is injected
+    (no ``datetime.now()`` in the mapper) to ensure the result remains deterministic
+    . The join keys ``ags``/``wikidata_qid`` are passed through from the register
+    (default ``None``); POIs do not have a point-stable measuring station,
+    so there is NO ``station_id`` (``poi_type`` is the business key).
     """
     items = [
         {
@@ -101,13 +101,13 @@ def map_osm_feature(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet eine generische OSM-Feature-Datenart auf einen ``CanonicalRecord`` ab.
+    """Maps a generic OSM feature data type to a ``CanonicalRecord``.
 
-    Wie ``map_overpass_pois``, aber mit zusätzlichen, je Feature konfigurierten
-    OSM-Tag-Feldern (``raw["extra_tags"]``, z.B. ``collection_times`` am Briefkasten
-    oder ``opening_hours`` am Markt). Ein Extra-Tag wird nur gesetzt, wenn das
-    Element es trägt (kein ``null``-Rauschen). Rein, deterministisch (kein
-    ``datetime.now()``), ODbL/Tier B wie der POI-Mapper.
+    Like ``map_overpass_pois``, but with additional OSM tag fields configured per feature
+    (``raw[“extra_tags”]``, e.g., ``collection_times`` for a mailbox
+    or ``opening_hours`` for a market). An extra tag is set only if the
+    element carries it (no ``null`` noise). Clean, deterministic (no
+    ``datetime.now()``), ODbL/Tier B like the POI mapper.
     """
     extra_tags = raw.get("extra_tags", [])
     items = []

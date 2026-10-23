@@ -1,17 +1,17 @@
-"""Stadt-Zuordnung der Auftragsvergabe in der Normalisierungs-Lib (TENDER-03).
+"""City mapping for contract awarding in the Normalization Library (TENDER-03).
 
-Plan-21-02-Artefakt: eine reine, deterministische Stadt-Zuordnungsfunktion in
-der Normalisierungs-Bibliothek. Die eigentliche Matching-Logik lebt als die EINE
-Quelle der Wahrheit in :mod:`cityscape.tenders.matching` (REST-Regel 6, keine
-Duplikate); dieses Modul stellt die in der Normalisierungs-Lib erwartete
-Signatur ``match_tender_cities(buyer_address, place_addresses)`` bereit und
-lädt dafür den Geo-Crosswalk-Seed (``tender_geo_crosswalk.json``) lazy +
-gecacht über ``seeds_dir()`` (analog reiner Mapper-Seed-Load).
+Plan-21-02 artifact: a pure, deterministic city-mapping function in
+the normalization library. The actual matching logic serves as the ONE
+source of truth in :mod:`cityscape.tenders.matching` (REST rule 6, no
+duplicates); this module provides the
+signature ``match_tender_cities(buyer_address, place_addresses)`` and
+loads the Geo Crosswalk seed (``tender_geo_crosswalk.json``) lazily and
+cached via ``seeds_dir()`` (analogous to a pure mapper seed load).
 
-Reinheit: kein I/O außer dem einmaligen, gecachten Seed-Load; kein
-``httpx``/``now()``/Logging. Die NUTS-3-/PLZ-Crosswalk-Maps und der
-Register-Name-Fallback sind die einzige Auflösungsbasis (fail-closed:
-mehrdeutige/unbekannte Adresse -> kein Treffer, T-21-MISMATCH).
+Purity: no I/O except for the one-time, cached seed load; no
+``httpx``/``now()``/logging. The NUTS-3/zip code crosswalk maps and the
+register name fallback are the sole resolution basis (fail-closed:
+ambiguous/unknown address -> no match, T-21-MISMATCH).
 """
 
 from __future__ import annotations
@@ -30,12 +30,12 @@ _CROSSWALK_SEED = "tender_geo_crosswalk.json"
 
 @lru_cache(maxsize=1)
 def load_tender_crosswalk() -> dict:
-    """Laedt die NUTS-3-/PLZ-Crosswalk-Maps lazy + gecacht über ``seeds_dir()``.
+    """Loads the NUTS-3/PLZ crosswalk maps lazily and cached via ``seeds_dir()``.
 
-    Einmaliger Seed-Load (Modul-Cache, analog ``ingest.delfi._ags8_to_slug``):
-    ``data/seeds/tender_geo_crosswalk.json`` = ``{"nuts3": {...}, "plz_prefix":
-    {...}, "_meta": {...}}``. Reiner Lese-Load, keine weiteren Seiteneffekte.
-    """
+    One-time seed load (module cache, similar to ``ingest.delfi._ags8_to_slug``):
+    ``data/seeds/tender_geo_crosswalk.json`` = ``{“nuts3”: {...}, “plz_prefix”:
+    {...}, “_meta”: {...}}``. Read-only load, no additional side effects.
+"""
     path = seeds_dir() / _CROSSWALK_SEED
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -44,17 +44,17 @@ def match_tender_cities(
     buyer_address: dict | None,
     place_addresses: list[dict],
 ) -> dict[str, list[str]]:
-    """Bildet Buyer-Adresse + Erfüllungsorte auf ``slug -> sortierte matches`` ab.
+    """Maps buyer addresses and places of performance to ``slug -> sorted matches``.
 
-    Reine Funktion in der Normalisierungs-Lib. Löst die Buyer-Adresse
-    (-> ``buyer_city``) und jede Erfüllungsort-Adresse
-    (-> ``place_of_performance``) getrennt gegen die Crosswalk-Maps + den
-    Register-Name-Fallback auf; beide matches sind möglich. Je Slug werden die
-    matches dedupliziert und sortiert. Fail-closed: unauflösbare Adressen
-    tragen nichts bei (kein falscher Treffer).
+    Pure function in the normalization library. Resolves the buyer address
+    (-> ``buyer_city``) and each place of performance address
+    (-> ``place_of_performance``) separately against the crosswalk maps + the
+    register name fallback; both matches are possible. For each slug, the
+    matches are deduplicated and sorted. Fail-closed: addresses that cannot be resolved
+    contribute nothing (no false positives).
 
-    Delegiert an die eine Quelle der Wahrheit
-    (:func:`cityscape.tenders.matching.match_tender_cities`) mit dem
-    lazy-geladenen Crosswalk-Seed.
-    """
+    Delegates to the single source of truth
+    (:func:`cityscape.tenders.matching.match_tender_cities`) using the
+    lazy-loaded crosswalk seed.
+"""
     return _match(buyer_address, place_addresses, load_tender_crosswalk())

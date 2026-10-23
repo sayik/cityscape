@@ -1,10 +1,10 @@
-"""Diskriminierte Payload-Union der Normalisierungs-Library (CORE-01).
+"""Discriminated payload union from the normalization library (CORE-01).
 
-Die domänenspezifischen Nutzdaten variieren je Quelle. Ein ``kind``-Literal
-diskriminiert die Union; pydantic wählt damit effizient das korrekte Modell und
-erzeugt einen sauberen OpenAPI-Discriminator. Neue Quellen (Phase 7 bis 9)
-ergänzen nur ein weiteres Payload-Modell mit eigenem ``kind`` und ein
-Union-Mitglied, ohne Breaking Change am Envelope.
+The domain-specific payloads vary by source. A ``kind`` literal
+discriminates the union; pydantic uses it to efficiently select the correct model and
+generate a clean OpenAPI discriminator. New sources (Phases 7 through 9)
+simply add another payload model with its own ``kind`` and a
+union member, without any breaking changes to the envelope.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 
 class CityBaseDataPayload(BaseModel):
-    """Stammdaten je Stadt (Einwohner, Fläche)."""
+    """Basic data by city (population, area)."""
 
     kind: Literal["city_base"] = "city_base"
     population: int | None = None
@@ -23,13 +23,13 @@ class CityBaseDataPayload(BaseModel):
 
 
 class AirQualityPayload(BaseModel):
-    """Luftqualitaets-Messwerte je Stadt (UBA, Tier A).
+    """Air quality measurements by city (UBA, Tier A).
 
-    Erweitert um die real von UBA gelieferten Schadstoff-Parameter. Alle
-    Felder optional, da nicht jede Messstation jeden Parameter liefert.
-    ``station_id`` trägt die stabile Mess-/Detektor-ID je Messpunkt (ARCH-02)
-    und dient als fachlicher Schlüssel für die deterministische ``record_id``.
-    """
+    Expanded to include the pollutant parameters actually provided by the UBA. All
+    fields are optional, as not every monitoring station provides every parameter.
+    ``station_id`` contains the unique measurement/detector ID for each monitoring point (ARCH-02)
+    and serves as a technical key for the deterministic ``record_id``.
+"""
 
     kind: Literal["air_quality"] = "air_quality"
     station_id: str | None = None
@@ -41,17 +41,17 @@ class AirQualityPayload(BaseModel):
 
 
 class WeatherPayload(BaseModel):
-    """Wetter-Messwerte je Stadt (DWD/Bright Sky, Tier A).
+    """Weather measurements by city (DWD/Bright Sky, Tier A).
 
-    Erweitert um Luftfeuchte, Windgeschwindigkeit und Wetterlage. Alle Felder
-    optional, da Bright Sky je Station unterschiedlich vollständig liefert.
-    ``station_id`` trägt die stabile Mess-/Detektor-ID je Messpunkt (ARCH-02)
-    und dient als fachlicher Schlüssel für die deterministische ``record_id``.
+    Expanded to include humidity, wind speed, and weather conditions. All fields
+    are optional, as Bright Sky provides varying levels of detail for each station.
+    ``station_id`` contains the unique measurement/detector ID for each measurement point (ARCH-02)
+    and serves as a technical key for the deterministic ``record_id``.
 
-    Einheiten: ``temperature_c`` in Grad Celsius, ``humidity`` in Prozent,
-    ``wind_speed`` in km/h (Bright Sky liefert die Windgeschwindigkeit in km/h;
-    Quelle ist das aktuellste Mittelungs-Fenster ``wind_speed_10``, siehe Audit K3).
-    """
+    Units: ``temperature_c`` in degrees Celsius, ``humidity`` in percent,
+    ``wind_speed`` in km/h (Bright Sky provides wind speed in km/h;
+    the source is the most recent averaging window ``wind_speed_10``, see Audit K3).
+"""
 
     kind: Literal["weather"] = "weather"
     station_id: str | None = None

@@ -1,10 +1,10 @@
-"""Reiner Wikidata-Stammdaten-Mapper (CORE-02).
+"""Pure Wikidata Master Data Mapper (CORE-02).
 
-Übersetzt rohe Wikidata-Stammdaten (ein dict) deterministisch in einen
-``CanonicalRecord`` mit ``CityBaseDataPayload``. Die Funktion ist rein: kein
-HTTP, kein Logging, kein ``datetime.now()``. Der ``retrieved_at``-Zeitstempel
-wird keyword-only injiziert, damit Tests deterministisch bleiben. Dieser Mapper
-ist die Vorlage für jeden weiteren Quellen-Mapper ab Phase 4.
+Deterministically translates raw Wikidata master data (a dict) into a
+``CanonicalRecord`` with ``CityBaseDataPayload``. The function is pure: no
+HTTP, no logging, no ``datetime.now()``. The ``retrieved_at`` timestamp
+is injected using keyword-only assignment so that tests remain deterministic. This mapper
+serves as the template for every subsequent source mapper starting in Phase 4.
 """
 
 from __future__ import annotations
@@ -31,15 +31,15 @@ def map_wikidata_city(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet rohe Wikidata-Stammdaten auf einen ``CanonicalRecord`` ab.
+    """Maps raw Wikidata master data to a ``CanonicalRecord``.
 
-    Stammdaten sind statisch, daher ist ``observed_at`` ``None``. Der
-    ``retrieved_at``-Zeitstempel wird injiziert (kein ``datetime.now()`` im
-    Mapper), damit das Ergebnis deterministisch und voll testbar bleibt. Die
-    Join-Keys ``ags`` und ``wikidata_qid`` werden aus dem Register durchgereicht
-    (Default ``None``, damit der Mapper rein und ohne Register testbar bleibt) und
-    fließen so in ``record_id``/``content_hash`` ein (ARCH-02). Stammdaten haben
-    keine Mess-Station, daher kein ``station_id``.
+    Master data is static, so ``observed_at`` is ``None``. The
+    ``retrieved_at`` timestamp is injected (no ``datetime.now()`` in the
+    mapper) so that the result remains deterministic and fully testable. The
+    Join keys ``ags`` and ``wikidata_qid`` are passed through from the register
+    (default ``None``, so that the mapper remains pure and testable without the register) and
+    are thus incorporated into ``record_id``/``content_hash`` (ARCH-02). Master data has
+    no measuring station, so there is no ``station_id``.
     """
     return CanonicalRecord(
         city_slug=raw["slug"],

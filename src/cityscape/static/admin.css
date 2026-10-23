@@ -1,19 +1,19 @@
-/* cityscape Admin-Dashboard (OPS-01/OPS-02) selbstenthaltenes Stylesheet.
-   Kein CDN, keine externen Assets (UI-SPEC Registry Safety). Tokens exakt nach
-   UI-SPEC: 60/30/10-Palette, semantische Status-Farben, System-Font-Stack +
-   Monospace fuer Logs, 8er-Spacing (12px nur fuer horizontales Tabellen-Padding),
-   Typo 14/20/28 mit 400/600. */
+/* cityscape Admin Dashboard (OPS-01/OPS-02) self-contained stylesheet.
+   No CDN, no external assets (UI-SPEC Registry Safety). Tokens strictly adhere to
+   UI-SPEC: 60/30/10 palette, semantic status colors, system font stack +
+   monospace for logs, 8-point spacing (12px only for horizontal table padding),
+   font sizes 14/20/28 with 400/600. */
 
 :root {
   /* Palette (60/30/10) */
   --bg: #f5f6f8;
   --surface: #ffffff;
   --accent: #2563eb;
-  /* Neutrale Struktur/Text */
+  /* Neutral Structure/Text */
   --text: #1f2933;
   --muted: #6b7280;
   --border: #e5e7eb;
-  /* Semantische Status */
+  /* Semantic Status */
   --ok: #16a34a;
   --warn: #d97706;
   --error: #dc2626;
@@ -155,7 +155,7 @@ input[type="password"]:focus {
   margin-bottom: var(--lg);
 }
 
-/* Auch als <button> im POST-Logout-Form (Audit LOW-1): Button-Defaults neutralisieren. */
+/* And all <button> im POST-Logout-Form (Audit LOW-1): Button-Defaults remove animation. */
 .logout-link {
   display: inline-flex;
   align-items: center;
@@ -277,7 +277,7 @@ table.logs tbody tr:nth-child(even) {
   font-size: 14px;
 }
 
-/* --- Hit-Rate-Balken + Roh-Counts ---------------------------------------- */
+/* --- Hit-Rate + Roh-Counts ---------------------------------------- */
 .bar-track {
   margin-top: var(--sm);
   height: 6px;
@@ -303,7 +303,7 @@ table.logs tbody tr:nth-child(even) {
   font-size: 14px;
 }
 
-/* --- Source-Health-Status-Punkte ----------------------------------------- */
+/* --- Source-Health-Status-Point ----------------------------------------- */
 .dot {
   display: inline-block;
   width: 8px;
@@ -407,7 +407,7 @@ table.heatmap th.heatmap-corner {
   background: var(--bg);
 }
 
-/* Farbige Zell-Hintergruende tragen dunkles Symbol (currentColor), nicht weiss. */
+/* Colored cell backgrounds appear dark Symbol (currentColor), nicht weiss. */
 .cell-ok {
   background: #dcfce7;
   color: #166534;
@@ -428,7 +428,7 @@ table.heatmap th.heatmap-corner {
   color: var(--muted);
 }
 
-/* WR-03: bewusst deaktivierte Quelle (grau mit Strich), nie rot als Fehler. */
+/* WR-03: Source intentionally disabled (gray with a line through it); never red to indicate an error. */
 .cell-disabled {
   background: repeating-linear-gradient(
     45deg,
@@ -451,7 +451,7 @@ table.heatmap th.heatmap-corner {
   color: #92400e;
 }
 
-/* --- Phase 17: Legende (UI-SPEC §4.2/§9) --------------------------------- */
+/* --- Phase 17: Legend (UI-SPEC §4.2/§9) --------------------------------- */
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -519,7 +519,7 @@ table.heatmap th.heatmap-corner {
   color: #92400e;
 }
 
-/* --- Phase 17: Tages-Timeline (UI-SPEC §4.5) ----------------------------- */
+/* --- Phase 17: Daily Timeline (UI-SPEC §4.5) ----------------------------- */
 .timeline {
   padding: var(--md);
   display: flex;
@@ -566,8 +566,8 @@ table.heatmap th.heatmap-corner {
   background: var(--error);
 }
 
-/* WR-04: legitime neutrale/erwartete Laeufe (no_data erwartet, quarantined,
-   disabled) als neutrale Graustufe, nicht rot als Fehler. */
+/* WR-04: Legitimate neutral/expected runs (no_data expected, quarantined,
+  disabled) are displayed as neutral gray, not red to indicate an error.*/
 .seg-neutral {
   background: #d1d5db;
 }
@@ -581,7 +581,7 @@ table.heatmap th.heatmap-corner {
   text-align: right;
 }
 
-/* --- Phase 17: Run-Aufklapp-Button + Detail (UI-SPEC §4.6) --------------- */
+/* --- Phase 17: Run-Fold-Out-Button + Detail (UI-SPEC §4.6) --------------- */
 .run-toggle {
   font: inherit;
   font-weight: 600;
@@ -638,9 +638,9 @@ table.heatmap th.heatmap-corner {
   opacity: 1;
 }
 
-/* --- Daten-Explorer (UI-SPEC §5/§10) -------------------------------------- */
+/* --- Date-Explorer (UI-SPEC §5/§10) -------------------------------------- */
 
-/* Filter-Form: Felder in einer flexiblen Zeile, gleiche Tokens wie das Bestand. */
+/* Filter format: Fields in a flexible row, same tokens as the inventory. */
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
@@ -673,8 +673,8 @@ table.heatmap th.heatmap-corner {
   outline-offset: 2px;
 }
 
-/* Sekundaer-Button (Outline, neutral, KEIN Akzent-Fill): vorgefertigte Sichten,
-   Export-Links, JSON-Detail-Buttons. */
+/* Secondary button (outline, neutral, NO accent fill): predefined views,
+   export links, JSON detail buttons. */
 .btn-secondary {
   display: inline-block;
   font-family: var(--font);
@@ -702,7 +702,7 @@ table.heatmap th.heatmap-corner {
   margin-top: var(--md);
 }
 
-/* JSON-Detail eines Records: monospaced, umbruch-erhaltend, auto-escaped. */
+/* JSON details of a record: monospaced, line-breaking preserved, auto-escaped. */
 .json-detail {
   font-family: var(--mono);
   font-size: 14px;

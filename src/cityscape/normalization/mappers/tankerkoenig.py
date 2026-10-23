@@ -1,14 +1,14 @@
-"""Reiner Tankerkönig-Mapper ``map_fuel_prices`` (Spritpreise, CC BY 4.0, Tier A).
+"""Reiner Tankerkönig mapper ``map_fuel_prices`` (fuel prices, CC BY 4.0, Tier A).
 
-Übersetzt das aggregierte Tankerkönig-raw-dict (aus
-``adapters.tankerkoenig.fetch_fuel_prices``) deterministisch in einen
-``CanonicalRecord`` mit ``FuelPricePayload``. Rein: kein HTTP, kein Logging, kein
-``datetime.now()`` (``retrieved_at`` wird injiziert).
+Deterministically translates the aggregated Tankerkönig raw dict (from
+``adapters.tankerkoenig.fetch_fuel_prices``) into a
+``CanonicalRecord`` with ``FuelPricePayload``. Pure: no HTTP, no logging, no
+``datetime.now()`` (``retrieved_at`` is injected).
 
-Die Stadt-Aggregate (avg/min je Sorte) sind aus den Einzelpreisen VERRECHNET
-(Durchschnitt/Minimum), daher ``modified=True``. Lizenz CC BY 4.0, Attribution
-wortgenau "Tankerkoenig (creativecommons.tankerkoenig.de), MTS-K" (muss verbatim
-in DATA-LICENSES.md + SOURCE_LICENSE stehen).
+The city aggregates (avg/min per fuel type) are CALCULATED from the individual prices
+(average/minimum), hence ``modified=True``. License: CC BY 4.0, Attribution
+word-for-word: “Tankerkoenig (creativecommons.tankerkoenig.de), MTS-K” (must appear verbatim
+in DATA-LICENSES.md + SOURCE_LICENSE).
 """
 
 from __future__ import annotations
@@ -37,11 +37,11 @@ def map_fuel_prices(
     lat: float | None = None,
     lon: float | None = None,
 ) -> CanonicalRecord:
-    """Bildet die aggregierten Spritpreise einer Stadt auf einen ``CanonicalRecord`` ab.
+    """Maps a city's aggregated fuel prices to a ``CanonicalRecord``.
 
-    ``lat``/``lon`` stammen aus dem Register (die Kennzahl aggregiert Tankstellen im
-    Umkreis dieser Koordinate). ``modified=True``, weil die Stadt-Aggregate aus den
-    Einzelpreisen berechnet sind.
+    ``lat``/``lon`` come from the register (the metric aggregates gas stations within
+    the vicinity of these coordinates). ``modified=True``, because the city aggregates are calculated from the
+    individual prices.
     """
     geo = GeoPoint(lat=lat, lon=lon) if lat is not None and lon is not None else None
     return CanonicalRecord(

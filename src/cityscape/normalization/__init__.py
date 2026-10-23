@@ -1,9 +1,9 @@
-"""Normalisierungs-Library: kanonisches Schema als einzige Quelle der Wahrheit.
+"""Normalization Library: Canonical schema as the single source of truth.
 
-Re-exportiert die öffentliche API der Library (CORE-01): den
-``CanonicalRecord``-Envelope, die Wert-Objekte, die Lizenz-/Quellen-Enums sowie
-die diskriminierte Payload-Union und ihre Mitglieder. Jede Quelle ab Phase 4
-bildet ihre Daten auf diese Modelle ab.
+Re-exports the library’s public API (CORE-01): the
+``CanonicalRecord`` envelope, the value objects, the license/source enums, and
+the discriminated payload union and its members. Every source starting in Phase 4
+maps its data to these models.
 """
 
 from __future__ import annotations

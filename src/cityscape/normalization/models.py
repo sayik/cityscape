@@ -1,11 +1,11 @@
-"""Kanonisches Daten-Schema als einzige Quelle der Wahrheit (CORE-01).
+"""Canonical Data Schema as the Single Source of Truth (CORE-01).
 
-Definiert den ``CanonicalRecord``-Envelope mit gemeinsamen Meta-Feldern (Geo,
-Zeitstempel, Quelle, Lizenz, Tier, Attribution) plus austauschbarer, über das
-``kind``-Feld diskriminierter Payload-Union. Lizenz und Tier sind Pflichtfelder
-(kein Default), damit kein Datensatz ohne Tier-Tag ins System gelangt
-(GOV-Fundament). ``extra="forbid"`` weist stumme Zusatzfelder ab und deckt so
-Mapper-Tippfehler früh auf.
+Defines the ``CanonicalRecord`` envelope with common meta fields (Geo,
+timestamp, source, license, tier, attribution) plus an interchangeable payload union defined via the
+``kind`` field. License and Tier are required fields
+(no default) to ensure that no record enters the system without a Tier tag
+(GOV Foundation). ``extra=“forbid”`` rejects silent additional fields, thereby
+detecting mapper typos early on.
 """
 
 from __future__ import annotations
@@ -19,15 +19,15 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 from cityscape.normalization.enums import LicenseId, LicenseTier, SourceId
 from cityscape.normalization.payloads import PayloadUnion
 
-# Version des kanonischen Schemas. Additive Schema-Änderungen zählen diese
-# Konstante hoch (ARCH-02 Reproduzierbarkeit): ein Record trägt so
-# die Schema-Version, unter der er entstanden ist. Bewusst NICHT Teil von
-# ``content_hash`` (Dedup soll über Versionsgrenzen stabil bleiben).
+# Version of the canonical schema. Incremental schema changes increment this
+# constant (ARCH-02 reproducibility): a record thus carries
+# the schema version under which it was created. Deliberately NOT part of
+# ``content_hash`` (deduplication should remain stable across version boundaries).
 SCHEMA_VERSION = 1
 
 
 class GeoPoint(BaseModel):
-    """Geokoordinate mit deklarativer Wertebereichs-Validierung (Wert-Objekt)."""
+    """Geocoordinate with declarative value range validation (value object)."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -36,7 +36,7 @@ class GeoPoint(BaseModel):
 
 
 class Attribution(BaseModel):
-    """Wortgenaue Namensnennung plus optionale Lizenz-URL (Attribution-Pflicht)."""
+    """Exact citation of the name plus optional license URL (attribution required)."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -46,24 +46,24 @@ class Attribution(BaseModel):
 
 
 class CanonicalRecord(BaseModel):
-    """Einheitlicher Envelope für jeden normalisierten Stadt-Datensatz.
+    """Uniform envelope for each normalized city dataset.
 
-    Trägt die gemeinsamen Meta-Felder jeder Quelle plus eine über ``kind``
-    diskriminierte Payload. ``license_tier`` ist Pflicht (kein Default), damit
-    kein Datensatz ohne Tier-Tag entsteht. ``extra="forbid"`` verhindert stumme
-    Zusatzfelder.
+    Contains the common meta fields from each source plus a payload
+    discriminated by ``kind``. ``license_tier`` is required (no default) to ensure
+    that no dataset is created without a tier tag. ``extra=“forbid”`` prevents silent
+    additional fields.
 
-    Identität (ARCH-02): ``schema_version`` hält die Schema-Version fest,
-    ``record_id`` und ``content_hash`` sind deterministisch aus den Record-Daten
-    abgeleitete ``computed_field``-Werte (kein Mapper setzt sie manuell). ``ags``
-    und ``wikidata_qid`` sind Join-Keys auf amtliche bzw. Wikidata-Identifikatoren.
+    Identity (ARCH-02): ``schema_version`` specifies the schema version;
+    ``record_id`` and ``content_hash`` are ``computed_field`` values derived deterministically from the record data
+    (no mapper sets them manually). ``ags``
+    and ``wikidata_qid`` are join keys to official and Wikidata identifiers, respectively.
 
-    Sicherheit: ``ags`` ist ein reines Datenfeld (amtlicher Gemeindeschlüssel).
-    Es darf NIE als Pfadsegment in einem Store verwendet werden (T-06.6-02); die
-    Store-Pfade nutzen ausschließlich die slug/tier-Allowlist. ``record_id`` und
-    ``content_hash`` beziehen NUR offene Nutzdaten ein, die ohnehin im Envelope
-    stehen, keine Secrets/PII (T-06.6-04, ASVS L1) -- alle Felder sind Open-Data.
-    """
+    Security: ``ags`` is a data-only field (official municipality code).
+    It must NEVER be used as a path segment in a store (T-06.6-02); the
+    store paths use only the slug/tier allowlist. ``record_id`` and
+    ``content_hash`` include ONLY open user data that is already in the envelope
+    anyway, no secrets/PII (T-06.6-04, ASVS L1) — all fields are open data.
+"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -82,11 +82,11 @@ class CanonicalRecord(BaseModel):
 
     @model_validator(mode="after")
     def _normalize_observed_at_utc(self) -> CanonicalRecord:
-        """Fuehrt ``observed_at`` kanonisch als timezone-aware UTC.
+        """Treats ``observed_at`` canonically as timezone-aware UTC.
 
-        Naive Zeit (ohne tzinfo) wird als UTC interpretiert, aware Zeit nach UTC
-        konvertiert; ``None`` bleibt ``None``. Garantiert vergleichbare Zeitanker
-        über alle Quellen (ARCH-02).
+        Naive time (without tzinfo) is interpreted as UTC; timezone-aware time is converted to UTC;
+        ``None`` remains ``None``. Guarantees comparable timestamps
+        across all sources (ARCH-02).
         """
         if self.observed_at is not None:
             if self.observed_at.tzinfo is None:
@@ -102,13 +102,13 @@ class CanonicalRecord(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def content_hash(self) -> str:
-        """Deterministischer Hash der reinen Nutzdaten (Dedup-Schlüssel).
+        """Deterministic hash of the raw payload (deduplication key).
 
-        Schließt bewusst ``retrieved_at``, ``record_id``, ``content_hash`` UND
-        ``schema_version`` aus: zwei Abrufe derselben Nutzdaten (anderer
-        ``retrieved_at``) oder eine additive Schema-Erhöhung dürfen den
-        Dedup-Hash NICHT verändern (T-06.6-03). Kanonisch via
-        ``orjson.OPT_SORT_KEYS`` (dict-order-unabhängig) + sha256.
+        Intentionally excludes ``retrieved_at``, ``record_id``, ``content_hash``, AND
+        ``schema_version``: two retrievals of the same payload (with different
+        ``retrieved_at`` values) or an incremental schema update must NOT
+        NOT change the dedup hash (T-06.6-03). Canonical via
+        ``orjson.OPT_SORT_KEYS`` (dict-order-independent) + sha256.
         """
         payload = {
             "city_slug": self.city_slug,
@@ -128,14 +128,14 @@ class CanonicalRecord(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def record_id(self) -> str:
-        """Deterministische Identität eines Records (stabiler Primärschlüssel).
+        """Deterministic identity of a record (stable primary key).
 
-        Stabiler Schlüssel aus Quelle, Stadt, Zeitanker (``observed_at`` falls
-        gesetzt, sonst ``retrieved_at`` -- statische Quellen haben kein
-        ``observed_at``), Payload-``kind`` und dem fachlichen Schlüssel
-        (``station_id``/``stop_id``/``poi_type``). Gleiche Eingabe -> gleiche ID;
-        anderes ``observed_at`` oder anderer fachlicher Schlüssel -> andere ID.
-        Kanonisch via ``orjson.OPT_SORT_KEYS`` + sha256 (T-06.6-03).
+        Stable key consisting of source, city, time anchor (``observed_at`` if
+        set, otherwise ``retrieved_at`` -- static sources do not have a
+        ``observed_at``), payload ``kind``, and the domain-specific key
+        (``station_id``/``stop_id``/``poi_type``). Same input -> same ID;
+        different ``observed_at`` or different domain-specific key -> different ID.
+        Canonicalized via ``orjson.OPT_SORT_KEYS`` + sha256 (T-06.6-03).
         """
         anchor = self.observed_at if self.observed_at else self.retrieved_at
         business_key = (

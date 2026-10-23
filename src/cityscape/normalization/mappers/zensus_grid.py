@@ -1,9 +1,10 @@
-"""Reiner Zensus-Gitter-Mapper map_population_density (DATA-OSM-Tier-2).
+"""Pure census grid mapper map_population_density (DATA-OSM-Tier-2).
 
-Errechnet aus dem aggregierten raw-dict (Summe Einwohner + Zahl der bewohnten
-100m-Zellen) die bewohnte Fläche (Zellen * 0.01 km2) und die Einwohnerdichte
-(Einwohner je km2 über die bewohnte Fläche). Rein, deterministisch (kein now()).
-Lizenz DL-DE/BY 2.0 (Tier A), Quelle Zensus 2022 (Statistische Ämter).
+Calculates the inhabited area (cells * 0.01 km²) and the population density
+(inhabitants per km² over the inhabited area) from the aggregated raw-dict
+(sum of inhabitants + number of inhabited
+100m cells). Pure, deterministic (no now()).
+License: DL-DE/BY 2.0 (Tier A), Source: 2022 Census (Statistical Offices).
 """
 
 from __future__ import annotations
@@ -30,12 +31,12 @@ def map_population_density(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet das aggregierte Zensus-Gitter-raw-dict auf einen ``CanonicalRecord`` ab.
+    """Maps the aggregated Census Grid raw dictionary to a ``CanonicalRecord``.
 
-    ``populated_area_km2`` = bewohnte Zellen * 0.01; ``density_per_km2`` = Einwohner
-    / bewohnte Fläche (None, wenn keine bewohnten Zellen). Werte sind statisch
-    (Zensus-Stichtag), daher ``observed_at=None``; ``retrieved_at`` wird injiziert.
-    """
+    ``populated_area_km2`` = populated cells * 0.01; ``density_per_km2`` = population
+    / populated area (None if there are no populated cells). Values are static
+    (census reference date), therefore ``observed_at=None``; ``retrieved_at`` is injected.
+"""
     cells = raw.get("populated_cells", 0) or 0
     population = raw.get("population")
     area = round(cells * _CELL_AREA_KM2, 4) if cells else None
@@ -56,7 +57,7 @@ def map_population_density(
         ags=ags,
         wikidata_qid=wikidata_qid,
         attribution=Attribution(
-            text="© Statistische Ämter des Bundes und der Länder, Zensus 2022",
+            text="© Federal and State Statistical Offices, 2022 Census",
             license_url=_DL_DE_BY_URL,
         ),
         payload=PopulationDensityPayload(

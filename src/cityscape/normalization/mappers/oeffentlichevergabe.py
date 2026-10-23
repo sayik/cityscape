@@ -1,20 +1,20 @@
-"""Reiner Mapper map_public_tender (DATA-21, öffentliche Auftragsvergabe).
+"""Reiner Mapper map_public_tender (DATA-21, public procurement).
 
-Bildet ein vom Adapter (``adapters.oeffentlichevergabe.parse_ocds_release``)
-geparstes OCDS-Notice-dict deterministisch auf einen ``CanonicalRecord`` mit
-``PublicTenderPayload`` (``kind="public_tender"``) ab. Quelle ist der Datenservice
-Öffentlicher Einkauf (oeffentlichevergabe.de, Beschaffungsamt des BMI), CC0 =
+Deterministically maps an OCDS Notice dictionary parsed by the adapter (``adapters.oeffentlichevergabe.parse_ocds_release``)
+to a ``CanonicalRecord`` with
+``PublicTenderPayload`` (``kind=“public_tender”``). The source is the
+Public Procurement data service (oeffentlichevergabe.de, Procurement Office of the BMI), CC0 =
 Tier A.
 
-Die Stadt-Zuordnung passiert NICHT hier, sondern in
-``cityscape.tenders.matching``; der Mapper nimmt den bereits aufgelösten
-``slug`` und die ``match``-Liste (``buyer_city`` | ``place_of_performance``) als
-Argumente und schreibt sie ins Payload. ``buyer_city`` trägt den
-(slugifizierten) Stadt-Bezug, ``nuts`` den NUTS-3-Code des Auftraggebers.
+City mapping does NOT take place here, but rather in
+``cityscape.tenders.matching``; the mapper takes the already resolved
+``slug`` and the ``match`` list (``buyer_city`` | ``place_of_performance``) as
+arguments and writes them to the payload. ``buyer_city`` contains the
+(slugified) city reference, while ``nuts`` contains the contracting authority’s NUTS 3 code.
 
-Rein: kein I/O, kein Logging, kein Wall-Clock. Der ``retrieved_at``-Zeitanker
-wird injiziert; ``observed_at`` wird aus dem ``publication_date`` der
-Bekanntmachung abgeleitet (falls parsbar, sonst None). Geo liegt nicht vor
+Pure: no I/O, no logging, no wall clock. The ``retrieved_at`` timestamp
+is injected; ``observed_at`` is derived from the ``publication_date`` of the
+notice (if parseable, otherwise None). Geo data is not available
 (``geo=None``).
 """
 
@@ -44,11 +44,11 @@ _NOTICE_URL_PREFIX = "https://oeffentlichevergabe.de/notices/"
 
 
 def _parse_observed_at(value: str | None) -> datetime | None:
-    """Parst einen ISO-8601-Publikationszeitpunkt defensiv (unparsbar -> None).
+    """Parses an ISO-8601 publication date conservatively (unparseable -> None).
 
-    Rein und ohne Wall-Clock: nur ``datetime.fromisoformat`` (das den OCDS-ISO-
-    String inkl. Zeitzone versteht). Ein fehlender/ungueltiger Wert ergibt None.
-    Die kanonische UTC-Vereinheitlichung übernimmt der ``CanonicalRecord``-
+    Pure and without wall clock: only ``datetime.fromisoformat`` (which understands the OCDS ISO
+    string, including the time zone). A missing or invalid value results in None.
+    The ``CanonicalRecord`` validator handles the canonical UTC normalization.
     Validator.
     """
     if not isinstance(value, str) or not value.strip():
@@ -60,7 +60,7 @@ def _parse_observed_at(value: str | None) -> datetime | None:
 
 
 def _source_url(notice: dict) -> str | None:
-    """Leitet eine stabile Notice-URL aus der notice_id ab (oder None)."""
+    """Derives a stable notice URL from the notice_id (or None)."""
     notice_id = notice.get("notice_id")
     if isinstance(notice_id, str) and notice_id.strip():
         return f"{_NOTICE_URL_PREFIX}{notice_id.strip()}"
@@ -76,16 +76,16 @@ def map_public_tender(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet ein OCDS-Notice-dict auf einen Tier-A-``CanonicalRecord`` ab.
+    """Maps an OCDS notice dictionary to a Tier-A ``CanonicalRecord``.
 
-    ``slug`` ist der bereits aufgelöste Register-Stadt-Slug (Stadt-Zuordnung in
-    ``tenders.matching``), ``match`` die Herkunfts-Liste (``buyer_city`` |
-    ``place_of_performance``). Beide werden ins ``PublicTenderPayload``
-    geschrieben. ``buyer_city`` trägt den Slug-Bezug, ``nuts`` den NUTS-3-Code
-    des Auftraggebers (``buyer_region`` aus dem geparsten Notice-dict).
+    ``slug`` is the already resolved registry city slug (city mapping in
+    ``tenders.matching``), and ``match`` is the source list (``buyer_city`` |
+    ``place_of_performance``). Both are written to the ``PublicTenderPayload``
+    . ``buyer_city`` contains the slug reference, and ``nuts`` contains the NUTS-3 code
+    of the contracting authority (``buyer_region`` from the parsed Notice-dict).
 
-    Rein: kein I/O. ``observed_at`` aus ``publication_date`` (falls parsbar);
-    ``retrieved_at`` injiziert; ``geo=None``. Quelle CC0 = Tier A.
+    Input: no I/O. ``observed_at`` from ``publication_date`` (if parseable);
+    ``retrieved_at`` injected; ``geo=None``. Source CC0 = Tier A.
     """
     payload = PublicTenderPayload(
         notice_id=notice.get("notice_id"),
