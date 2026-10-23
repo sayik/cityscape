@@ -1,22 +1,22 @@
-"""Reiner eRound-AFIR-Mapper (LIVE-11, CC0/Tier A, Phase 20).
+"""Pure eRound-AFIR Mapper (LIVE-11, CC0/Tier A, Phase 20).
 
-Übersetzt das rohe Adapter-dict aus ``adapters/mobilithek_afir.py``
-(``points``, eRound AFIR-Recharging, EnergyInfrastructureStatusPublication V3)
-deterministisch in einen ``CanonicalRecord`` mit ``ChargingStatusPayload`` und
-SourceId.EROUND_CHARGING (LIVE-11, schließt die DATA-09-Belegungslücke Laden).
+Translates the raw adapter dictionary from ``adapters/mobilithek_afir.py``
+(``points``, eRound AFIR Recharging, EnergyInfrastructureStatusPublication V3)
+deterministically into a ``CanonicalRecord`` with ``ChargingStatusPayload`` and
+SourceId.EROUND_CHARGING (LIVE-11, closes the DATA-09 charging allocation gap).
 
-Lizenz (Owner-Verifikation 2026-06-12, Checkpoint-Entscheid ``cc0-tier-a``): das
-eRound-Angebot (mobilithek.info/offers/961629419076456448, Tab
-Nutzungsbedingungen) weist als Standard-Lizenz **Creative Commons CC Zero**
-(http://dcat-ap.de/def/licenses/cc-zero) aus -> ``license_id=CC0``,
-``license_tier=A``. CC0 verlangt keine Attribution; Projekt-Konvention führt sie
-dennoch konsistent ("Hamburger Energienetze GmbH / eRound").
+License (owner verification 2026-06-12, Checkpoint decision ``cc0-tier-a``): the
+eRound offering (mobilithek.info/offers/961629419076456448, “Terms of Use” tab
+) specifies **Creative Commons CC Zero**
+(http://dcat-ap.de/def/licenses/cc-zero) as its default license -> ``license_id=CC0``,
+``license_tier=A``. CC0 does not require attribution; however, project convention
+consistently includes it (“Hamburger Energienetze GmbH / eRound”).
 
-Schablone ist ``mappers/mobilithek_parken.py`` (exakt): rein (kein HTTP, kein
-Parse, keine Systemuhr), ``retrieved_at`` keyword-only injiziert
-(deterministisch). Reine Live-Daten -> ``geo=None`` (der dynamische Feed trägt
-nur Ladepunkt-IDs/Status); ``observed_at`` aus der DATEX-II ``publicationTime``
-(``as_of``) falls vorhanden, sonst ``None`` (ehrlich, keine Systemuhr).
+The template is ``mappers/mobilithek_parken.py`` (exactly): raw (no HTTP, no
+parsing, no system clock), ``retrieved_at`` injected as a keyword-only field
+(deterministically). Pure live data -> ``geo=None`` (the dynamic feed contains
+only charging point IDs/statuses); ``observed_at`` from the DATEX-II ``publicationTime``
+(``as_of``) if available, otherwise ``None`` (honestly, no system clock).
 """
 
 from __future__ import annotations
@@ -39,10 +39,10 @@ _EROUND_ATTRIBUTION = "Hamburger Energienetze GmbH / eRound"
 
 
 def _parse_as_of(raw: dict) -> datetime | None:
-    """Liest ``as_of`` (DATEX-II publicationTime) als aware ``datetime`` oder None.
+    """Reads ``as_of`` (DATEX-II publicationTime) as an aware ``datetime`` or None.
 
-    Rein (keine Systemuhr). Ein nicht-parsebarer/fehlender Wert -> ``None``
-    (ehrlich, kein Fehler).
+    Pure (no system clock). An unparseable/missing value -> ``None``
+    (honestly, not an error).
     """
     text = raw.get("as_of")
     if not text:
@@ -60,14 +60,14 @@ def map_eround_charging(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet die eRound-Ladesäulen-Belegung (points) auf einen ``CanonicalRecord`` ab.
+    """Maps the eRound charging station occupancy (points) to a ``CanonicalRecord``.
 
-    Die ``points`` (je Ladepunkt refill_point_id + status/observed_at, LIVE-11)
-    wandern in den ``ChargingStatusPayload``. ``observed_at`` aus der DATEX-II
-    ``publicationTime`` (``as_of``) falls vorhanden. ``retrieved_at`` injiziert
-    (keine Systemuhr im Mapper). Tier A, CC0 (Owner-Verifikation, Checkpoint
-    cc0-tier-a), Attribution "Hamburger Energienetze GmbH / eRound". Schließt
-    die DATA-09-Echtzeit-Ladesäulenbelegungslücke.
+    The ``points`` (for each charging point: refill_point_id + status/observed_at, LIVE-11)
+    are transferred to the ``ChargingStatusPayload``. ``observed_at`` from the DATEX-II
+    ``publicationTime`` (``as_of``), if available. ``retrieved_at`` is injected
+    (no system clock in the mapper). Tier A, CC0 (owner verification, checkpoint
+    cc0-tier-a), attribution “Hamburger Energienetze GmbH / eRound”. Closes
+    the DATA-09 real-time charging station occupancy gap.
     """
     return CanonicalRecord(
         city_slug=raw["slug"],
@@ -90,11 +90,11 @@ def map_eround_charging(
 
 
 def _parse_observed_max(points: list[dict]) -> datetime | None:
-    """Juengstes ``observed_at`` der gemeldeten Punkte (oder None, rein).
+    """The most recent ``observed_at`` of the reported points (or None, as is).
 
-    ISO-Strings vergleichen lexikografisch korrekt nur bei einheitlichem Format;
-    daher wird echt geparst (fromisoformat) und das Maximum der parsebaren Werte
-    genommen. Kein parsebarer Wert -> ``None`` (ehrlich).
+    ISO strings are lexically compared correctly only if they have a consistent format;
+    therefore, they are parsed properly (using `fromisoformat`), and the maximum of the parseable values
+    is taken. No parseable value -> ``None`` (honestly).
     """
     best: datetime | None = None
     for point in points:
@@ -118,14 +118,14 @@ def map_city_charging_status(
     wikidata_qid: str | None = None,
     geo: GeoPoint | None = None,
 ) -> CanonicalRecord:
-    """Bildet die aggregierte Stadt-Ladebelegung (DATA-42) auf einen Record ab.
+    """Maps the aggregated city charging occupancy (DATA-42) to a single record.
 
-    ``raw`` ist der Join aus Geo-Map und Redis-State (von der Route gebaut):
+    ``raw`` is the join of Geo-Map and Redis-State (built from the route):
     ``slug``, ``total_points``, ``reported_points``, ``status_counts``,
-    ``points`` (gekappt) + ``truncated``. ``observed_at`` ist das jüngste
-    ``observed_at`` der gemeldeten Punkte (ehrliche Feed-Frische, keine
-    Systemuhr). Lizenz/Attribution identisch zu ``map_eround_charging``
-    (CC0/Tier A, eRound). ``geo`` ist das Stadt-Zentrum aus dem Register.
+    ``points`` (capped) + ``truncated``. ``observed_at`` is the most recent
+    ``observed_at`` of the reported points (genuine feed freshness, not
+    the system clock). License/attribution identical to ``map_eround_charging``
+    (CC0/Tier A, eRound). ``geo`` is the city center from the register.
     """
     points = raw.get("points", [])
     return CanonicalRecord(

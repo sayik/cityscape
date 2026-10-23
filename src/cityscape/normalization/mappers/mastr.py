@@ -1,19 +1,19 @@
-"""Reiner MaStR-Energie-Mapper map_mastr_assets (DATA-18, GOV-02/03).
+"""Pure MaStR Energy Mapper `map_mastr_assets` (DATA-18, GOV-02/03).
 
-Aggregiert die schlanken Anlagen-dicts aus dem SQLite-Reader (read_energy)
-deterministisch zu einem ``CanonicalRecord`` mit ``EnergyAssetPayload``
-(kind=energy_asset). Die Funktion ist rein: kein HTTP, kein Logging, kein
-``datetime.now()``. Der ``retrieved_at``-Zeitstempel wird keyword-only injiziert,
-damit Tests deterministisch bleiben.
+Deterministically aggregates the lean asset dictionaries from the SQLite reader (`read_energy`)
+into a `CanonicalRecord` with `EnergyAssetPayload`
+(kind=energy_asset). The function is pure: no HTTP, no logging, no
+``datetime.now()``. The ``retrieved_at`` timestamp is injected on a keyword-only basis
+to ensure that tests remain deterministic.
 
-KRITISCH (Lizenz-Klassifikation GOV-02): MaStR-Energieanlagen sind Tier A
-(offene Lizenz), ``source=SourceId.MASTR``, ``license_id=DL_DE_BY_2_0``,
-``license_tier=A``. Die
-Attribution nennt PFLICHT die Bundesnetzagentur/Marktstammdatenregister samt der
-DL-DE/BY-2.0-Lizenz-URL (GOV-03).
+CRITICAL (license classification GOV-02): MaStR energy assets are Tier A
+(open license), ``source=SourceId.MASTR``, ``license_id=DL_DE_BY_2_0``,
+``license_tier=A``. The
+attribution MANDATORY requires the Federal Network Agency/Market Master Data Register, including the
+DL-DE/BY-2.0 license URL (GOV-03).
 
-``observed_at`` bleibt ``None`` (kein Mess-Zeitstempel auf Stadtebene); ``geo``
-bleibt ``None`` (die Einzel-Koordinaten stehen in den ``assets``-dicts).
+``observed_at`` remains ``None`` (no measurement timestamp at the city level); ``geo``
+remains ``None`` (the individual coordinates are listed in the ``assets`` dictionaries).
 """
 
 from __future__ import annotations
@@ -41,19 +41,19 @@ def map_mastr_assets(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet die schlanken MaStR-Anlagen-dicts auf einen ``CanonicalRecord`` ab.
+    """Maps the slim MaStR facility dictionaries to a ``CanonicalRecord``.
 
-    ``rows`` sind die vom SQLite-Reader gelieferten schlanken Anlagen-dicts (je
-    ein dict mit ``einheit_typ``/``plz``/``lat``/``lon``/``leistung_kw``). Der
-    ``retrieved_at``-Zeitstempel wird injiziert (kein ``datetime.now()`` im
-    Mapper), damit das Ergebnis deterministisch bleibt. Die Join-Keys
-    ``ags``/``wikidata_qid`` werden aus dem Register durchgereicht (ARCH-02,
-    Default ``None``). ``geo`` bleibt ``None`` (Stadtebene); ``observed_at``
-    bleibt ``None``.
+    ``rows`` are the slim facility dictionaries returned by the SQLite reader (one
+    dict each containing ``unit_type``/``zip_code``/``lat``/``lon``/``power_kw``). The
+    ``retrieved_at`` timestamp is injected (no ``datetime.now()`` in the
+    mapper) to ensure the result remains deterministic. The join keys
+    ``ags``/``wikidata_qid`` are passed through from the register (ARCH-02,
+    default ``None``). ``geo`` remains ``None`` (city level); ``observed_at``
+    remains ``None``.
 
-    ``by_type`` zählt die Anlagen je Typ (pv/wind/speicher/biogas). Leere
-    ``rows`` sind KEIN Fehler (Batch ohne Treffer -> count 0).
-    """
+    ``by_type`` counts the plants by type (pv/wind/storage/biogas). Empty
+    ``rows`` are NOT an error (batch with no matches -> count 0).
+"""
     by_type: dict[str, int] = {}
     # H7: leistung_kw je Anlage zur Stadt-Gesamtleistung (+ je Typ) aggregieren -
     # die wichtigste MaStR-Kennzahl. Nur echte Zahlen zählen; trägt keine Anlage

@@ -1,18 +1,18 @@
-"""Reiner München-Mapper map_muenchen_road_events (DATA-15, Tier A DL-DE/BY).
+"""Pure Munich mapper map_muenchen_road_events (DATA-15, Tier A DL-DE/BY).
 
-Übersetzt das rohe Adapter-dict (``slug``/``events``) deterministisch in einen
-``CanonicalRecord`` mit ``RoadEventPayload``. Die Funktion ist rein: kein HTTP,
-keine Log-Aufrufe, keine Systemuhr. Der ``retrieved_at``-Zeitstempel wird
-keyword-only injiziert, damit Tests deterministisch bleiben.
+Deterministically translates the raw adapter dictionary (``slug``/``events``) into a
+``CanonicalRecord`` with ``RoadEventPayload``. The function is pure: no HTTP,
+no log calls, no system clock. The ``retrieved_at`` timestamp is
+injected as a keyword-only field so that tests remain deterministic.
 
-Die Baustellendaten der Landeshauptstadt München (CKAN-Paket
-``baustellen_4_weeks_opendata`` auf opendata.muenchen.de, GeoJSON via WFS auf
-geoportal.muenchen.de, [VERIFIED 2026-06-10]) sind unter der Datenlizenz
-Deutschland Namensnennung 2.0 verfuegbar:
-``license_id=DL_DE_BY_2_0``, ``license_tier=A`` (kennzeichnet die permissive
-Lizenz zur korrekten Attribution und Weiternutzung, T-9-03) und die wortgenaue
-Attribution "Landeshauptstadt München". Die Einzel-Events tragen ihre Zeit und
-Geometrie im Payload, daher ``observed_at=None`` und ``geo=None``.
+The roadwork data from the City of Munich (CKAN package
+``baustellen_4_weeks_opendata`` on opendata.muenchen.de, GeoJSON via WFS on
+geoportal.muenchen.de, [VERIFIED 2026-06-10]) are available under the
+Germany Attribution 2.0 data license:
+``license_id=DL_DE_BY_2_0``, ``license_tier=A`` (indicates the permissive
+license for proper attribution and reuse, T-9-03) and the verbatim
+attribution “City of Munich.” The individual events contain their time and
+geometry in the payload, hence ``observed_at=None`` and ``geo=None``.
 """
 
 from __future__ import annotations
@@ -39,15 +39,15 @@ def map_muenchen_road_events(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet rohe Münchner Road-Events auf einen ``CanonicalRecord`` (Tier A) ab.
+    """Maps raw Munich road events to a ``CanonicalRecord`` (Tier A).
 
-    Die ``events`` (Baustellen/Sperrungen, DATA-15) wandern unverändert in den
-    ``RoadEventPayload`` (``city_source="muenchen_baustellen"``). Der
-    ``retrieved_at``-Zeitstempel wird injiziert (keine Systemuhr im Mapper), damit
-    das Ergebnis deterministisch bleibt. Die Join-Keys ``ags``/``wikidata_qid``
-    werden aus dem Register durchgereicht (Default ``None``). Verkehrsereignisse
-    tragen ihre Zeit/Geometrie je Event, daher bewusst ``observed_at=None`` und
-    ``geo=None`` (keine strikte Geometry-Validierung, Pitfall 6).
+    The ``events`` (construction sites/road closures, DATA-15) are passed unchanged into the
+    ``RoadEventPayload`` (``city_source=“muenchen_baustellen”``). The
+    ``retrieved_at`` timestamp is injected (no system clock in the mapper) so that
+    the result remains deterministic. The join keys ``ags``/``wikidata_qid``
+    are passed through from the register (default ``None``). Traffic events
+    carry their own time and geometry per event, hence the deliberate use of ``observed_at=None`` and
+    ``geo=None`` (no strict geometry validation, Pitfall 6).
     """
     return CanonicalRecord(
         city_slug=raw["slug"],
@@ -77,16 +77,16 @@ def map_muenchen_parking(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet den Münchner Parkhaus-Standortkatalog auf einen ``CanonicalRecord`` ab.
+    """Maps the Munich parking garage location catalog to a ``CanonicalRecord``.
 
-    Die ``facilities`` (Parkhaus-Standorte, DATA-40) wandern unverändert in den
-    ``ParkingPayload``. STATISCHER Standortkatalog der Landeshauptstadt München
-    (CKAN-Paket ``parkhaeuser-munchen`` auf opendata.muenchen.de, [VERIFIED
-    2026-06-23]), KEINE Live-Belegung. Datenlizenz Deutschland Namensnennung 2.0
-    (``license_id=DL_DE_BY_2_0``, ``license_tier=A``), wortgenaue Attribution
-    "Landeshauptstadt München". Die Standorte tragen ihre Koordinaten je Eintrag,
-    daher ``observed_at=None`` und ``geo=None``. ``retrieved_at`` wird injiziert
-    (keine Systemuhr im Mapper), damit das Ergebnis deterministisch bleibt.
+    The ``facilities`` (parking garage locations, DATA-40) are transferred unchanged to the
+    ``ParkingPayload``. STATIC location catalog of the City of Munich
+    (CKAN package ``parkhaeuser-munchen`` on opendata.muenchen.de, [VERIFIED
+    2026-06-23]), NO live data. Data License Germany Attribution 2.0
+    (``license_id=DL_DE_BY_2_0``, ``license_tier=A``), verbatim attribution
+    “City of Munich”. Each location entry contains its own coordinates,
+    hence ``observed_at=None`` and ``geo=None``. ``retrieved_at`` is injected
+    (no system clock in the mapper) to ensure the result remains deterministic.
     """
     return CanonicalRecord(
         city_slug=raw["slug"],

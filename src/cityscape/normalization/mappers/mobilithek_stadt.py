@@ -1,27 +1,26 @@
-"""Reine Stadt-Mobilithek-Mapper (LIVE-08/12, Tier A DL-DE/BY, Phase 20).
+"""Pure City Mobilithek Mappers (LIVE-08/12, Tier A DL-DE/BY, Phase 20).
 
-Übersetzt die rohen Adapter-dicts aus ``adapters/mobilithek_datex2.py``
-(SituationPublication, ``events``) deterministisch in einen ``CanonicalRecord``:
-- ``map_berlin_traffic_messages``: Berlin Verkehrsmeldungen (SenMVKU,
-  SituationPublication) -> ``RoadEventPayload`` (``city_source="berlin_senmvku"``),
+Translates the raw adapter dictionaries from ``adapters/mobilithek_datex2.py``
+(SituationPublication, ``events`) deterministically into a ``CanonicalRecord``:
+- ``map_berlin_traffic_messages``: Berlin traffic reports (SenMVKU,
+  SituationPublication) -> ``RoadEventPayload`` (``city_source=“berlin_senmvku”``),
   SourceId.BERLIN_VERKEHRSMELDUNGEN (LIVE-08).
-- ``map_hannover_road_events``: Hannover Verkehrsmeldungen (LH Hannover, Fachbereich
-  Tiefbau, SituationPublication) -> ``RoadEventPayload`` (``city_source="hannover"``),
-  SourceId.HANNOVER_VERKEHRSMELDUNGEN, Attribution "Landeshauptstadt Hannover".
-- ``map_koeln_lez``: Köln LowEmissionZone (MoCKiii, SituationPublication) ->
-  ``RoadEventPayload`` (``city_source="koeln"``), SourceId.KOELN_LEZ_LIVE (LIVE-12).
+- ``map_hannover_road_events``: Hanover traffic reports (City of Hanover, Department of
+  Civil Engineering, SituationPublication) -> ``RoadEventPayload`` (``city_source=“hannover”``),
+  SourceId.HANNOVER_VERKEHRSMELDUNGEN, Attribution “State Capital Hanover”.
+- ``map_koeln_lez``: Cologne Low-Emission Zone (MoCKiii, SituationPublication) ->
+  ``RoadEventPayload`` (``city_source=“koeln”``), SourceId.KOELN_LEZ_LIVE (LIVE-12).
 
-Schablone ist ``mappers/mobilithek_koeln.py`` (exakt, Plan 04): rein (kein HTTP,
-kein XML-Parse, keine Systemuhr), ``retrieved_at`` keyword-only injiziert
-(deterministisch). Beide Quellen stehen unter der Datenlizenz Deutschland
-Namensnennung 2.0: ``license_id=DL_DE_BY_2_0``, ``license_tier=A`` (verifiziert,
-T-20-TIER: KEIN pauschales Tier-A über alle Quellen, nur diese DL-DE/BY-Feeds).
-Wortgenaue Attribution gemäß DATA-LICENSES.md (Berlin = SenMVKU, Köln = Stadt
-Köln).
+Template is ``mappers/mobilithek_koeln.py`` (exact, Plan 04): direct (no HTTP,
+no XML parsing, no system clock), ``retrieved_at`` injected as a keyword only
+(deterministic). Both sources are licensed under the Germany
+Attribution 2.0: ``license_id=DL_DE_BY_2_0``, ``license_tier=A`` (verified,
+T-20-TIER: NO blanket Tier A across all sources, only these DL-DE/BY feeds).
+Verbatim attribution in accordance with DATA-LICENSES.md (Berlin = SenMVKU, Cologne = City
+of Cologne).
 
-Reine Live-Daten -> ``geo=None`` (Geo je Event im Payload); ``observed_at`` aus
-der DATEX-II ``publicationTime`` (``as_of``) falls vorhanden, sonst ``None``
-(ehrlich, keine Systemuhr).
+Pure live data -> ``geo=None`` (geo per event in the payload); ``observed_at`` from
+the DATEX-II ``publicationTime`` (``as_of`) if available, otherwise ``None``
 """
 
 from __future__ import annotations
@@ -46,10 +45,10 @@ _HANNOVER_ATTRIBUTION = "Landeshauptstadt Hannover"
 
 
 def _parse_as_of(raw: dict) -> datetime | None:
-    """Liest ``as_of`` (DATEX-II publicationTime) als aware ``datetime`` oder None.
+    """Reads ``as_of`` (DATEX-II publicationTime) as an aware ``datetime`` or None.
 
-    Rein (keine Systemuhr). Ein nicht-parsebarer/fehlender Wert -> ``None``
-    (ehrlich, kein Fehler).
+    Pure (no system clock). An unparseable/missing value -> ``None``
+    (honestly, not an error).
     """
     text = raw.get("as_of")
     if not text:
@@ -67,13 +66,13 @@ def map_berlin_traffic_messages(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet Berlin Verkehrsmeldungen (situation) auf einen ``CanonicalRecord`` ab.
+    """Maps Berlin traffic reports (situation) to a ``CanonicalRecord``.
 
-    Die ``events`` (SenMVKU SituationPublication, LIVE-08) wandern in den
-    ``RoadEventPayload`` (``city_source="berlin_senmvku"``). ``observed_at`` aus
-    der DATEX-II ``publicationTime`` (``as_of``) falls vorhanden. ``retrieved_at``
-    injiziert (keine Systemuhr im Mapper). Tier A, DL-DE/BY 2.0, wortgenaue
-    SenMVKU-Attribution (DATA-LICENSES.md).
+    The ``events`` (SenMVKU SituationPublication, LIVE-08) are mapped to the
+    ``RoadEventPayload`` (``city_source=“berlin_senmvku”``). ``observed_at`` from
+    the DATEX-II ``publicationTime`` (``as_of``), if available. ``retrieved_at``
+    is injected (no system clock in the mapper). Tier A, DL-DE/BY 2.0, verbatim
+    SenMVKU attribution (DATA-LICENSES.md).
     """
     return CanonicalRecord(
         city_slug=raw["slug"],
@@ -103,16 +102,16 @@ def map_hannover_road_events(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet Hannover Verkehrsmeldungen (situation) auf einen ``CanonicalRecord`` ab.
+    """Maps Hanover traffic reports (situation) to a ``CanonicalRecord``.
 
-    Die ``events`` (Landeshauptstadt Hannover, Fachbereich Tiefbau:
-    Baustellen/verkehrsrelevante Veranstaltungen/Verkehrsstörungen,
-    SituationPublication, BBox-gefiltert um Hannover) wandern in den
-    ``RoadEventPayload`` (``city_source="hannover"``). ``observed_at`` aus der
-    DATEX-II ``publicationTime`` (``as_of``) falls vorhanden. ``retrieved_at``
-    injiziert (keine Systemuhr im Mapper). Das Mobilithek-Angebot ist "freie
-    Nutzung/Open Data" = DL-DE/BY 2.0 (Tier A, analog Bremen), Attribution
-    wortgenau "Landeshauptstadt Hannover" (DATA-LICENSES.md).
+    The ``events`` (State Capital of Hanover, Civil Engineering Department:
+    construction sites/traffic-related events/traffic disruptions,
+    SituationPublication, BBox-filtered to Hannover) are transferred to the
+    ``RoadEventPayload`` (``city_source=“hannover”``). ``observed_at`` from the
+    DATEX-II ``publicationTime`` (``as_of``), if available. ``retrieved_at``
+    is injected (no system clock in the mapper). The Mobilithek service is “free
+    use/Open Data” = DL-DE/BY 2.0 (Tier A, similar to Bremen), attribution
+    exactly as stated: “State Capital of Hanover” (DATA-LICENSES.md).
     """
     return CanonicalRecord(
         city_slug=raw["slug"],
@@ -142,13 +141,13 @@ def map_koeln_lez(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet die Köln LowEmissionZone (situation) auf einen ``CanonicalRecord`` ab.
+    """Maps the Cologne LowEmissionZone (situation) to a ``CanonicalRecord``.
 
-    Die ``events`` (MoCKiii SituationPublication, LIVE-12) wandern in den
-    ``RoadEventPayload`` (``city_source="koeln"``). ``observed_at`` aus der
-    DATEX-II ``publicationTime`` (``as_of``) falls vorhanden. ``retrieved_at``
-    injiziert (keine Systemuhr im Mapper). Tier A, DL-DE/BY 2.0, Attribution
-    "Stadt Köln" (DATA-LICENSES.md).
+    The ``events`` (MoCKiii SituationPublication, LIVE-12) are moved into the
+    ``RoadEventPayload`` (``city_source=“koeln”``). ``observed_at`` from the
+    DATEX-II ``publicationTime`` (``as_of``), if available. ``retrieved_at``
+    is injected (no system clock in the mapper). Tier A, DL-DE/BY 2.0, Attribution
+    “City of Cologne” (DATA-LICENSES.md).
     """
     return CanonicalRecord(
         city_slug=raw["slug"],

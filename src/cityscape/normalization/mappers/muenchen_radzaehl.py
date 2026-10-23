@@ -1,14 +1,13 @@
-"""Mapper ``map_muenchen_radzaehl`` (DATA-40, Münchner Rad-Tageszählwerte, Tier A).
+"""Mapper ``map_muenchen_radzaehl`` (DATA-40, Munich daily bicycle count data, Tier A).
 
-Übersetzt das rohe Adapter-dict (``slug``/``stations``/``as_of``) deterministisch
-in einen ``CanonicalRecord`` mit ``CountStationPayload`` (kanonische Zählstellen-
-Hülle, wiederverwendet für alle bike-counts-Quellen). Rein: kein HTTP, keine
-Systemuhr (``retrieved_at`` keyword-only injiziert).
+Deterministically translates the raw adapter dictionary (``slug``/``stations``/``as_of``)
+into a ``CanonicalRecord`` with ``CountStationPayload`` (canonical counting station
+envelope, reused for all bike-counts sources). Pure: no HTTP, no
+system clock (``retrieved_at`` injected as a keyword only).
 
-LIZENZ (GOV-01): Landeshauptstadt München, Open-Data-Portal, Datenlizenz
-Deutschland Namensnennung 2.0 (``DL_DE_BY_2_0`` -> Tier A), [VERIFIED 2026-06-23
-via package_show license_id ``dl-by-de/2.0``]. Attribution mit Namensnennung.
-"""
+LICENSE (GOV-01): City of Munich, Open Data Portal, Data License
+Germany Attribution 2.0 (``DL_DE_BY_2_0`` -> Tier A), [VERIFIED 2026-06-23
+via package_show license_id ``dl-by-de/2.0``]. Attribution with name credit."""
 
 from __future__ import annotations
 
@@ -30,7 +29,6 @@ _ATTRIBUTION = "Landeshauptstadt München"
 
 
 def _parse_datum(value: object) -> datetime | None:
-    """Parst das Münchner ``datum`` (Format ``JJJJ.MM.TT``) defensiv zu datetime."""
     if not isinstance(value, str) or not value:
         return None
     try:
@@ -40,13 +38,11 @@ def _parse_datum(value: object) -> datetime | None:
 
 
 def _period(value: object) -> str | None:
-    """ISO-Tagesdatum (``JJJJ-MM-TT``) aus dem ``JJJJ.MM.TT``-``datum`` oder None."""
     parsed = _parse_datum(value)
     return parsed.date().isoformat() if parsed else None
 
 
 def _directions(station: dict) -> dict | None:
-    """Baut ``{Richtungslabel: Tageswert}`` aus den beiden Richtungen (oder None)."""
     out: dict[str, int | None] = {}
     for label_key, value_key in (
         ("direction_1", "direction_1_value"),
@@ -65,12 +61,12 @@ def map_muenchen_radzaehl(
     ags: str | None = None,
     wikidata_qid: str | None = None,
 ) -> CanonicalRecord:
-    """Bildet rohe Münchner Rad-Tageszählwerte auf einen ``CanonicalRecord`` ab.
+    """Maps raw Munich daily bike count values to a ``CanonicalRecord``.
 
-    Je Station ein schlankes Zähl-dict (``station``/``lat``/``lon``/``value`` =
-    Tagessumme/``granularity`` "day"/``period`` ISO-Tag/``directions``) im
-    ``CountStationPayload``. ``observed_at`` ist der jüngste Zähltag (``as_of``);
-    ``geo=None`` (Koordinaten je Station im Payload). Tier A (DL-DE/BY 2.0).
+    For each station, a simple count dictionary (``station``/``lat``/``lon``/``value`` =
+    daily total/``granularity`` “day”/``period`` ISO day/``directions``) in the
+    ``CountStationPayload``. ``observed_at`` is the most recent count day (``as_of``);
+    ``geo=None`` (coordinates for each station in the payload). Tier A (DL-DE/BY 2.0).
     """
     counts: list[dict] = []
     for station in raw.get("stations", []):
